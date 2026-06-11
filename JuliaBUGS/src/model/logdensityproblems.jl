@@ -5,7 +5,9 @@ function _eval_logdensity(model, ::UseGeneratedLogDensityFunction, x)
         _, log_densities = evaluate_with_values!!(model, x; transformed=model.transformed)
         return log_densities.tempered_logjoint
     end
-    return model.log_density_computation_function(model.evaluation_env, x)
+    return Base.invokelatest(
+        model.log_density_computation_function, model.evaluation_env, x
+    )
 end
 
 function _eval_logdensity(model, ::UseGraph, x)
