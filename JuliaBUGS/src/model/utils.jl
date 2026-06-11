@@ -159,26 +159,11 @@ new_env = smart_copy_evaluation_env(env, mutable_syms)
 ```
 """
 function smart_copy_evaluation_env(env::NamedTuple, mutable_syms::Set{Symbol})
-    # Get all keys from the environment
-    env_keys = keys(env)
-
-    # Determine which keys to copy vs share
-    keys_to_copy = intersect(env_keys, mutable_syms)
-    keys_to_share = setdiff(env_keys, mutable_syms)
-
-    # Build new environment
-    new_values = Dict{Symbol,Any}()
-
-    # Deep copy mutable parts
-    for k in keys_to_copy
-        new_values[k] = deepcopy(env[k])
+    new_env = env
+    for k in keys(env)
+        if k in mutable_syms
+            new_env = BangBang.setindex!!(new_env, deepcopy(env[k]), k)
+        end
     end
-
-    # Share immutable parts (no copy)
-    for k in keys_to_share
-        new_values[k] = env[k]
-    end
-
-    # Create and return new NamedTuple
-    return NamedTuple(new_values)
+    return new_env
 end

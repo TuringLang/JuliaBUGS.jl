@@ -34,7 +34,10 @@ Ensure all functions and modules are available on all processes using `@everywhe
 
 ```julia
 @everywhere begin
-    using JuliaBUGS, LogDensityProblems, AbstractMCMC, AdvancedHMC, MCMCChains, ADTypes, ReverseDiff
+    using JuliaBUGS, LogDensityProblems, AbstractMCMC, AdvancedHMC, MCMCChains
+    using ADTypes, Mooncake
+    # If using DI-backed AD, also load DifferentiationInterface and the backend,
+    # for example: using DifferentiationInterface, ReverseDiff
 
     # Define any custom functions here
     # Use `@bugs_primitive` to register functions for use in the model

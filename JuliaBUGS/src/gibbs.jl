@@ -4,24 +4,24 @@
 # `(sampler, ad_backend)` where `ad_backend` is from ADTypes.
 #
 # Supported AD Backends:
-# - `AutoForwardDiff()` (default): Good for models with few parameters (<100)
-# - `AutoReverseDiff()`: Good for models with many parameters
-# - `AutoMooncake()`: Experimental, potentially faster for some models
+# - `AutoMooncake()`: Recommended native reverse-mode backend
+# - `AutoReverseDiff()`: DI-backed reverse mode
+# - `AutoForwardDiff()`: DI-backed forward mode for small models (<100 parameters)
 #
 # Examples:
 # ```julia
-# using ADTypes
+# using ADTypes, Mooncake
 # 
 # # Explicit AD specification
 # sampler_map = OrderedDict(
-#     @varname(μ) => (HMC(0.01, 10), AutoForwardDiff()),
-#     @varname(σ) => (NUTS(0.65), AutoReverseDiff())
+#     @varname(μ) => (HMC(0.01, 10), AutoMooncake()),
+#     @varname(σ) => (NUTS(0.65), AutoMooncake())
 # )
 # 
 # # For gradient-based samplers, always specify AD backend
 # sampler_map = OrderedDict(
-#     @varname(μ) => (HMC(0.01, 10), AutoForwardDiff()),
-#     @varname(σ) => (NUTS(0.65), AutoReverseDiff())
+#     @varname(μ) => (HMC(0.01, 10), AutoMooncake()),
+#     @varname(σ) => (NUTS(0.65), AutoMooncake())
 # )
 # ```
 
@@ -76,12 +76,14 @@ Variables can be specified individually or as groups:
 
 # Examples
 ```julia
-using ADTypes: AutoReverseDiff, AutoForwardDiff
+using ADTypes: AutoMooncake, AutoReverseDiff, AutoForwardDiff
+using Mooncake
+using DifferentiationInterface, ReverseDiff, ForwardDiff
 
 # Different samplers for different parameters
 sampler_map = OrderedDict(
-    @varname(μ) => (HMC(0.01, 10), AutoReverseDiff()),
-    @varname(σ) => (NUTS(0.65), AutoReverseDiff()),
+    @varname(μ) => (HMC(0.01, 10), AutoMooncake()),
+    @varname(σ) => (NUTS(0.65), AutoMooncake()),
     @varname(k) => IndependentMH()  # Good for discrete parameters
 )
 gibbs = Gibbs(model, sampler_map)
@@ -135,11 +137,14 @@ single-site Gibbs sampling.
 
 # Examples
 ```julia
+using ADTypes: AutoMooncake
+using Mooncake
+
 # Use IndependentMH for all parameters
 gibbs = Gibbs(model, IndependentMH())
 
 # Use HMC for all parameters (each updated individually)
-gibbs = Gibbs(model, (HMC(0.01, 10), AutoForwardDiff()))
+gibbs = Gibbs(model, (HMC(0.01, 10), AutoMooncake()))
 # Note: For gradient-based samplers, you must specify the AD backend
 ```
 

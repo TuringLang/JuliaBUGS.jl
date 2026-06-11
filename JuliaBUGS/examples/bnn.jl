@@ -5,12 +5,12 @@ using AbstractMCMC
 using ADTypes
 using AdvancedHMC
 using FillArrays
-using ForwardDiff
 using Functors
 using LinearAlgebra
 using LogDensityProblems
 using Lux
 using MCMCChains
+using Mooncake
 using Random
 
 ## data simulation
@@ -95,10 +95,10 @@ end
 
 data = (nparameters=Lux.parameterlength(nn), xs=xs_hcat, ts=ts, N=length(ts), sigma=sigma)
 
-# Use ForwardDiff with UseGraph mode (required for user-defined primitives)
+# Use Mooncake with UseGraph mode.
 model = compile(model_def, data)
 model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
-model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
+model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
 
 # sampling is slow, so sample 10 of them to verify that this can work
 samples_and_stats = AbstractMCMC.sample(
@@ -106,6 +106,7 @@ samples_and_stats = AbstractMCMC.sample(
     NUTS(0.65),
     10;
     chain_type=Chains,
+    progress=false,
     # n_adapts=1000,
     # discard_initial=1000
 )

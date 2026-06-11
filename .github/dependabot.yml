@@ -1,0 +1,34 @@
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-github-actions-packages:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "julia"
+    directories:
+      - "/JuliaBUGS"
+      - "/JuliaBUGS/docs"
+      - "/JuliaBUGS/test"
+      - "/JuliaBUGS/benchmark"
+      - "/JuliaBUGS/examples"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-julia-packages:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/DoodleBUGS"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-npm-packages:
+        patterns:
+          - "*"

@@ -6,11 +6,10 @@ using Accessors
 using ADTypes
 using BangBang
 using Bijectors: Bijectors
-using DifferentiationInterface
 using Distributions
 using Graphs, MetaGraphsNext
 using LinearAlgebra
-using LogDensityProblems, LogDensityProblemsAD
+using LogDensityProblems
 using MacroTools
 using OrderedCollections: OrderedDict
 using Random
@@ -18,7 +17,6 @@ using Serialization: Serialization
 using StaticArrays
 
 import Base: ==, hash, Symbol, size
-import DifferentiationInterface as DI
 import Distributions: truncated
 
 export @bugs
@@ -244,11 +242,21 @@ Compile a BUGS model. Returns `BUGSModel`, or `BUGSModelWithGradient` if `adtype
 - `model_def::Expr`: Model definition from `@bugs` macro
 - `data::NamedTuple`: Observed data
 - `initial_params::NamedTuple`: Initial parameter values (optional, defaults to prior samples)
-- `adtype`: AD backend from ADTypes.jl (e.g., `AutoReverseDiff()`, `AutoForwardDiff()`, `AutoMooncake()`)
+- `adtype`: AD backend from ADTypes.jl (e.g., `AutoMooncake()`, `AutoReverseDiff()`, `AutoForwardDiff()`)
+
+For Mooncake-backed AD, load `Mooncake` before compiling with `adtype`. For
+DifferentiationInterface-backed AD backends like `AutoReverseDiff()` and
+`AutoForwardDiff()`, load `DifferentiationInterface` and the concrete backend
+package before compiling.
 
 # Examples
 ```julia
 model = compile(model_def, data)
+
+using ADTypes, Mooncake
+model = compile(model_def, data; adtype=AutoMooncake(; config=nothing))
+
+using ADTypes, DifferentiationInterface, ReverseDiff
 model = compile(model_def, data; adtype=AutoReverseDiff())
 ```
 """

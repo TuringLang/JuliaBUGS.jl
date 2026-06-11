@@ -5,14 +5,13 @@ end
 
 using JuliaBUGS
 
-using DifferentiationInterface
-using Mooncake: Mooncake
+using ADTypes
+using Mooncake
 
 using MetaGraphsNext
 using BridgeStan
 using StanLogDensityProblems
 using LogDensityProblems
-using LogDensityProblemsAD
 using Chairmarks
 using DataFrames
 using OrderedCollections
