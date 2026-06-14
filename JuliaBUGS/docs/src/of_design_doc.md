@@ -1,5 +1,14 @@
 # Design Document: `of` Type System for JuliaBUGS
 
+!!! note "Implementation lives in AbstractPPL"
+    As of JuliaBUGS v0.14.1 the `of` type system is implemented in
+    [AbstractPPL.jl](https://github.com/TuringLang/AbstractPPL.jl) (≥ 0.15.3) rather than
+    being vendored in JuliaBUGS. JuliaBUGS re-exports `of` and `@of`, so the user-facing API
+    documented here is unchanged. The supporting names (`OfType`, `OfReal`, `OfInt`,
+    `OfArray`, `OfNamedTuple`, `OfConstantWrapper`, `flatten`, `unflatten`, …) now live in
+    `AbstractPPL`. JuliaBUGS additionally provides `of(model::BUGSModel)` to extract an `of`
+    specification from a compiled model.
+
 ## Overview
 
 The `of` type system provides a declarative way to specify parameter **types** for probabilistic programming. It serves as a lightweight type annotation system that:

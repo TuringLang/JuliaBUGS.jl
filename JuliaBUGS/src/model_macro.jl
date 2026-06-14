@@ -144,6 +144,24 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
     )
 end
 
+# Validate a compiled model's `evaluation_env` against an `of` type annotation.
+#
+# `evaluation_env` holds *all* model variables (stochastic parameters, deterministic
+# nodes, and constants/data), whereas the `of` spec only describes a subset of them.
+# AbstractPPL's `_validate` rejects unexpected fields, so we restrict the environment to
+# the fields the spec actually declares (`get_names`) before validating. Fields the spec
+# declares but the environment lacks are left out so that `_validate` still reports them as
+# missing. `get_names` throws a `MethodError` for non-`OfNamedTuple` annotations, which the
+# caller turns into a helpful "use an of type" error.
+#
+# NOTE: `_validate` and `get_names` are AbstractPPL internals (not exported, not `public`).
+# If AbstractPPL later exposes a public subset-validation entry point, switch to it here.
+function _validate_of_annotation(param_type, evaluation_env)
+    spec_names = get_names(param_type)
+    present = filter(name -> haskey(evaluation_env, name), spec_names)
+    return _validate(param_type, NamedTuple{present}(evaluation_env))
+end
+
 function _generate_model_function(
     model_name,
     param_type,
@@ -171,7 +189,7 @@ function _generate_model_function(
 
         if $(param_type !== nothing)
             try
-                _validate($(esc(param_type)), model.evaluation_env)
+                _validate_of_annotation($(esc(param_type)), model.evaluation_env)
             catch e
                 if e isa MethodError
                     error(

@@ -19,6 +19,21 @@ using StaticArrays
 import Base: ==, hash, Symbol, size
 import Distributions: truncated
 
+# The `of` type system lives in AbstractPPL (>= 0.15.3); JuliaBUGS no longer vendors it.
+# `of` and `@of` are exported by AbstractPPL and re-exported here (see `export of` /
+# `export @of`) so JuliaBUGS's public API is unchanged. `of` is `import`ed (rather than
+# only made available through `using AbstractPPL`) so the `of(::BUGSModel)` convenience
+# method defined below can extend it.
+#
+# `unflatten` is `public` in AbstractPPL and is used by the integration tests via
+# `using JuliaBUGS: unflatten`. `_validate` and `get_names` are AbstractPPL *internal*
+# helpers (neither exported nor `public`) that the `@model` macro's type-annotation checking
+# relies on (see `_validate_of_annotation` in `model_macro.jl`); they are imported explicitly
+# here so the dependency on those internals is visible in one place. (A future AbstractPPL
+# release could expose a public subset-validation entry point to replace these two imports.)
+import AbstractPPL: of
+using AbstractPPL: @of, unflatten, _validate, get_names
+
 export @bugs
 export compile, initialize!
 
@@ -358,7 +373,43 @@ Only defined with `MCMCChains` extension.
 """
 function gen_chains end
 
-include("of_type.jl")
+"""
+    of(model::BUGSModel)
+
+Extract the `of` type specification from a compiled `BUGSModel`.
+
+This function introspects the model's evaluation environment to reconstruct the corresponding
+`of` type specification. This is useful for:
+- Model introspection and debugging
+- Type validation after compilation
+- Generic code that needs to work with models without knowing their structure
+- Model serialization and deserialization
+
+# Arguments
+- `model::BUGSModel`: A compiled BUGS model
+
+# Returns
+- An `OfNamedTuple` type representing the structure of all variables in the model
+
+# Example
+```julia
+# Define and compile a model
+@model function regression((; y, beta, sigma), X, N)
+    # ... model definition ...
+end
+
+model = regression((; y = data), X, N)
+
+# Extract the of type from the compiled model
+ModelType = of(model)
+# ModelType might be: @of(y = of(Array, Float64, 100), beta = of(Array, Float64, 3), sigma = of(Real, 0, nothing))
+
+# Use the extracted type
+rand(ModelType)  # Generate random values matching the model structure
+```
+"""
+of(model::BUGSModel) = of(model.evaluation_env)
+
 include("model_macro.jl")
 
 export of

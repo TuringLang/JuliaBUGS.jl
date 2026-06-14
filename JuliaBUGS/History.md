@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## 0.14.1
+
+### Highlights
+
+- **The `of` type system is now consumed from AbstractPPL.** JuliaBUGS no longer vendors its own copy of the `of`/`@of` type machinery; it now imports it from `AbstractPPL` (≥ 0.15.3, where `of` and `@of` are exported and the supporting `Of*`/`flatten`/`unflatten` names are `public`). `of` and `@of` continue to be exported by JuliaBUGS, so the public API is unchanged. The JuliaBUGS-specific `of(model::BUGSModel)` method (extract an `of` specification from a compiled model) is retained and now extends `AbstractPPL.of`. The `@model` type-annotation check validates only the fields the spec declares (ignoring model constants/derived quantities in the environment). The bundled `src/of_type.jl` and its unit test `test/of_type.jl` were removed; the integration tests (`of_model_integration.jl`, `model_macro.jl`) are unchanged.
+
 ## Unreleased
 
 ### Highlights
