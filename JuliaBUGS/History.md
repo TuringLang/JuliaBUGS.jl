@@ -1,10 +1,14 @@
 # JuliaBUGS Changelog
 
-## 0.14.1
+## 0.14.2
 
 ### Highlights
 
 - **FlexiChains support** (#483): Sampling can now collect results into a [`FlexiChains.FlexiChain{VarName}`](https://github.com/penelopeysm/FlexiChains.jl) by passing `chain_type=VNChain` (after `using FlexiChains`). Chains are keyed by `VarName`, so array-valued variables are stored whole instead of being flattened into scalar columns, and sampler statistics are stored as `FlexiChains.Extra` entries. This is the chain format the rest of the TuringLang ecosystem is moving to (Turing 0.45 uses it by default); the docs now use it in examples. `MCMCChains` remains fully supported via `chain_type=MCMCChains.Chains`, and a `FlexiChain` can be converted with `MCMCChains.Chains(chain)`.
+
+## 0.14.1
+
+### Highlights
 
 - **`to_distribution(model::BUGSModel)`** (#459, closes #27): Wrap a compiled BUGS model as a `Distributions.Distribution` with variate type `NamedTupleVariate{names}`, where `names` are the unique parameter symbols. `rand` performs ancestral sampling and returns a `NamedTuple`; `logpdf` evaluates the joint log density in the original (constrained) parameter space at the supplied `NamedTuple`. This makes BUGS models composable inside other PPLs that consume `Distribution` objects.
 
