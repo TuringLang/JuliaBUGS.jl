@@ -19,18 +19,6 @@ using StaticArrays
 import Base: ==, hash, Symbol, size
 import Distributions: truncated
 
-# The `of` type system lives in AbstractPPL (>= 0.15.3); JuliaBUGS no longer vendors it.
-# `of` and `@of` are exported by AbstractPPL and re-exported here (see `export of` /
-# `export @of`) so JuliaBUGS's public API is unchanged. `of` is `import`ed (rather than
-# only made available through `using AbstractPPL`) so the `of(::BUGSModel)` convenience
-# method defined below can extend it.
-#
-# `unflatten` is `public` in AbstractPPL and is used by the integration tests via
-# `using JuliaBUGS: unflatten`. `_validate` and `get_names` are AbstractPPL *internal*
-# helpers (neither exported nor `public`) that the `@model` macro's type-annotation checking
-# relies on (see `_validate_of_annotation` in `model_macro.jl`); they are imported explicitly
-# here so the dependency on those internals is visible in one place. (A future AbstractPPL
-# release could expose a public subset-validation entry point to replace these two imports.)
 import AbstractPPL: of
 using AbstractPPL: @of, unflatten, _validate, get_names
 

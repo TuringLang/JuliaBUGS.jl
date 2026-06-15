@@ -154,8 +154,7 @@ end
 # missing. `get_names` throws a `MethodError` for non-`OfNamedTuple` annotations, which the
 # caller turns into a helpful "use an of type" error.
 #
-# NOTE: `_validate` and `get_names` are AbstractPPL internals (not exported, not `public`).
-# If AbstractPPL later exposes a public subset-validation entry point, switch to it here.
+# TODO: `_validate` and `get_names` are currently AbstractPPL internals
 function _validate_of_annotation(param_type, evaluation_env)
     spec_names = get_names(param_type)
     present = filter(name -> haskey(evaluation_env, name), spec_names)
