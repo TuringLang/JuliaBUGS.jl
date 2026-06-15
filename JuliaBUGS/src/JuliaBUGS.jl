@@ -19,6 +19,9 @@ using StaticArrays
 import Base: ==, hash, Symbol, size
 import Distributions: truncated
 
+import AbstractPPL: of
+using AbstractPPL: @of, unflatten, _validate, get_names
+
 export @bugs
 export compile, initialize!
 
@@ -363,7 +366,43 @@ variables are stored whole instead of being flattened into scalar columns).
 """
 function gen_chains end
 
-include("of_type.jl")
+"""
+    of(model::BUGSModel)
+
+Extract the `of` type specification from a compiled `BUGSModel`.
+
+This function introspects the model's evaluation environment to reconstruct the corresponding
+`of` type specification. This is useful for:
+- Model introspection and debugging
+- Type validation after compilation
+- Generic code that needs to work with models without knowing their structure
+- Model serialization and deserialization
+
+# Arguments
+- `model::BUGSModel`: A compiled BUGS model
+
+# Returns
+- An `OfNamedTuple` type representing the structure of all variables in the model
+
+# Example
+```julia
+# Define and compile a model
+@model function regression((; y, beta, sigma), X, N)
+    # ... model definition ...
+end
+
+model = regression((; y = data), X, N)
+
+# Extract the of type from the compiled model
+ModelType = of(model)
+# ModelType might be: @of(y = of(Array, Float64, 100), beta = of(Array, Float64, 3), sigma = of(Real, 0, nothing))
+
+# Use the extracted type
+rand(ModelType)  # Generate random values matching the model structure
+```
+"""
+of(model::BUGSModel) = of(model.evaluation_env)
+
 include("model_macro.jl")
 
 export of
