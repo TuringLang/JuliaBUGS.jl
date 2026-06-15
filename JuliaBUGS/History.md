@@ -1,10 +1,15 @@
 # JuliaBUGS Changelog
 
-## Unreleased
+## 0.14.1
 
 ### Highlights
 
-- **`to_distribution(model::BUGSModel)`** (#27): Wrap a compiled BUGS model as a `Distributions.Distribution` with variate type `NamedTupleVariate{names}`, where `names` are the unique parameter symbols. `rand` performs ancestral sampling and returns a `NamedTuple`; `logpdf` evaluates the joint log density in the original (constrained) parameter space at the supplied `NamedTuple`. This makes BUGS models composable inside other PPLs that consume `Distribution` objects.
+- **`to_distribution(model::BUGSModel)`** (#459, closes #27): Wrap a compiled BUGS model as a `Distributions.Distribution` with variate type `NamedTupleVariate{names}`, where `names` are the unique parameter symbols. `rand` performs ancestral sampling and returns a `NamedTuple`; `logpdf` evaluates the joint log density in the original (constrained) parameter space at the supplied `NamedTuple`. This makes BUGS models composable inside other PPLs that consume `Distribution` objects.
+
+### Compatibility
+
+- `Distributions` compat bumped to `0.25.117` (#459).
+- `LogExpFunctions` `1.0` and `OrderedCollections` `2.0` are now allowed in compat (#471).
 
 ## 0.14.0
 
