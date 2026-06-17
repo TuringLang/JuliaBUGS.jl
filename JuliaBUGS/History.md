@@ -1,5 +1,21 @@
 # JuliaBUGS Changelog
 
+## 0.14.1
+
+### Highlights
+
+- **`to_distribution(model::BUGSModel)`** (#459, closes #27): Wrap a compiled BUGS model as a `Distributions.Distribution` with variate type `NamedTupleVariate{names}`, where `names` are the unique parameter symbols. `rand` performs ancestral sampling and returns a `NamedTuple`; `logpdf` evaluates the joint log density in the original (constrained) parameter space at the supplied `NamedTuple`. This makes BUGS models composable inside other PPLs that consume `Distribution` objects.
+
+- **`of` type system moved to AbstractPPL.** The `of`/`@of` type-specification system now lives in [AbstractPPL](https://github.com/TuringLang/AbstractPPL.jl/pull/168) and is re-exported from JuliaBUGS. The public API is unchanged — `of`, `@of`, and the `of(::BUGSModel)` convenience method continue to work as before — so this is a non-breaking change. JuliaBUGS now requires `AbstractPPL ≥ 0.15.3`.
+
+### Improvements
+
+- Widened dependency compat bounds (#471): `Distributions = "0.25.117"`, `LogExpFunctions = "0.3, 1.0"`, and `OrderedCollections = "1, 2.0"`.
+
+### Internal
+
+- Replaced CompatHelper with Dependabot for dependency updates (#463) and bumped CI GitHub Actions versions.
+
 ## 0.14.0
 
 ### Highlights

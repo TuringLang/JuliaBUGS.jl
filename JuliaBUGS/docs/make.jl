@@ -14,6 +14,7 @@ makedocs(;
             "Two Macros: `@bugs` & `@model`" => "two_macros.md",
             "`@model` Macro" => "model_macro.md",
             "`of` Type System" => "of_design_doc.md",
+            "Model as a Distribution" => "model_as_distribution.md",
         ],
         "Inference" => [
             "Automatic Differentiation" => "inference/ad.md",

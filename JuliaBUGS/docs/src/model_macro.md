@@ -59,7 +59,7 @@ end
 
 ## Type Specifications with `of`
 
-JuliaBUGS provides an `of` type system for specifying parameter structures and constraints. For a comprehensive guide to the `of` type system, including advanced features like symbolic dimensions, arithmetic expressions, and dynamic model structures, see the [of Design Documentation](of_design_doc.md).
+JuliaBUGS uses the `of` type system for specifying parameter structures and constraints. The full API is documented in the [AbstractPPL `of` Type System](https://turinglang.org/AbstractPPL.jl/dev/of/) page; for JuliaBUGS-specific examples and model annotations, see the [`of` Type System](of_design_doc.md) page.
 
 The `of` system serves two main purposes:
 1. Documents the expected structure of parameters
