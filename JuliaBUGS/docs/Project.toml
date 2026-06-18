@@ -19,5 +19,18 @@ ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 JuliaBUGS = {path = ".."}
 
 [compat]
+ADTypes = "1.22.0"
+AbstractMCMC = "5.15.1"
+AbstractPPL = "0.15.3"
+AdvancedHMC = "0.8.5"
+DifferentiationInterface = "0.7.18"
 Distributions = "0.25"
 Documenter = "1.14"
+DocumenterMermaid = "0.2.0"
+ForwardDiff = "1.4.1"
+JuliaBUGS = "0.14.1"
+LogDensityProblems = "2.2.0"
+MCMCChains = "7.7.0"
+MetaGraphsNext = "0.8.0"
+Mooncake = "0.5.32"
+ReverseDiff = "1.17.0"
