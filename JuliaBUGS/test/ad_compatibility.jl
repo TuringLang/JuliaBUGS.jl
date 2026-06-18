@@ -116,9 +116,10 @@
         x = JuliaBUGS.getparams(model)
 
         @testset "AutoReverseDiff - should warn and switch to UseGraph" begin
-            grad_model = @test_warn "does not support mutation" JuliaBUGS.BUGSModelWithGradient(
-                model, AutoReverseDiff()
-            )
+            # Note: The warning uses maxlog=1, so it may be suppressed if another
+            # test in the suite triggered it first. We only assert the behavioral
+            # invariant (mode switches to UseGraph).
+            grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoReverseDiff())
             @test grad_model.base_model.evaluation_mode isa JuliaBUGS.UseGraph
 
             # Should still work after switching

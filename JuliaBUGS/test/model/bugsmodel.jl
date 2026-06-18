@@ -139,8 +139,9 @@ end
         model_def_missing = @bugs begin
             x ~ Normal(0, 1)
             y ~ Normal(x, 1)
+            z ~ Normal(y, 1)
         end
-        model_missing = compile(model_def_missing, (; y=missing))
+        model_missing = compile(model_def_missing, (; y=missing, z=1.0))
         gd_missing = model_missing.graph_evaluation_data
         type_of_missing = Dict(gd_missing.sorted_nodes .=> gd_missing.variable_types)
 
