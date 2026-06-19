@@ -4,11 +4,19 @@ using JuliaBUGS.Model:
     decondition,
     parameters,
     variables,
+    model_parameters,
+    generated_quantities,
+    variable_type,
     getparams,
     settrans,
     set_evaluation_mode,
     UseGeneratedLogDensityFunction,
-    UseGraph
+    UseGraph,
+    VariableType,
+    Observation,
+    ModelParameter,
+    TransformedParameter,
+    GeneratedQuantity
 
 @testset "Compile Vol.1 BUGS Examples" begin
     for model_name in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
@@ -87,7 +95,7 @@ end
     end
 
     @testset "VariableType classification" begin
-        # Model with deterministic, observation, and model parameters
+        # Model with all four variable types
         model_def = @bugs begin
             mu ~ Normal(0, 10)
             sigma ~ Gamma(1, 1)
@@ -99,16 +107,18 @@ end
         end
 
         model = compile(model_def, (; y=2.5))
-        gd = model.graph_evaluation_data
-        type_of = Dict(gd.sorted_nodes .=> gd.variable_types)
 
-        @test type_of[@varname(mu)] == ModelParameter
-        @test type_of[@varname(sigma)] == ModelParameter
-        @test type_of[@varname(x[1])] == ModelParameter
-        @test type_of[@varname(mean_x)] == Deterministic
-        @test type_of[@varname(y)] == Observation
+        # Test variable_type accessor
+        @test variable_type(model, @varname(mu)) == ModelParameter
+        @test variable_type(model, @varname(sigma)) == ModelParameter
+        @test variable_type(model, @varname(x[1])) == ModelParameter
+        @test variable_type(model, @varname(mean_x)) == TransformedParameter
+        @test variable_type(model, @varname(y)) == Observation
 
-        # Model with a generated quantity
+        # variable_type should error on nonexistent variables
+        @test_throws ArgumentError variable_type(model, @varname(nonexistent))
+
+        # Model with a stochastic generated quantity
         model_def_gq = @bugs begin
             mu ~ Normal(0, 1)
             y ~ Normal(mu, 1)
@@ -116,45 +126,83 @@ end
         end
 
         model_gq = compile(model_def_gq, (; y=1.0))
-        gd_gq = model_gq.graph_evaluation_data
-        type_of_gq = Dict(gd_gq.sorted_nodes .=> gd_gq.variable_types)
 
-        @test type_of_gq[@varname(mu)] == ModelParameter
-        @test type_of_gq[@varname(y)] == Observation
-        @test type_of_gq[@varname(z)] == GeneratedQuantity
+        @test variable_type(model_gq, @varname(mu)) == ModelParameter
+        @test variable_type(model_gq, @varname(y)) == Observation
+        @test variable_type(model_gq, @varname(z)) == GeneratedQuantity
 
-        @test @varname(mu) in mcmc_parameters(model_gq)
-        @test @varname(z) ∉ mcmc_parameters(model_gq)
-        @test @varname(z) in postprocess_variables(model_gq)
+        @test @varname(mu) in model_parameters(model_gq)
+        @test @varname(z) ∉ model_parameters(model_gq)
+        @test @varname(z) in generated_quantities(model_gq)
 
         # Missing-data interpolation that influences observed likelihood
-        # should remain a model parameter (sampled by MCMC).
+        # should remain a model parameter.
         model_def_missing = @bugs begin
             x ~ Normal(0, 1)
             y ~ Normal(x, 1)
+            z ~ Normal(y, 1)
         end
-        model_missing = compile(model_def_missing, (; y=missing))
-        gd_missing = model_missing.graph_evaluation_data
-        type_of_missing = Dict(gd_missing.sorted_nodes .=> gd_missing.variable_types)
+        model_missing = compile(model_def_missing, (; y=missing, z=1.0))
 
-        @test type_of_missing[@varname(y)] == ModelParameter
-        @test @varname(y) in mcmc_parameters(model_missing)
-        @test @varname(y) ∉ postprocess_variables(model_missing)
+        @test variable_type(model_missing, @varname(y)) == ModelParameter
+        @test @varname(y) in model_parameters(model_missing)
+        @test @varname(y) ∉ generated_quantities(model_missing)
 
-        # Unobserved stochastic node with no observed descendants should be postprocessed.
+        # Unobserved stochastic node with no observed descendants
         model_def_post = @bugs begin
             θ ~ Normal(0, 1)
             y ~ Normal(θ, 1)
             z ~ Normal(θ, 1)
         end
         model_post = compile(model_def_post, (; y=1.0))
-        gd_post = model_post.graph_evaluation_data
-        type_of_post = Dict(gd_post.sorted_nodes .=> gd_post.variable_types)
 
-        @test type_of_post[@varname(z)] == GeneratedQuantity
-        @test @varname(z) in parameters(model_post)
-        @test @varname(z) ∉ mcmc_parameters(model_post)
-        @test @varname(z) in postprocess_variables(model_post)
+        @test variable_type(model_post, @varname(z)) == GeneratedQuantity
+        @test @varname(z) ∉ model_parameters(model_post)
+        @test @varname(z) in generated_quantities(model_post)
+
+        # Deterministic node with no observed descendants
+        model_def_det_gq = @bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            pred = mu + 1.0
+        end
+        model_det_gq = compile(model_def_det_gq, (; y=1.0))
+
+        @test variable_type(model_det_gq, @varname(pred)) == GeneratedQuantity
+        @test @varname(pred) in generated_quantities(model_det_gq)
+    end
+
+    @testset "Classification invariants" begin
+        model_def = @bugs begin
+            mu ~ Normal(0, 10)
+            sigma ~ Gamma(1, 1)
+            for i in 1:3
+                x[i] ~ Normal(mu, sigma)
+            end
+            mean_x = mean(x[:])
+            y ~ Normal(mean_x, 1)
+            z ~ Normal(mu, 1)
+            pred = mu + sigma
+        end
+
+        model = compile(model_def, (; y=2.5))
+        mp = model_parameters(model)
+        gq = generated_quantities(model)
+
+        # model_parameters and generated_quantities are disjoint
+        @test isempty(intersect(Set(mp), Set(gq)))
+
+        # Every unobserved stochastic node is in exactly one partition
+        for vn in parameters(model)
+            @test (vn in mp) ⊻ (vn in gq)
+        end
+
+        # Deterministic nodes with no observed descendants are in generated_quantities
+        @test @varname(pred) in gq
+
+        # TransformedParameters are in neither
+        @test @varname(mean_x) ∉ mp
+        @test @varname(mean_x) ∉ gq
     end
 
     @testset "initialize!" begin
