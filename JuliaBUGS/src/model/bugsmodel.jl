@@ -109,7 +109,15 @@ function GraphEvaluationData(
     generated_quantities = VarName[]
     variable_types = Vector{VariableType}(undef, length(sorted_nodes))
 
-    gq_vars = find_generated_quantities_variables(g)
+    if gq_override !== nothing
+        gq_vars = gq_override
+    else
+        gq_vars = find_generated_quantities_variables(g)
+        has_observations = any(g[vn].is_observed for vn in labels(g) if g[vn].is_stochastic)
+        if !has_observations
+            gq_vars = Set{VarName}()
+        end
+    end
 
     for (i, vn) in enumerate(sorted_nodes)
         (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
@@ -314,7 +322,7 @@ function BUGSModel(
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
     Dict{VarName,Int}()
-    sampled_vars = Set(graph_evaluation_data.mcmc_parameters)
+    sampled_vars = Set(graph_evaluation_data.model_parameters)
 
     for (i, vn) in enumerate(graph_evaluation_data.sorted_nodes)
         is_stochastic = graph_evaluation_data.is_stochastic_vals[i]
@@ -477,6 +485,34 @@ function initialize!(model::BUGSModel, initial_params::AbstractVector)
 end
 
 """
+    _active_parameters(model::BUGSModel)
+
+In `UseAutoMarginalization` mode, this filters out discrete variables that are being marginalized.
+Otherwise, it returns `model_parameters(model)`.
+"""
+function _active_parameters(model::BUGSModel)
+    if model.evaluation_mode isa UseAutoMarginalization
+        gd = model.graph_evaluation_data
+        mc = model.marginalization_cache
+        return filter(model_parameters(model)) do vn
+            idx = findfirst(==(vn), gd.sorted_nodes)
+            if idx !== nothing
+                node_type = mc.node_types[idx]
+                if node_type == :discrete_infinite
+                    error(
+                        "Model contains discrete infinite variable $(vn) which cannot be marginalized. " *
+                        "Use UseGraph evaluation mode instead.",
+                    )
+                end
+                return node_type == :continuous
+            end
+            return false
+        end
+    end
+    return model_parameters(model)
+end
+
+"""
     getparams([T::Type], model::BUGSModel, evaluation_env=model.evaluation_env)
 
 Extract parameter values from the model.
@@ -510,8 +546,10 @@ params_vec = getparams(model, custom_env)
 params_dict = getparams(Dict, model, custom_env)
 ```
 """
+
+
 function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
-    param_vars = _active_parameter_vars(model)
+    param_vars = _active_parameters(model)
 
     # Compute total length for allocation
     param_length = 0
@@ -558,7 +596,7 @@ function getparams(
     T::Type{<:AbstractDict}, model::BUGSModel, evaluation_env=model.evaluation_env
 )
     d = T()
-    param_vars = _active_parameter_vars(model)
+    param_vars = _active_parameters(model)
     for v in param_vars
         value = AbstractPPL.getvalue(evaluation_env, v)
         if !model.transformed
@@ -661,7 +699,7 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
 
                 # Create fresh GraphEvaluationData for the new order
                 new_gd = GraphEvaluationData(
-                    model.g, sorted_nodes, model.graph_evaluation_data.mcmc_parameters
+                    model.g, sorted_nodes, model.graph_evaluation_data.model_parameters
                 )
 
                 model = BangBang.setproperty!!(model, :graph_evaluation_data, new_gd)
@@ -703,7 +741,7 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 param_lengths = Dict{eltype(sorted_nodes),Int}()
                 param_offsets = Dict{eltype(sorted_nodes),Int}()
                 offset = 1
-                for vn in gd.mcmc_parameters
+                for vn in gd.model_parameters
                     idx = get(vn_to_idx, vn, 0)
                     if idx != 0 && node_types[idx] == :continuous
                         len = model.transformed_var_lengths[vn]

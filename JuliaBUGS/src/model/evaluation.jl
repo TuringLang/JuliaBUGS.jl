@@ -58,7 +58,7 @@ function evaluate_with_rng!!(
     logprior = 0.0
     loglikelihood = 0.0
     evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
-    sampled_vars = Set(model.graph_evaluation_data.mcmc_parameters)
+    sampled_vars = Set(model.graph_evaluation_data.model_parameters)
 
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
         is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
@@ -136,10 +136,15 @@ function evaluate_with_env!!(
     evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols);
     temperature=1.0,
     transformed=true,
+    include_generated_quantities=false,
 )
     logprior = 0.0
     loglikelihood = 0.0
-    sampled_vars = Set(model.graph_evaluation_data.mcmc_parameters)
+    sampled_vars = if include_generated_quantities
+        Set(model.graph_evaluation_data.sorted_parameters)
+    else
+        Set(model.graph_evaluation_data.model_parameters)
+    end
 
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
         is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
@@ -213,7 +218,7 @@ function evaluate_with_values!!(
     end
 
     evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
-    sampled_vars = Set(model.graph_evaluation_data.mcmc_parameters)
+    sampled_vars = Set(model.graph_evaluation_data.model_parameters)
     current_idx = 1
     logprior, loglikelihood = 0.0, 0.0
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)

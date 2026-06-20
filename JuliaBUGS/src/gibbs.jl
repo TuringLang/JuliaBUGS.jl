@@ -109,7 +109,7 @@ gibbs = Gibbs(model, sampler_map)
 function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
     verify_sampler_map(model, sampler_map)
     # Expand variable groups once to avoid repeated computation
-    model_parameters = model.graph_evaluation_data.mcmc_parameters
+    model_parameters = model.graph_evaluation_data.model_parameters
     expanded_sampler_map = OrderedDict()
     for (variable_group, sampler) in sampler_map
         variable_group_vec =
@@ -155,7 +155,7 @@ parameters and using the OrderedDict constructor instead.
 function Gibbs(model::BUGSModel, s::AbstractMCMC.AbstractSampler)
     # Use the sampler as-is for all parameters
     sampler_map = OrderedDict([
-        v => s for v in model.graph_evaluation_data.mcmc_parameters
+        v => s for v in model.graph_evaluation_data.model_parameters
     ])
     return Gibbs(model, sampler_map)
 end
@@ -291,7 +291,7 @@ function verify_sampler_map(model::BUGSModel, sampler_map::OrderedDict)
     end
 
     # Get model parameters
-    model_parameters = model.graph_evaluation_data.mcmc_parameters
+    model_parameters = model.graph_evaluation_data.model_parameters
 
     # Track which model parameters are covered
     covered_parameters = Set{VarName}()
@@ -364,7 +364,7 @@ function AbstractMCMC.step(
     verify_sampler_map(model, sampler.sampler_map)
 
     cached_conditioned_models = OrderedDict()
-    model_parameters = model.graph_evaluation_data.mcmc_parameters
+    model_parameters = model.graph_evaluation_data.model_parameters
 
     for variables_to_update in keys(sampler.sampler_map)
         # Variables to condition on are all parameters except those we're updating

@@ -11,7 +11,7 @@ function AbstractMCMC.ParamsWithStats(
 )
     bugs_model = model.logdensity
 
-    param_vars = Model._active_parameter_vars(bugs_model)
+    param_vars = model_parameters(bugs_model)
 
     p = if params
         d = OrderedDict{String,Any}()

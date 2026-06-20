@@ -1,7 +1,7 @@
 using LogDensityProblems
 
 function _eval_logdensity(model, ::UseGeneratedLogDensityFunction, x)
-    if !isempty(model.graph_evaluation_data.postprocess_stochastic)
+    if !isempty(model.graph_evaluation_data.generated_quantities)
         _, log_densities = evaluate_with_values!!(model, x; transformed=model.transformed)
         return log_densities.tempered_logjoint
     end
@@ -31,7 +31,7 @@ function LogDensityProblems.logdensity(model::BUGSModel, x::AbstractArray)
 end
 
 function LogDensityProblems.dimension(model::BUGSModel)
-    param_vars = Model._active_parameter_vars(model)
+    param_vars = _active_parameters(model)
     dim = 0
     if model.transformed
         for vn in param_vars

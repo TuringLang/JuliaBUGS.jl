@@ -8,7 +8,7 @@ using JuliaBUGS:
     find_generated_quantities_variables,
     evaluate!!,
     getparams
-using JuliaBUGS.Model: UseAutoMarginalization, _active_parameter_vars
+using JuliaBUGS.Model: UseAutoMarginalization, model_parameters
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.Accessors
 using MCMCChains: Chains
@@ -133,7 +133,7 @@ function JuliaBUGS.gen_chains(
 )
     gd = model.graph_evaluation_data
     # Filter parameters based on evaluation mode and MCMC partition.
-    param_vars = _active_parameter_vars(model)
+    param_vars = model_parameters(model)
 
     # Find and order generated quantities
     # Exclude parameters to avoid double counting forward-sampled variables

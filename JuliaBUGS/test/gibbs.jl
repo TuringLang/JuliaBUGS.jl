@@ -508,7 +508,7 @@ using StatsBase: mode
 
         @testset "Complex model sampler map" begin
             # α and β are generated quantities (unused in the likelihood) and are
-            # correctly excluded from mcmc_parameters, so they don't need samplers.
+            # correctly excluded from model_parameters, so they don't need samplers.
             # Test various ways to specify the sampler map
             sampler_map1 = OrderedDict(
                 @varname(μ) => IndependentMH(),
