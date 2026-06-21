@@ -543,7 +543,7 @@ function _create_modified_model(
     base_model=nothing,
 )
     # Create new graph evaluation data preserving the original GQ classification
-    # We must explicitly keep the original `generated_quantities` to avoid them being reclassified.
+    # We must explicitly keep the original `generated_quantities` to avoid 
     original_gq = Set(generated_quantities(
         isnothing(model.base_model) ? model : model.base_model
     ))
