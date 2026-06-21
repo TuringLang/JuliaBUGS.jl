@@ -82,6 +82,42 @@
         @test logpdf(d, nt) ≈ manual
     end
 
+    # @testset "partially observed array" begin
+    #    model_def = @bugs begin
+    #         for i in 1:4
+    #             x[i] ~ Normal(0, 1)
+    #         end
+    #     end
+    #     model = compile(model_def, (; x=[missing, 1.0, missing, 2.0]))
+    #     d = to_distribution(model)
+
+    #     # rand bakes the model's observed data into the observed slots.
+    #     nt = rand(MersenneTwister(0), d)
+    #     @test nt.x[2] == 1.0
+    #     @test nt.x[4] == 2.0
+
+    #     # logpdf is the full joint, but the observed slots are scored against the MODEL's
+    #     # data, never against the caller's input: only the free parameters (x[1], x[3]) are
+    #     # read from the supplied NamedTuple. So logpdf is invariant to whatever sits in the
+    #     # observed slots (x[2], x[4]).
+    #     free1, free3 = nt.x[1], nt.x[3]
+    #     expected =
+    #         logpdf(Normal(0, 1), free1) +
+    #         logpdf(Normal(0, 1), free3) +    # free parameters x[1], x[3]
+    #         logpdf(Normal(0, 1), 1.0) +
+    #         logpdf(Normal(0, 1), 2.0)        # observed data x[2], x[4] (from the model)
+    #     @test logpdf(d, nt) ≈ expected
+
+    #     # Tampering with the observed slots must not change the density (the bug: it did).
+    #     tampered = (; x=[free1, 999.0, free3, -888.0])
+    #     @test logpdf(d, tampered) ≈ expected
+    #     @test logpdf(d, tampered) ≈ logpdf(d, nt)
+
+    #     # logpdf must not corrupt the model's stored data.
+    #     @test model.evaluation_env.x[2] == 1.0
+    #     @test model.evaluation_env.x[4] == 2.0
+    # end
+
     @testset "mixed discrete/continuous" begin
         model_def = @bugs begin
             p ~ Beta(2, 2)
