@@ -58,7 +58,6 @@ function evaluate_with_rng!!(
     logprior = 0.0
     loglikelihood = 0.0
     evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
-    sampled_vars = Set(model.graph_evaluation_data.model_parameters)
 
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
         is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
@@ -76,12 +75,8 @@ function evaluate_with_rng!!(
                 else
                     value = AbstractPPL.getvalue(model.evaluation_env, vn)
                 end
-            elseif vn in sampled_vars
-                value = rand(rng, dist)
             else
-                # Postprocessed stochastic variables are excluded from the MCMC target.
-                # Keep current value deterministic during inference-time evaluation.
-                value = AbstractPPL.getvalue(evaluation_env, vn)
+                value = rand(rng, dist)
             end
 
             if transformed
@@ -96,7 +91,7 @@ function evaluate_with_rng!!(
 
             if is_observed
                 loglikelihood += logp
-            elseif vn in sampled_vars
+            else
                 logprior += logp
             end
 

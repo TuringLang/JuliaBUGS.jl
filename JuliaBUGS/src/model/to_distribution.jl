@@ -164,9 +164,8 @@ function Distributions.logpdf(d::BUGSModelDistribution, x::NamedTuple)
         )
         env = BangBang.setindex!!(env, AbstractPPL.getvalue(x, vn), vn)
     end
-    _, log_densities = evaluate_with_env!!(
-        model, env; transformed=false, include_generated_quantities=true
-    )
+    _, log_densities = evaluate_with_env!!(model, env; transformed=false)
+    # Untempered joint = logprior + loglikelihood, independent of any temperature default.
     return log_densities.logprior + log_densities.loglikelihood
 end
 

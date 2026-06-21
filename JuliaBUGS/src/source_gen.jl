@@ -252,32 +252,13 @@ function _lower_model_def_to_represent_observe_stmts(
     for statement in reconstructed_model_def.args
         if Meta.isexpr(statement, (:(=), :call))
             stmt_id = stmt_to_stmt_id[statement]
-            observed_loop_vars, model_parameter_loop_vars, deterministic_loop_vars, generated_quantity_loop_vars = var_types[stmt_id]
+            observed_loop_vars, model_parameter_loop_vars, deterministic_loop_vars = var_types[stmt_id]
 
             _contains_observed = !isempty(observed_loop_vars)
             _contains_model_parameter = !isempty(model_parameter_loop_vars)
-            _contains_generated_quantity = !isempty(generated_quantity_loop_vars)
 
             if _contains_observed
-                if _contains_model_parameter && _contains_generated_quantity
-                    # Three-way: observed, model parameter, and GQ iterations
-                    MacroTools.@capture(statement, lhs_ ~ rhs_)
-                    new_stmt = MacroTools.@q if condition_placeholder
-                        $(lhs) ~ $(rhs)
-                    elseif observed_placeholder
-                        $(lhs) ≂ $(rhs)
-                    else
-                        $(lhs) ≃ $(rhs)
-                    end
-                    new_stmt.args[1] = __generate_model_parameter_condition_expr(
-                        model_parameter_loop_vars
-                    )
-                    # The elseif condition: check if current iteration is observed
-                    new_stmt.args[3].args[1] = __generate_model_parameter_condition_expr(
-                        observed_loop_vars
-                    )
-                    push!(lowered_model_def.args, new_stmt)
-                elseif _contains_model_parameter
+                if _contains_model_parameter
                     MacroTools.@capture(statement, lhs_ ~ rhs_)
                     new_stmt = MacroTools.@q if condition_placeholder
                         $(lhs) ~ $(rhs)
@@ -286,18 +267,6 @@ function _lower_model_def_to_represent_observe_stmts(
                     end
                     new_stmt.args[1] = __generate_model_parameter_condition_expr(
                         model_parameter_loop_vars
-                    )
-                    push!(lowered_model_def.args, new_stmt)
-                elseif _contains_generated_quantity
-                    # Observed + GQ but no model parameters
-                    MacroTools.@capture(statement, lhs_ ~ rhs_)
-                    new_stmt = MacroTools.@q if condition_placeholder
-                        $(lhs) ≂ $(rhs)
-                    else
-                        $(lhs) ≃ $(rhs)
-                    end
-                    new_stmt.args[1] = __generate_model_parameter_condition_expr(
-                        observed_loop_vars
                     )
                     push!(lowered_model_def.args, new_stmt)
                 else
@@ -305,23 +274,6 @@ function _lower_model_def_to_represent_observe_stmts(
                     new_stmt = MacroTools.@q $(lhs) ≂ $(rhs)
                     push!(lowered_model_def.args, new_stmt)
                 end
-            elseif _contains_generated_quantity && !_contains_model_parameter
-                # Pure generated quantity: forward-sample, no logp contribution
-                MacroTools.@capture(statement, lhs_ ~ rhs_)
-                new_stmt = MacroTools.@q $(lhs) ≃ $(rhs)
-                push!(lowered_model_def.args, new_stmt)
-            elseif _contains_generated_quantity && _contains_model_parameter
-                # Mixed: some iterations are MCMC parameters, some are GQ
-                MacroTools.@capture(statement, lhs_ ~ rhs_)
-                new_stmt = MacroTools.@q if condition_placeholder
-                    $(lhs) ~ $(rhs)
-                else
-                    $(lhs) ≃ $(rhs)
-                end
-                new_stmt.args[1] = __generate_model_parameter_condition_expr(
-                    model_parameter_loop_vars
-                )
-                push!(lowered_model_def.args, new_stmt)
             else
                 push!(lowered_model_def.args, statement)
             end
@@ -466,14 +418,8 @@ function _generate_lowered_model_def(
         sorted_fissioned_stmts
     )
     induction_variable_values = _var_to_loop_vars(model_def, evaluation_env)
-    gq_vars = find_generated_quantities_variables(g)
-    # If no observations exist, don't classify anything as GQ
-    has_observations = any(g[vn].is_observed for vn in labels(g) if g[vn].is_stochastic)
-    if !has_observations
-        gq_vars = Set{VarName}()
-    end
     var_types = __determine_var_types(
-        g, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values, gq_vars
+        g, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values
     )
     lowered_model_def = _lower_model_def_to_represent_observe_stmts(
         reconstructed_model_def, stmt_to_stmt_id, var_types, evaluation_env
@@ -546,24 +492,21 @@ function _var_to_loop_vars(model_def, evaluation_env)
 end
 
 function __determine_var_types(
-    g::JuliaBUGS.BUGSGraph, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values,
-    gq_vars::Set=Set{VarName}(),
+    g::JuliaBUGS.BUGSGraph, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values
 )
-    # for each statement, have four lists: observed, model_parameter, deterministic, generated_quantity
-    var_types = [([], [], [], []) for _ in 1:length(stmt_id_to_stmt)]
+    # for each statement, have three list to collect the var of each type
+    var_types = [([], [], []) for _ in 1:length(stmt_id_to_stmt)]
     for stmt_id in keys(stmt_id_to_stmt)
         if !haskey(stmt_id_to_var, stmt_id)
             continue
         end
         vars = stmt_id_to_var[stmt_id]
         for var in vars
-            var_type = __variable_type(g, var, gq_vars)
+            var_type = __variable_type(g, var)
             if var_type == :observed
                 push!(var_types[stmt_id][1], induction_variable_values[var])
             elseif var_type == :model_parameter
                 push!(var_types[stmt_id][2], induction_variable_values[var])
-            elseif var_type == :generated_quantity
-                push!(var_types[stmt_id][4], induction_variable_values[var])
             else
                 push!(var_types[stmt_id][3], induction_variable_values[var])
             end
@@ -572,12 +515,10 @@ function __determine_var_types(
     return var_types
 end
 
-function __variable_type(g::JuliaBUGS.BUGSGraph, var, gq_vars::Set=Set{VarName}())
+function __variable_type(g::JuliaBUGS.BUGSGraph, var)
     if g[var].is_stochastic
         if g[var].is_observed
             return :observed
-        elseif var in gq_vars
-            return :generated_quantity
         else
             return :model_parameter
         end
@@ -609,12 +550,8 @@ function __gen_logp_density_function_body_exprs(stmts::Vector, evaluation_env, e
         elseif Meta.isexpr(stmt, :call)
             if stmt.args[1] == :~
                 push!(exprs, __gen_model_parameter_exprs(stmt).args...)
-            elseif stmt.args[1] == :≂
-                push!(exprs, __gen_observe_exprs(stmt))
-            elseif stmt.args[1] == :≃
-                push!(exprs, __gen_generated_quantity_exprs(stmt))
             else
-                error("Unknown operator: $(stmt.args[1])")
+                push!(exprs, __gen_observe_exprs(stmt))
             end
         elseif Meta.isexpr(stmt, :for)
             new_body = __gen_logp_density_function_body_exprs(
@@ -667,11 +604,6 @@ end
 
 function __gen_deterministic_exprs(stmt)
     return stmt
-end
-
-function __gen_generated_quantity_exprs(stmt)
-    MacroTools.@capture(stmt, lhs_ ≃ rhs_)
-    return MacroTools.@q $lhs = rand($(rhs))
 end
 
 function __gen_model_parameter_exprs(stmt)

@@ -547,7 +547,6 @@ params_dict = getparams(Dict, model, custom_env)
 ```
 """
 
-
 function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
     param_vars = _active_parameters(model)
 
