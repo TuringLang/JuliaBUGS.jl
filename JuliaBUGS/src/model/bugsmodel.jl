@@ -97,7 +97,8 @@ function GraphEvaluationData(
     sorted_nodes::Vector{<:VarName}=VarName[
         label_for(g, node) for node in topological_sort(g)
     ],
-    active_parameters::Union{Nothing,Vector{<:VarName}}=nothing,
+    active_parameters::Union{Nothing,Vector{<:VarName}}=nothing;
+    gq_override::Union{Nothing,Set{<:VarName}}=nothing,
 )
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
@@ -108,7 +109,15 @@ function GraphEvaluationData(
     generated_quantities = VarName[]
     variable_types = Vector{VariableType}(undef, length(sorted_nodes))
 
-    gq_vars = find_generated_quantities_variables(g)
+    if gq_override !== nothing
+        gq_vars = gq_override
+    else
+        gq_vars = find_generated_quantities_variables(g)
+        has_observations = any(g[vn].is_observed for vn in labels(g) if g[vn].is_stochastic)
+        if !has_observations
+            gq_vars = Set{VarName}()
+        end
+    end
 
     for (i, vn) in enumerate(sorted_nodes)
         (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
@@ -313,6 +322,7 @@ function BUGSModel(
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
     Dict{VarName,Int}()
+    sampled_vars = Set(graph_evaluation_data.model_parameters)
 
     for (i, vn) in enumerate(graph_evaluation_data.sorted_nodes)
         is_stochastic = graph_evaluation_data.is_stochastic_vals[i]
@@ -337,8 +347,10 @@ function BUGSModel(
                 else
                     length(Bijectors.transformed(dist))
                 end
-                untransformed_param_length += untransformed_var_lengths[vn]
-                transformed_param_length += transformed_var_lengths[vn]
+                if vn in sampled_vars
+                    untransformed_param_length += untransformed_var_lengths[vn]
+                    transformed_param_length += transformed_var_lengths[vn]
+                end
 
                 if haskey(initial_params, AbstractPPL.getsym(vn))
                     initialization = AbstractPPL.getvalue(initial_params, vn)
@@ -381,7 +393,7 @@ end
 """
     parameters(model::BUGSModel)
 
-Return a vector of `VarName` containing the names of the model parameters (unobserved stochastic variables).
+Return a vector of `VarName` containing the names of all unobserved stochastic variables.
 """
 parameters(model::BUGSModel) = model.graph_evaluation_data.sorted_parameters
 
@@ -473,6 +485,34 @@ function initialize!(model::BUGSModel, initial_params::AbstractVector)
 end
 
 """
+    _active_parameters(model::BUGSModel)
+
+In `UseAutoMarginalization` mode, this filters out discrete variables that are being marginalized.
+Otherwise, it returns `model_parameters(model)`.
+"""
+function _active_parameters(model::BUGSModel)
+    if model.evaluation_mode isa UseAutoMarginalization
+        gd = model.graph_evaluation_data
+        mc = model.marginalization_cache
+        return filter(model_parameters(model)) do vn
+            idx = findfirst(==(vn), gd.sorted_nodes)
+            if idx !== nothing
+                node_type = mc.node_types[idx]
+                if node_type == :discrete_infinite
+                    error(
+                        "Model contains discrete infinite variable $(vn) which cannot be marginalized. " *
+                        "Use UseGraph evaluation mode instead.",
+                    )
+                end
+                return node_type == :continuous
+            end
+            return false
+        end
+    end
+    return model_parameters(model)
+end
+
+"""
     getparams([T::Type], model::BUGSModel, evaluation_env=model.evaluation_env)
 
 Extract parameter values from the model.
@@ -507,18 +547,7 @@ params_dict = getparams(Dict, model, custom_env)
 ```
 """
 function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
-    # Determine which parameters to include based on evaluation mode
-    gd = model.graph_evaluation_data
-    param_vars = if model.evaluation_mode isa UseAutoMarginalization
-        # Only include continuous parameters when auto marginalizing
-        mc = model.marginalization_cache
-        filter(gd.sorted_parameters) do vn
-            idx = findfirst(==(vn), gd.sorted_nodes)
-            idx !== nothing && mc.node_types[idx] == :continuous
-        end
-    else
-        gd.sorted_parameters
-    end
+    param_vars = _active_parameters(model)
 
     # Compute total length for allocation
     param_length = 0
@@ -565,17 +594,7 @@ function getparams(
     T::Type{<:AbstractDict}, model::BUGSModel, evaluation_env=model.evaluation_env
 )
     d = T()
-    gd = model.graph_evaluation_data
-    # Respect evaluation mode when selecting parameters
-    param_vars = if model.evaluation_mode isa UseAutoMarginalization
-        mc = model.marginalization_cache
-        filter(gd.sorted_parameters) do vn
-            idx = findfirst(==(vn), gd.sorted_nodes)
-            idx !== nothing && mc.node_types[idx] == :continuous
-        end
-    else
-        gd.sorted_parameters
-    end
+    param_vars = _active_parameters(model)
     for v in param_vars
         value = AbstractPPL.getvalue(evaluation_env, v)
         if !model.transformed
@@ -677,7 +696,9 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 end
 
                 # Create fresh GraphEvaluationData for the new order
-                new_gd = GraphEvaluationData(model.g, sorted_nodes)
+                new_gd = GraphEvaluationData(
+                    model.g, sorted_nodes, model.graph_evaluation_data.model_parameters
+                )
 
                 model = BangBang.setproperty!!(model, :graph_evaluation_data, new_gd)
                 model = BangBang.setproperty!!(
@@ -718,7 +739,7 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 param_lengths = Dict{eltype(sorted_nodes),Int}()
                 param_offsets = Dict{eltype(sorted_nodes),Int}()
                 offset = 1
-                for vn in gd.sorted_parameters
+                for vn in gd.model_parameters
                     idx = get(vn_to_idx, vn, 0)
                     if idx != 0 && node_types[idx] == :continuous
                         len = model.transformed_var_lengths[vn]

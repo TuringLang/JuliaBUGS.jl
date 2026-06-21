@@ -507,9 +507,10 @@ using StatsBase: mode
         model = compile(model_def, (; J=J, N=N, group_id=group_id, y=y_data))
 
         @testset "Complex model sampler map" begin
+            # α and β are generated quantities (unused in the likelihood) and are
+            # correctly excluded from model_parameters, so they don't need samplers.
             # Test various ways to specify the sampler map
             sampler_map1 = OrderedDict(
-                [@varname(α), @varname(β)] => IndependentMH(),
                 @varname(μ) => IndependentMH(),
                 @varname(θ) => IndependentMH(),
             )
@@ -517,8 +518,6 @@ using StatsBase: mode
 
             # More granular specification
             sampler_map2 = OrderedDict(
-                @varname(α) => IndependentMH(),
-                @varname(β) => IndependentMH(),
                 [@varname(μ[1]), @varname(μ[2]), @varname(μ[3])] => IndependentMH(),
                 [@varname(θ[i]) for i in 1:N] => IndependentMH(),
             )

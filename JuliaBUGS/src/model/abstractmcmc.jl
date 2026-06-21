@@ -10,17 +10,8 @@ function AbstractMCMC.ParamsWithStats(
     extras::Bool=false,
 )
     bugs_model = model.logdensity
-    gd = bugs_model.graph_evaluation_data
 
-    param_vars = if bugs_model.evaluation_mode isa UseAutoMarginalization
-        mc = bugs_model.marginalization_cache
-        filter(gd.sorted_parameters) do vn
-            idx = findfirst(==(vn), gd.sorted_nodes)
-            idx !== nothing && mc.node_types[idx] == :continuous
-        end
-    else
-        gd.sorted_parameters
-    end
+    param_vars = model_parameters(bugs_model)
 
     p = if params
         d = OrderedDict{String,Any}()

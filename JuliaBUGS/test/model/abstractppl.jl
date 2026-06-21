@@ -81,7 +81,7 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             @test !isnothing(model_cond_gen.log_density_computation_function)
 
             # Use zeros to avoid parameter order issues
-            params = zeros(length(parameters(model_cond)))
+            params = zeros(LogDensityProblems.dimension(model_cond))
             logp1 = Base.invokelatest(LogDensityProblems.logdensity, model_cond_gen, params)
 
             # Compare with graph evaluation on the SAME model (model_cond_gen)
@@ -221,7 +221,7 @@ JuliaBUGS.@bugs_primitive Normal Gamma
                 @test m2.evaluation_mode isa UseGraph
 
                 # Can switch to generated mode explicitly and match graph
-                params = zeros(length(parameters(m2)))
+                params = zeros(LogDensityProblems.dimension(m2))
                 logp_gen = Base.invokelatest(
                     LogDensityProblems.logdensity,
                     set_evaluation_mode(m2, UseGeneratedLogDensityFunction()),

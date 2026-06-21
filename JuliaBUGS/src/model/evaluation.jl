@@ -131,9 +131,15 @@ function evaluate_with_env!!(
     evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols);
     temperature=1.0,
     transformed=true,
+    include_generated_quantities=false,
 )
     logprior = 0.0
     loglikelihood = 0.0
+    sampled_vars = if include_generated_quantities
+        Set(model.graph_evaluation_data.sorted_parameters)
+    else
+        Set(model.graph_evaluation_data.model_parameters)
+    end
 
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
         is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
@@ -163,7 +169,7 @@ function evaluate_with_env!!(
 
             if is_observed
                 loglikelihood += logp
-            else
+            elseif vn in sampled_vars
                 logprior += logp
             end
         end
@@ -207,6 +213,7 @@ function evaluate_with_values!!(
     end
 
     evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
+    sampled_vars = Set(model.graph_evaluation_data.model_parameters)
     current_idx = 1
     logprior, loglikelihood = 0.0, 0.0
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
@@ -219,7 +226,7 @@ function evaluate_with_values!!(
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(evaluation_env, loop_vars)
-            if !is_observed
+            if !is_observed && vn in sampled_vars
                 l = var_lengths[vn]
                 if transformed
                     b = Bijectors.bijector(dist)
@@ -240,6 +247,11 @@ function evaluate_with_values!!(
                 end
                 current_idx += l
                 logprior += logpdf(dist, value) + logjac
+                evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+            elseif !is_observed
+                # Postprocessed stochastic variables are not part of parameter vectors
+                # and should not contribute to the sampled target density.
+                value = AbstractPPL.getvalue(evaluation_env, vn)
                 evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
             else
                 loglikelihood += logpdf(dist, AbstractPPL.getvalue(evaluation_env, vn))
