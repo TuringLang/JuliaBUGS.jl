@@ -269,3 +269,225 @@ end
         @test isapprox(ld_graph, ld_gen; rtol=1e-10)
     end
 end
+
+@testset "generated quantities in generated log-density function" begin
+    # A generated quantity (GQ) is an unobserved node (stochastic or deterministic) that
+    # cannot reach any observation, so it contributes nothing to the model log density and
+    # the generated function must drop its `~`/`=` statement entirely. The helper below
+    # asserts the invariants the feature must uphold for each model:
+    #
+    #   I1  Mode-invariance: `model_parameters`, `generated_quantities`, and `dimension`
+    #       are identical between `UseGraph` and `UseGeneratedLogDensityFunction`. (This is
+    #       exactly what the conditioning/regeneration consistency bug used to violate.)
+    #   I2  Partition: a node is never both a model parameter and a generated quantity, and
+    #       `model_parameters ⊆ parameters ⊆ model_parameters ∪ generated_quantities`
+    #       (`parameters` additionally holds the stochastic generated quantities).
+    #   I3  Dimension reflects model parameters only: `dimension == length(getparams)` and
+    #       no generated quantity appears in the parameter vector.
+    #   I4  Generated ≡ graph: equal log density at matched parameter values, flattening
+    #       parameters in each model's own ordering (the generated model re-orders nodes to
+    #       loop-execution order).
+    #   I5  Generated quantities do not enter the log density: re-forward-sampling the GQ
+    #       (which changes only GQ values, leaving parameters and observations fixed) leaves
+    #       both `getparams` and the log density unchanged, in both modes.
+    JuliaBUGS.@bugs_primitive Normal
+
+    fsgq = JuliaBUGS.Model.forward_sample_generated_quantities!!
+
+    # `n_params` is the number of (scalar) model parameters = the expected `dimension`;
+    # `n_gq` the number of generated-quantity nodes; `has_stochastic_gq` whether at least
+    # one GQ is stochastic (so re-sampling actually perturbs the environment).
+    function check_gq_invariants(model; n_params, n_gq, has_stochastic_gq)
+        m_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        m_gen = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
+        @test !isnothing(m_gen.log_density_computation_function)
+
+        mp = Set(JuliaBUGS.model_parameters(m_graph))
+        gq = Set(JuliaBUGS.generated_quantities(m_graph))
+        allpar = Set(JuliaBUGS.parameters(m_graph))
+        dim = LogDensityProblems.dimension(m_graph)
+
+        # I1: classification and dimension do not depend on the evaluation mode.
+        @test Set(JuliaBUGS.model_parameters(m_gen)) == mp
+        @test Set(JuliaBUGS.generated_quantities(m_gen)) == gq
+        @test LogDensityProblems.dimension(m_gen) == dim
+
+        # Per-model anchors so a silent reclassification can't pass unnoticed.
+        @test length(mp) == n_params
+        @test length(gq) == n_gq
+        @test dim == n_params
+
+        # I2: model parameters and generated quantities partition the unobserved
+        # stochastic nodes; `parameters` is their union (it also lists stochastic GQ).
+        @test isempty(intersect(mp, gq))
+        @test issubset(mp, allpar)
+        @test issubset(allpar, union(mp, gq))
+
+        # I3: the parameter vector covers exactly the model parameters; no GQ leaks in.
+        @test length(JuliaBUGS.getparams(m_graph)) == dim
+        param_keys = Set(keys(JuliaBUGS.getparams(Dict, m_graph)))
+        @test param_keys == mp
+        @test isempty(intersect(param_keys, gq))
+
+        # I4: generated log density matches graph evaluation at matched values.
+        for seed in 1:8
+            env, _ = Base.invokelatest(
+                JuliaBUGS.AbstractPPL.evaluate!!, Random.MersenneTwister(seed), model
+            )
+            xg = JuliaBUGS.getparams(m_graph, env)
+            xgen = JuliaBUGS.getparams(m_gen, env)
+            @test length(xg) == length(xgen) == dim
+            lp_graph = Base.invokelatest(LogDensityProblems.logdensity, m_graph, xg)
+            lp_gen = Base.invokelatest(LogDensityProblems.logdensity, m_gen, xgen)
+            @test isapprox(lp_graph, lp_gen; atol=1e-10)
+        end
+
+        # I5: log density is invariant to the values of generated quantities. Two forward
+        # samples differ only in their GQ values; parameters and log density must not move.
+        base_env, _ = Base.invokelatest(
+            JuliaBUGS.AbstractPPL.evaluate!!, Random.MersenneTwister(99), model
+        )
+        # `fsgq` calls the compiled node functions directly, so invoke it in the latest
+        # world age (the helper is defined before these models are compiled).
+        env_a = Base.invokelatest(
+            fsgq, Random.MersenneTwister(1), model, deepcopy(base_env)
+        )
+        env_b = Base.invokelatest(
+            fsgq, Random.MersenneTwister(2), model, deepcopy(base_env)
+        )
+        @test JuliaBUGS.getparams(m_graph, env_a) == JuliaBUGS.getparams(m_graph, env_b)
+        if has_stochastic_gq
+            # Guard against a vacuous test: the GQ values really did change.
+            @test any(
+                vn ->
+                    JuliaBUGS.AbstractPPL.getvalue(env_a, vn) !=
+                    JuliaBUGS.AbstractPPL.getvalue(env_b, vn),
+                gq,
+            )
+        end
+        for m in (m_graph, m_gen)
+            m_a = BangBang.setproperty!!(m, :evaluation_env, env_a)
+            m_b = BangBang.setproperty!!(m, :evaluation_env, env_b)
+            lp_a = Base.invokelatest(
+                LogDensityProblems.logdensity, m_a, JuliaBUGS.getparams(m_a)
+            )
+            lp_b = Base.invokelatest(
+                LogDensityProblems.logdensity, m_b, JuliaBUGS.getparams(m_b)
+            )
+            @test isapprox(lp_a, lp_b; atol=1e-10)
+        end
+        return nothing
+    end
+
+    @testset "scalar GQ (stochastic + deterministic)" begin
+        # z and pred are generated quantities; only mu is a parameter.
+        check_gq_invariants(
+            compile((@bugs begin
+                mu ~ Normal(0, 1)
+                y ~ Normal(mu, 1)
+                z ~ Normal(mu, 1)
+                pred = mu + 1.0
+            end), (; y=0.5));
+            n_params=1,
+            n_gq=2,
+            has_stochastic_gq=true,
+        )
+    end
+
+    @testset "chained GQ" begin
+        # z and z2 form a GQ chain hanging off mu.
+        check_gq_invariants(
+            compile((@bugs begin
+                mu ~ Normal(0, 1)
+                y ~ Normal(mu, 1)
+                z ~ Normal(mu, 1)
+                z2 ~ Normal(z, 1)
+            end), (; y=0.5));
+            n_params=1,
+            n_gq=2,
+            has_stochastic_gq=true,
+        )
+    end
+
+    @testset "all-GQ loop (entirely dropped)" begin
+        # The whole g[1:3] loop is generated quantities and must drop out.
+        check_gq_invariants(
+            compile((@bugs begin
+                mu ~ Normal(0, 1)
+                y ~ Normal(mu, 1)
+                for i in 1:3
+                    g[i] ~ Normal(mu, 1)
+                end
+            end), (; y=0.5));
+            n_params=1,
+            n_gq=3,
+            has_stochastic_gq=true,
+        )
+    end
+
+    @testset "partial-observation loop (observed + GQ siblings)" begin
+        # y[2], y[4] are missing with no observed descendant -> generated quantities.
+        check_gq_invariants(
+            compile((@bugs begin
+                mu ~ Normal(0, 1)
+                for i in 1:4
+                    y[i] ~ Normal(mu, 1)
+                end
+            end), (; y=[0.1, missing, 0.3, missing]));
+            n_params=1,
+            n_gq=2,
+            has_stochastic_gq=true,
+        )
+    end
+
+    @testset "mixed loops (observed + parameter in x, observed + GQ in z)" begin
+        # x[1], x[3] are parameters; x[2], x[4] observed; z[1], z[3] observed
+        # likelihoods; z[2], z[4] are generated quantities.
+        check_gq_invariants(
+            compile(
+                (@bugs begin
+                    for i in 1:4
+                        x[i] ~ Normal(0, 1)
+                        z[i] ~ Normal(x[i], 1)
+                    end
+                end),
+                (; x=[missing, 1.0, missing, 2.0], z=[0.5, missing, 0.7, missing]),
+            );
+            n_params=2,
+            n_gq=2,
+            has_stochastic_gq=true,
+        )
+    end
+
+    @testset "conditioning preserves classification (no-data model)" begin
+        # Compiling without data treats every node as a parameter (no-data shim). After
+        # conditioning x[1], x[3] the remaining x[2], y[1:3] stay parameters -- they must
+        # not be silently reclassified as generated quantities when the function is
+        # generated. This is the scenario the consistency bug broke.
+        model = compile((@bugs begin
+            for i in 1:3
+                x[i] ~ Normal(0, 1)
+            end
+            for i in 1:3
+                y[i] ~ Normal(x[i], 1)
+            end
+        end), (;))
+        model_cond = condition(model, Dict(@varname(x[1]) => 0.5, @varname(x[3]) => 1.5))
+        check_gq_invariants(model_cond; n_params=4, n_gq=0, has_stochastic_gq=false)
+    end
+
+    @testset "conditioning preserves a surviving generated quantity" begin
+        # z is a generated quantity of the original model; conditioning the only parameter
+        # mu must leave z classified as a generated quantity (preserved override) while the
+        # parameter space collapses to empty.
+        model = compile((@bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Normal(mu, 1)
+        end), (; y=0.5))
+        model_cond = condition(model, Dict(@varname(mu) => 0.3))
+        check_gq_invariants(model_cond; n_params=0, n_gq=1, has_stochastic_gq=true)
+    end
+end

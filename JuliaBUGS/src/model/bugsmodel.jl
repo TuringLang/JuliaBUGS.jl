@@ -672,7 +672,10 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
         # Lazily generate log density function if not already present
         if isnothing(model.log_density_computation_function)
             lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
-                model.model_def, model.g, model.evaluation_env
+                model.model_def,
+                model.g,
+                model.evaluation_env;
+                generated_quantities=Set(model.graph_evaluation_data.generated_quantities),
             )
             if isnothing(lowered_model_def)
                 @warn(
@@ -700,9 +703,16 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     node in gd.sorted_nodes
                 end
 
-                # Create fresh GraphEvaluationData for the new order
+                # Create fresh GraphEvaluationData for the new order. Preserve the same
+                # generated-quantity classification used to generate the function above so
+                # the stored data and the generated code agree (the 3-argument constructor
+                # would otherwise re-derive GQ from the graph and disagree on, e.g.,
+                # conditioned models).
                 new_gd = GraphEvaluationData(
-                    model.g, sorted_nodes, model.graph_evaluation_data.model_parameters
+                    model.g,
+                    sorted_nodes,
+                    model.graph_evaluation_data.model_parameters;
+                    gq_override=Set(model.graph_evaluation_data.generated_quantities),
                 )
 
                 model = BangBang.setproperty!!(model, :graph_evaluation_data, new_gd)
