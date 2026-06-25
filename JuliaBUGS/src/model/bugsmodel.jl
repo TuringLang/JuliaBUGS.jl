@@ -69,6 +69,7 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 - `model_parameters::Vector{<:VarName}`: Unobserved stochastic variables that influence observations
 - `generated_quantities::Vector{<:VarName}`: Variables (stochastic or deterministic) with no observed descendants
 - `variable_types::Vector{VariableType}`: Classification of each node
+- `is_model_parameter_vals::Vector{Bool}`: Whether each node is part of the MCMC parameter vector (true exactly for `model_parameters`)
 - `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable
 - `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
 - `node_function_vals::TNF`: Functions that define each node's computation
@@ -80,6 +81,7 @@ struct GraphEvaluationData{TNF,TV}
     model_parameters::Vector{<:VarName}
     generated_quantities::Vector{<:VarName}
     variable_types::Vector{VariableType}
+    is_model_parameter_vals::Vector{Bool}
     is_stochastic_vals::Vector{Bool}
     is_observed_vals::Vector{Bool}
     node_function_vals::TNF
@@ -108,6 +110,7 @@ function GraphEvaluationData(
     model_parameters = VarName[]
     generated_quantities = VarName[]
     variable_types = Vector{VariableType}(undef, length(sorted_nodes))
+    is_model_parameter_vals = fill(false, length(sorted_nodes))
 
     if gq_override !== nothing
         gq_vars = gq_override
@@ -141,6 +144,7 @@ function GraphEvaluationData(
             if active_parameters === nothing || vn in active_parameters
                 push!(sorted_parameters, vn)
                 push!(model_parameters, vn)
+                is_model_parameter_vals[i] = true
             end
         end
     end
@@ -151,6 +155,7 @@ function GraphEvaluationData(
         model_parameters,
         generated_quantities,
         variable_types,
+        is_model_parameter_vals,
         is_stochastic_vals,
         is_observed_vals,
         map(identity, node_function_vals),
@@ -322,7 +327,6 @@ function BUGSModel(
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
     Dict{VarName,Int}()
-    sampled_vars = Set(graph_evaluation_data.model_parameters)
 
     for (i, vn) in enumerate(graph_evaluation_data.sorted_nodes)
         is_stochastic = graph_evaluation_data.is_stochastic_vals[i]
@@ -347,7 +351,7 @@ function BUGSModel(
                 else
                     length(Bijectors.transformed(dist))
                 end
-                if vn in sampled_vars
+                if graph_evaluation_data.is_model_parameter_vals[i]
                     untransformed_param_length += untransformed_var_lengths[vn]
                     transformed_param_length += transformed_var_lengths[vn]
                 end
@@ -420,7 +424,8 @@ Return the `VariableType` classification for variable `vn` in the model.
 function variable_type(model::BUGSModel, vn::VarName)
     gd = model.graph_evaluation_data
     idx = findfirst(==(vn), gd.sorted_nodes)
-    idx === nothing && throw(ArgumentError("Variable \"$(vn)\" does not exist in the model"))
+    idx === nothing &&
+        throw(ArgumentError("Variable \"$(vn)\" does not exist in the model"))
     return gd.variable_types[idx]
 end
 

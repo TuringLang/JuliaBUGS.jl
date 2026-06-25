@@ -31,18 +31,27 @@ function LogDensityProblems.logdensity(model::BUGSModel, x::AbstractArray)
 end
 
 function LogDensityProblems.dimension(model::BUGSModel)
-    param_vars = _active_parameters(model)
-    dim = 0
-    if model.transformed
-        for vn in param_vars
-            dim += model.transformed_var_lengths[vn]
+    # Auto-marginalization needs the continuous-only filter; other modes can use the
+    # precomputed parameter lengths (already accumulated over `model_parameters`).
+    if model.evaluation_mode isa UseAutoMarginalization
+        param_vars = _active_parameters(model)
+        dim = 0
+        if model.transformed
+            for vn in param_vars
+                dim += model.transformed_var_lengths[vn]
+            end
+        else
+            for vn in param_vars
+                dim += model.untransformed_var_lengths[vn]
+            end
         end
-    else
-        for vn in param_vars
-            dim += model.untransformed_var_lengths[vn]
-        end
+        return dim
     end
-    return dim
+    return if model.transformed
+        model.transformed_param_length
+    else
+        model.untransformed_param_length
+    end
 end
 
 function LogDensityProblems.capabilities(::AbstractBUGSModel)
