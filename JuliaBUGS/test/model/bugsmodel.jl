@@ -205,6 +205,64 @@ end
         @test @varname(mean_x) ∉ gq
     end
 
+    @testset "MCMC partition excludes generated quantities" begin
+        # mu drives the likelihood (model parameter); z is a stochastic generated
+        # quantity (no observed descendant); pred is a deterministic generated quantity.
+        model_def = @bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Normal(mu, 1)
+            pred = mu + 1.0
+        end
+        model = compile(model_def, (; y=0.5))
+
+        # Only the model parameter enters the MCMC parameter vector.
+        @test model_parameters(model) == [@varname(mu)]
+        @test @varname(z) in generated_quantities(model)
+        @test @varname(pred) in generated_quantities(model)
+        @test LogDensityProblems.dimension(model) == 1
+        @test length(getparams(model)) == 1
+
+        # `parameters` (all unobserved stochastic) still includes the stochastic GQ, so
+        # it now legitimately differs in length from the MCMC dimension.
+        @test @varname(z) in parameters(model)
+        @test length(parameters(model)) != LogDensityProblems.dimension(model)
+
+        # The dimension fast path agrees with the precomputed length field.
+        @test LogDensityProblems.dimension(model) == model.transformed_param_length
+
+        x = getparams(model)
+        env, logp = AbstractPPL.evaluate!!(model, x)
+        model_env = JuliaBUGS.Accessors.@set model.evaluation_env = env
+
+        # GQ-exclusion invariant: the MCMC target equals the full joint minus the
+        # generated-quantity prior terms.
+        _, ld_excl = JuliaBUGS.Model.evaluate_with_env!!(
+            model_env; transformed=model.transformed, include_generated_quantities=false
+        )
+        _, ld_incl = JuliaBUGS.Model.evaluate_with_env!!(
+            model_env; transformed=model.transformed, include_generated_quantities=true
+        )
+        z_logp = logpdf(
+            Normal(AbstractPPL.getvalue(env, @varname(mu)), 1),
+            AbstractPPL.getvalue(env, @varname(z)),
+        )
+        @test ld_incl.logprior - ld_excl.logprior ≈ z_logp
+        @test logp ≈ ld_excl.logprior + ld_excl.loglikelihood
+
+        # Regression for the env/rng acceptance inconsistency: the ancestral proposal
+        # and the env recompute use the same GQ policy, so they agree on the same env.
+        rng = StableRNG(123)
+        env_rng, ld_rng = JuliaBUGS.Model.evaluate_with_rng!!(
+            rng, model; transformed=model.transformed
+        )
+        model_rng = JuliaBUGS.Accessors.@set model.evaluation_env = env_rng
+        _, ld_rng_env = JuliaBUGS.Model.evaluate_with_env!!(
+            model_rng; transformed=model.transformed, include_generated_quantities=false
+        )
+        @test ld_rng.tempered_logjoint ≈ ld_rng_env.tempered_logjoint
+    end
+
     @testset "initialize!" begin
         model_def = @bugs begin
             a ~ Normal(0, 1)

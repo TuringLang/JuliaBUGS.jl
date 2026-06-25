@@ -54,6 +54,7 @@ function evaluate_with_rng!!(
     sample_observed=false,
     temperature=1.0,
     transformed=true,
+    include_generated_quantities=false,
 )
     logprior = 0.0
     loglikelihood = 0.0
@@ -91,7 +92,8 @@ function evaluate_with_rng!!(
 
             if is_observed
                 loglikelihood += logp
-            else
+            elseif include_generated_quantities ||
+                model.graph_evaluation_data.is_model_parameter_vals[i]
                 logprior += logp
             end
 
@@ -135,11 +137,6 @@ function evaluate_with_env!!(
 )
     logprior = 0.0
     loglikelihood = 0.0
-    sampled_vars = if include_generated_quantities
-        Set(model.graph_evaluation_data.sorted_parameters)
-    else
-        Set(model.graph_evaluation_data.model_parameters)
-    end
 
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
         is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
@@ -169,7 +166,8 @@ function evaluate_with_env!!(
 
             if is_observed
                 loglikelihood += logp
-            elseif vn in sampled_vars
+            elseif include_generated_quantities ||
+                model.graph_evaluation_data.is_model_parameter_vals[i]
                 logprior += logp
             end
         end
@@ -213,7 +211,6 @@ function evaluate_with_values!!(
     end
 
     evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
-    sampled_vars = Set(model.graph_evaluation_data.model_parameters)
     current_idx = 1
     logprior, loglikelihood = 0.0, 0.0
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
@@ -224,38 +221,33 @@ function evaluate_with_values!!(
         if !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        elseif !is_observed && model.graph_evaluation_data.is_model_parameter_vals[i]
+            dist = node_function(evaluation_env, loop_vars)
+            l = var_lengths[vn]
+            if transformed
+                b = Bijectors.bijector(dist)
+                b_inv = Bijectors.inverse(b)
+                reconstructed_value = reconstruct(
+                    b_inv, dist, view(flattened_values, current_idx:(current_idx + l - 1))
+                )
+                value, logjac = Bijectors.with_logabsdet_jacobian(
+                    b_inv, reconstructed_value
+                )
+            else
+                value = reconstruct(
+                    dist, view(flattened_values, current_idx:(current_idx + l - 1))
+                )
+                logjac = 0.0
+            end
+            current_idx += l
+            logprior += logpdf(dist, value) + logjac
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        elseif !is_observed
+            # Generated quantity: not part of the MCMC parameter vector. Leave its
+            # current env value untouched here; it is forward-sampled separately.
         else
             dist = node_function(evaluation_env, loop_vars)
-            if !is_observed && vn in sampled_vars
-                l = var_lengths[vn]
-                if transformed
-                    b = Bijectors.bijector(dist)
-                    b_inv = Bijectors.inverse(b)
-                    reconstructed_value = reconstruct(
-                        b_inv,
-                        dist,
-                        view(flattened_values, current_idx:(current_idx + l - 1)),
-                    )
-                    value, logjac = Bijectors.with_logabsdet_jacobian(
-                        b_inv, reconstructed_value
-                    )
-                else
-                    value = reconstruct(
-                        dist, view(flattened_values, current_idx:(current_idx + l - 1))
-                    )
-                    logjac = 0.0
-                end
-                current_idx += l
-                logprior += logpdf(dist, value) + logjac
-                evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-            elseif !is_observed
-                # Postprocessed stochastic variables are not part of parameter vectors
-                # and should not contribute to the sampled target density.
-                value = AbstractPPL.getvalue(evaluation_env, vn)
-                evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-            else
-                loglikelihood += logpdf(dist, AbstractPPL.getvalue(evaluation_env, vn))
-            end
+            loglikelihood += logpdf(dist, AbstractPPL.getvalue(evaluation_env, vn))
         end
     end
     return evaluation_env,
@@ -297,9 +289,8 @@ end
 Return the finite support for a discrete univariate distribution.
 Relies on Distributions.support to provide an iterable, finite range.
 """
-_enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) = Distributions.support(
-    dist
-)
+_enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) =
+    Distributions.support(dist)
 
 """
     _classify_node_type(dist)
