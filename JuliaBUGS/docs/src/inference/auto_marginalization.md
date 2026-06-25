@@ -422,4 +422,8 @@ Enable auto-marginalization on a compiled model:
 
 Requires transformed space. Discrete variables must have finite support (Categorical, Bernoulli, etc.).
 
-See [Evaluation Modes](evaluation_modes.md) for more on `set_evaluation_mode`.
+See [Evaluation Modes](evaluation_modes.md) for more on `set_evaluation_mode`. A quantity
+derived from a marginalized discrete latent — for example a predicted observation or the
+latent state itself — is a [generated quantity](generated_quantities.md); it is excluded from
+the marginalized log density and recovered afterwards by sampling the latent from its
+conditional posterior.
