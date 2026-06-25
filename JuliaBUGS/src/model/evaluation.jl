@@ -258,6 +258,48 @@ function evaluate_with_values!!(
     )
 end
 
+"""
+    forward_sample_generated_quantities!!(
+        rng::Random.AbstractRNG,
+        model::BUGSModel,
+        evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols),
+    )
+
+Forward-sample the generated quantities of `model` given an environment that already holds
+the model parameters, observations, and transformed parameters.
+
+Generated quantities are the nodes with no observed descendants. Stochastic ones are drawn
+from their conditional distribution given their (already-set) parents (`rand`); deterministic
+ones are recomputed. Model parameters, observations, and transformed parameters are left
+untouched. Nodes are visited in topological order, so chains of generated quantities are
+sampled with their parents already in place.
+
+This is the post-processing step that turns a posterior draw of the model parameters into a
+joint posterior(-predictive) draw that also includes the generated quantities.
+
+# Returns
+- `evaluation_env`: The environment with generated-quantity values filled in.
+"""
+function forward_sample_generated_quantities!!(
+    rng::Random.AbstractRNG,
+    model::BUGSModel,
+    evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols),
+)
+    gd = model.graph_evaluation_data
+    for (i, vn) in enumerate(gd.sorted_nodes)
+        gd.variable_types[i] == GeneratedQuantity || continue
+        node_function = gd.node_function_vals[i]
+        loop_vars = gd.loop_vars_vals[i]
+        value = if gd.is_stochastic_vals[i]
+            rand(rng, node_function(evaluation_env, loop_vars))
+        else
+            node_function(evaluation_env, loop_vars)
+        end
+        evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+    end
+    return evaluation_env
+end
+
 # ======================
 # Marginalization Support
 # ======================
