@@ -6,6 +6,7 @@ using JuliaBUGS.Model:
     set_evaluation_mode,
     UseAutoMarginalization,
     UseGraph,
+    UseGeneratedLogDensityFunction,
     evaluate_with_marginalization_values!!
 
 @testset "Auto-Marginalization" begin
@@ -848,5 +849,125 @@ using JuliaBUGS.Model:
         # Both should give same results
         @test isapprox(val_rd, val_fd; atol=1e-10)
         @test isapprox(grad_rd, grad_fd; atol=1e-8)
+    end
+
+    @testset "generated quantities are excluded from the marginalized target" begin
+        # A generated quantity has no observed descendants, so its factor
+        # integrates/sums to one and the whole generated-quantity block factors out of
+        # p(θ, y). The marginalization must skip it: not read it from the parameter
+        # vector (it has no slot there) and not marginalize it.
+
+        @testset "no discrete latents: all three modes agree" begin
+            # Regression: marginalization used to throw `KeyError: z` on a continuous
+            # generated quantity, because the marginalization order included it but the
+            # parameter offsets (built over model parameters) did not.
+            model_def = @bugs begin
+                mu ~ Normal(0, 1)
+                y ~ Normal(mu, 1)
+                z ~ Normal(mu, 1)        # continuous generated quantity
+            end
+            model = settrans(compile(model_def, (; y=0.5)), true)
+            m_graph = set_evaluation_mode(model, UseGraph())
+            m_gen = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
+            m_marg = set_evaluation_mode(model, UseAutoMarginalization())
+
+            @test LogDensityProblems.dimension(m_marg) ==
+                LogDensityProblems.dimension(m_graph)
+
+            # Compare at matched parameter values (flatten in each model's own order).
+            env, _ = Base.invokelatest(AbstractPPL.evaluate!!, StableRNG(1), model)
+            lp_graph = Base.invokelatest(
+                LogDensityProblems.logdensity, m_graph, getparams(m_graph, env)
+            )
+            lp_gen = Base.invokelatest(
+                LogDensityProblems.logdensity, m_gen, getparams(m_gen, env)
+            )
+            lp_marg = Base.invokelatest(
+                LogDensityProblems.logdensity, m_marg, getparams(m_marg, env)
+            )
+            @test isapprox(lp_graph, lp_marg; atol=1e-10)
+            @test isapprox(lp_gen, lp_marg; atol=1e-10)
+        end
+
+        @testset "discrete latent + GQ: marginalized log density unchanged" begin
+            # Fixed-parameter HMM (z[1], z[2] marginalized); reference via forward
+            # algorithm. Adding a generated quantity -- including one that depends on a
+            # marginalized latent (case 3) -- must not change the marginalized target.
+            expected = forward_algorithm_hmm(
+                [0.1, 4.9], 0.0, 5.0, 1.0, [0.5, 0.5], [0.7 0.3; 0.4 0.6]
+            )
+            data = (T=2, y=[0.1, 4.9])
+
+            hmm_base = @bugs begin
+                mu[1] = 0.0
+                mu[2] = 5.0
+                sigma = 1.0
+                trans[1, 1] = 0.7
+                trans[1, 2] = 0.3
+                trans[2, 1] = 0.4
+                trans[2, 2] = 0.6
+                pi[1] = 0.5
+                pi[2] = 0.5
+                z[1] ~ Categorical(pi[1:2])
+                for t in 2:T
+                    p[t, 1] = trans[z[t - 1], 1]
+                    p[t, 2] = trans[z[t - 1], 2]
+                    z[t] ~ Categorical(p[t, :])
+                end
+                for t in 1:T
+                    y[t] ~ Normal(mu[z[t]], sigma)
+                end
+            end
+            hmm_case2 = @bugs begin
+                mu[1] = 0.0
+                mu[2] = 5.0
+                sigma = 1.0
+                trans[1, 1] = 0.7
+                trans[1, 2] = 0.3
+                trans[2, 1] = 0.4
+                trans[2, 2] = 0.6
+                pi[1] = 0.5
+                pi[2] = 0.5
+                z[1] ~ Categorical(pi[1:2])
+                for t in 2:T
+                    p[t, 1] = trans[z[t - 1], 1]
+                    p[t, 2] = trans[z[t - 1], 2]
+                    z[t] ~ Categorical(p[t, :])
+                end
+                for t in 1:T
+                    y[t] ~ Normal(mu[z[t]], sigma)
+                end
+                g ~ Normal(0, 1)            # case-2 GQ (no marginalized-discrete ancestor)
+            end
+            hmm_case3 = @bugs begin
+                mu[1] = 0.0
+                mu[2] = 5.0
+                sigma = 1.0
+                trans[1, 1] = 0.7
+                trans[1, 2] = 0.3
+                trans[2, 1] = 0.4
+                trans[2, 2] = 0.6
+                pi[1] = 0.5
+                pi[2] = 0.5
+                z[1] ~ Categorical(pi[1:2])
+                for t in 2:T
+                    p[t, 1] = trans[z[t - 1], 1]
+                    p[t, 2] = trans[z[t - 1], 2]
+                    z[t] ~ Categorical(p[t, :])
+                end
+                for t in 1:T
+                    y[t] ~ Normal(mu[z[t]], sigma)
+                end
+                g ~ Normal(mu[z[1]], 1)     # case-3 GQ (depends on marginalized z[1])
+            end
+
+            for model_def in (hmm_base, hmm_case2, hmm_case3)
+                model = set_evaluation_mode(
+                    settrans(compile(model_def, data), true), UseAutoMarginalization()
+                )
+                lp = Base.invokelatest(LogDensityProblems.logdensity, model, Float64[])
+                @test isapprox(lp, expected; atol=1e-6)
+            end
+        end
     end
 end

@@ -577,7 +577,23 @@ function _marginalize_recursive(
     loop_vars = gd.loop_vars_vals[current_idx]
     rest_indices = @view(remaining_indices[2:end])
 
-    result = if !gd.is_stochastic_vals[current_idx]
+    result = if gd.variable_types[current_idx] == GeneratedQuantity
+        # Generated quantities have no observed descendants, so the whole generated-quantity
+        # block integrates/sums to one and factors out of the marginalized target p(θ, y).
+        # Skip it entirely: don't read the parameter vector (it has no slot there) and don't
+        # marginalize it. They are recovered later by forward sampling, not here.
+        _marginalize_recursive(
+            model,
+            env,
+            rest_indices,
+            parameter_values,
+            param_offsets,
+            var_lengths,
+            memo,
+            minimal_keys,
+        )
+
+    elseif !gd.is_stochastic_vals[current_idx]
         # Deterministic node: compute value and continue
         value = node_function(env, loop_vars)
         new_env = BangBang.setindex!!(env, value, current_vn)
