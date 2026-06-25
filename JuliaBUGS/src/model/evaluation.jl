@@ -274,6 +274,13 @@ ones are recomputed. Model parameters, observations, and transformed parameters 
 untouched. Nodes are visited in topological order, so chains of generated quantities are
 sampled with their parents already in place.
 
+If `model` is in `UseAutoMarginalization` mode its discrete latents were summed out of the
+log density and have no value in `evaluation_env`. A generated quantity may depend on such a
+latent (directly or indirectly), so before forward-sampling, the marginalized discrete
+latents are first recovered by sampling from their conditional posterior
+`p(z | θ, y)` (see [`_sample_discrete_latents!!`](@ref)). Generated quantities with no
+marginalized-discrete ancestor are unaffected by this step.
+
 This is the post-processing step that turns a posterior draw of the model parameters into a
 joint posterior(-predictive) draw that also includes the generated quantities.
 
@@ -285,6 +292,12 @@ function forward_sample_generated_quantities!!(
     model::BUGSModel,
     evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols),
 )
+    # Under marginalization the discrete latents were summed out and carry no value, so
+    # recover them from their conditional posterior before any generated quantity that
+    # depends on them is forward-sampled.
+    if model.evaluation_mode isa UseAutoMarginalization
+        evaluation_env = _sample_discrete_latents!!(rng, model, evaluation_env)
+    end
     gd = model.graph_evaluation_data
     for (i, vn) in enumerate(gd.sorted_nodes)
         gd.variable_types[i] == GeneratedQuantity || continue
@@ -298,6 +311,118 @@ function forward_sample_generated_quantities!!(
         evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
     end
     return evaluation_env
+end
+
+"""
+    _sample_discrete_latents!!(rng, model, evaluation_env)
+
+Recover the marginalized discrete latents of an `UseAutoMarginalization` model by sampling
+them from their conditional posterior `p(z | θ, y)`, given an environment that already holds
+the continuous parameters and observations.
+
+The latents are drawn in the marginalization order: each discrete latent `z_i` is sampled
+from the weights `p(z_i = v | pa) · p(y, z_{>i} | z_i = v, …)`, where the second factor is
+the marginalized joint of everything downstream (computed by [`_marginalize_recursive`](@ref)
+with `z_i` fixed to `v` and the not-yet-sampled latents summed out). Normalizing over `v`
+gives exactly `p(z_i = v | z_{<i}, θ, y)`, so sampling the latents sequentially in
+topological order yields a draw from the joint posterior `p(z | θ, y)`. Continuous parameters
+are taken from `evaluation_env`; generated quantities are skipped (they are forward-sampled
+separately).
+"""
+function _sample_discrete_latents!!(
+    rng::Random.AbstractRNG, model::BUGSModel, evaluation_env
+)
+    mc = model.marginalization_cache
+    (mc === nothing || mc.n_discrete_finite == 0) && return evaluation_env
+    # Continuous parameters in the order/offsets expected by `_marginalize_recursive`.
+    param_values = getparams(model, evaluation_env)
+    return _backward_sample_recursive!!(
+        rng,
+        model,
+        evaluation_env,
+        mc.marginalization_order,
+        param_values,
+        mc.param_offsets,
+        mc.param_lengths,
+        mc.minimal_cache_keys,
+    )
+end
+
+function _backward_sample_recursive!!(
+    rng::Random.AbstractRNG,
+    model::BUGSModel,
+    env::NamedTuple,
+    remaining_indices::AbstractVector{Int},
+    param_values::AbstractVector,
+    param_offsets::Dict{<:VarName,Int},
+    var_lengths::Dict{<:VarName,Int},
+    minimal_keys::Dict{Int,Vector{Int}},
+)
+    isempty(remaining_indices) && return env
+
+    gd = model.graph_evaluation_data
+    mc = model.marginalization_cache
+
+    current_idx = remaining_indices[1]
+    current_vn = gd.sorted_nodes[current_idx]
+    rest_indices = @view(remaining_indices[2:end])
+    node_function = gd.node_function_vals[current_idx]
+    loop_vars = gd.loop_vars_vals[current_idx]
+
+    if gd.variable_types[current_idx] == GeneratedQuantity
+        # Generated quantities are forward-sampled separately; skip here.
+    elseif !gd.is_stochastic_vals[current_idx]
+        env = BangBang.setindex!!(env, node_function(env, loop_vars), current_vn)
+    elseif gd.is_observed_vals[current_idx]
+        # Observed value is already in the environment.
+    elseif mc.node_types[current_idx] == :discrete_finite
+        # Sample this latent from p(z_i = v | z_{<i}, θ, y), with z_{>i} marginalized.
+        dist = node_function(env, loop_vars)
+        possible_values = collect(_enumerate_discrete_values(dist))
+        log_weights = Vector{Float64}(undef, length(possible_values))
+        for (k, val) in enumerate(possible_values)
+            branch_env = BangBang.setindex!!(env, val, current_vn)
+            memo = Dict{Tuple{Int,Tuple},Tuple{Float64,Float64}}()
+            branch_prior, branch_lik = _marginalize_recursive(
+                model,
+                branch_env,
+                rest_indices,
+                param_values,
+                param_offsets,
+                var_lengths,
+                memo,
+                minimal_keys,
+            )
+            # The continuous-prior part of branch_prior is constant across `val` and
+            # cancels in the softmax below; the rest captures all `val`-dependent terms.
+            log_weights[k] = logpdf(dist, val) + branch_prior + branch_lik
+        end
+        weights = exp.(log_weights .- LogExpFunctions.logsumexp(log_weights))
+        sampled = possible_values[rand(rng, Distributions.Categorical(weights))]
+        env = BangBang.setindex!!(env, sampled, current_vn)
+    else
+        # Continuous (or discrete-infinite) parameter: set its value from the vector.
+        dist = node_function(env, loop_vars)
+        b_inv = Bijectors.inverse(Bijectors.bijector(dist))
+        len = var_lengths[current_vn]
+        start_idx = param_offsets[current_vn]
+        param_slice = view(param_values, start_idx:(start_idx + len - 1))
+        value, _ = Bijectors.with_logabsdet_jacobian(
+            b_inv, reconstruct(b_inv, dist, param_slice)
+        )
+        env = BangBang.setindex!!(env, value, current_vn)
+    end
+
+    return _backward_sample_recursive!!(
+        rng,
+        model,
+        env,
+        rest_indices,
+        param_values,
+        param_offsets,
+        var_lengths,
+        minimal_keys,
+    )
 end
 
 # ======================

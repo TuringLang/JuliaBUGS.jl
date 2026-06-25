@@ -7,7 +7,8 @@ using JuliaBUGS.Model:
     UseAutoMarginalization,
     UseGraph,
     UseGeneratedLogDensityFunction,
-    evaluate_with_marginalization_values!!
+    evaluate_with_marginalization_values!!,
+    forward_sample_generated_quantities!!
 
 @testset "Auto-Marginalization" begin
     # HMM helper function for ground truth using forward algorithm
@@ -969,5 +970,68 @@ using JuliaBUGS.Model:
                 @test isapprox(lp, expected; atol=1e-6)
             end
         end
+    end
+
+    @testset "recover marginalized latents when forward-sampling GQ (case 3)" begin
+        # A generated quantity that depends on a marginalized discrete latent needs a value
+        # for that latent. `forward_sample_generated_quantities!!` recovers it by sampling
+        # from p(z | θ, y) before forward-sampling the GQ. Use a 2-state, 2-observation HMM
+        # with overlapping emissions so the posterior is spread across all states, and check
+        # the empirical distribution of the recovered (z[1], z[2]) against the analytic
+        # posterior and E[g] against the analytic mixture mean.
+        mu = [0.0, 2.0]
+        y_obs = [0.7, 1.3]
+        pivec = [0.5, 0.5]
+        trans = [0.7 0.3; 0.4 0.6]
+        W = [
+            pivec[i] *
+            pdf(Normal(mu[i], 1), y_obs[1]) *
+            trans[i, j] *
+            pdf(Normal(mu[j], 1), y_obs[2]) for i in 1:2, j in 1:2
+        ]
+        P = W ./ sum(W)               # analytic p(z[1], z[2] | y)
+        pz1 = vec(sum(P; dims=2))     # analytic p(z[1] | y)
+        Eg = sum(pz1 .* mu)           # analytic E[g] = E[mu[z[1]]]
+
+        hmm_case3 = @bugs begin
+            mu[1] = 0.0
+            mu[2] = 2.0
+            sigma = 1.0
+            trans[1, 1] = 0.7
+            trans[1, 2] = 0.3
+            trans[2, 1] = 0.4
+            trans[2, 2] = 0.6
+            pi[1] = 0.5
+            pi[2] = 0.5
+            z[1] ~ Categorical(pi[1:2])
+            for t in 2:T
+                p[t, 1] = trans[z[t - 1], 1]
+                p[t, 2] = trans[z[t - 1], 2]
+                z[t] ~ Categorical(p[t, :])
+            end
+            for t in 1:T
+                y[t] ~ Normal(mu[z[t]], sigma)
+            end
+            g ~ Normal(mu[z[1]], 1)      # case-3 GQ
+        end
+        model = set_evaluation_mode(
+            settrans(compile(hmm_case3, (T=2, y=y_obs)), true), UseAutoMarginalization()
+        )
+
+        N = 20000
+        counts = zeros(Int, 2, 2)
+        g_sum = 0.0
+        for s in 1:N
+            env = Base.invokelatest(
+                forward_sample_generated_quantities!!, StableRNG(s), model
+            )
+            z1 = Int(AbstractPPL.getvalue(env, @varname(z[1])))
+            z2 = Int(AbstractPPL.getvalue(env, @varname(z[2])))
+            counts[z1, z2] += 1
+            g_sum += AbstractPPL.getvalue(env, @varname(g))
+        end
+        P_emp = counts ./ N
+        @test maximum(abs.(P_emp .- P)) < 0.02
+        @test isapprox(g_sum / N, Eg; atol=0.05)
     end
 end
