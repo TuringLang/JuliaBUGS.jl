@@ -269,3 +269,101 @@ end
         @test isapprox(ld_graph, ld_gen; rtol=1e-10)
     end
 end
+
+@testset "generated quantities in generated log-density function" begin
+    # A generated quantity is an unobserved node (stochastic or deterministic) that
+    # cannot reach any observation. It contributes nothing to the model log density,
+    # so the generated function must drop its `~`/`=` statement entirely. These tests
+    # check that the generated function matches graph evaluation (which already excludes
+    # GQ nodes from the log prior) and that GQ nodes are excluded from the parameter
+    # space, including when a GQ shares a loop with observed/parameter siblings.
+    JuliaBUGS.@bugs_primitive Normal
+
+    # Compare graph vs generated log density at the same underlying values, flattening
+    # parameters in each model's own ordering (the generated model re-orders nodes to
+    # loop-execution order). Also returns the parameter dimension.
+    function gq_check(model_def, data)
+        model = compile(model_def, data)
+        m_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        m_gen = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
+        @test !isnothing(m_gen.log_density_computation_function)
+        @test LogDensityProblems.dimension(m_graph) == LogDensityProblems.dimension(m_gen)
+        ok = true
+        for seed in 1:5
+            env, _ = Base.invokelatest(
+                JuliaBUGS.AbstractPPL.evaluate!!, Random.MersenneTwister(seed), model
+            )
+            lp_graph = Base.invokelatest(
+                LogDensityProblems.logdensity, m_graph, JuliaBUGS.getparams(m_graph, env)
+            )
+            lp_gen = Base.invokelatest(
+                LogDensityProblems.logdensity, m_gen, JuliaBUGS.getparams(m_gen, env)
+            )
+            ok &= isapprox(lp_graph, lp_gen; atol=1e-10)
+        end
+        @test ok
+        return LogDensityProblems.dimension(m_graph)
+    end
+
+    @testset "scalar GQ (stochastic + deterministic)" begin
+        # z and pred are generated quantities; only mu is a parameter.
+        dim = gq_check((@bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Normal(mu, 1)
+            pred = mu + 1.0
+        end), (; y=0.5))
+        @test dim == 1
+    end
+
+    @testset "chained GQ" begin
+        # z and z2 form a GQ chain hanging off mu.
+        dim = gq_check((@bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Normal(mu, 1)
+            z2 ~ Normal(z, 1)
+        end), (; y=0.5))
+        @test dim == 1
+    end
+
+    @testset "all-GQ loop (entirely dropped)" begin
+        # The whole g[1:3] loop is generated quantities and must drop out.
+        dim = gq_check((@bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            for i in 1:3
+                g[i] ~ Normal(mu, 1)
+            end
+        end), (; y=0.5))
+        @test dim == 1
+    end
+
+    @testset "partial-observation loop (observed + GQ siblings)" begin
+        # y[2], y[4] are missing with no observed descendant -> generated quantities.
+        dim = gq_check((@bugs begin
+            mu ~ Normal(0, 1)
+            for i in 1:4
+                y[i] ~ Normal(mu, 1)
+            end
+        end), (; y=[0.1, missing, 0.3, missing]))
+        @test dim == 1
+    end
+
+    @testset "mixed loops (observed + parameter in x, observed + GQ in z)" begin
+        # x[1], x[3] are parameters; x[2], x[4] observed; z[1], z[3] observed
+        # likelihoods; z[2], z[4] are generated quantities.
+        dim = gq_check(
+            (@bugs begin
+                for i in 1:4
+                    x[i] ~ Normal(0, 1)
+                    z[i] ~ Normal(x[i], 1)
+                end
+            end),
+            (; x=[missing, 1.0, missing, 2.0], z=[0.5, missing, 0.7, missing]),
+        )
+        @test dim == 2
+    end
+end

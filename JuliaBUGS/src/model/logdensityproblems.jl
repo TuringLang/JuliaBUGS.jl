@@ -1,10 +1,6 @@
 using LogDensityProblems
 
 function _eval_logdensity(model, ::UseGeneratedLogDensityFunction, x)
-    if !isempty(model.graph_evaluation_data.generated_quantities)
-        _, log_densities = evaluate_with_values!!(model, x; transformed=model.transformed)
-        return log_densities.tempered_logjoint
-    end
     return Base.invokelatest(
         model.log_density_computation_function, model.evaluation_env, x
     )

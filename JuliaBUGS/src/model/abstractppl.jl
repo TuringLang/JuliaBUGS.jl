@@ -544,9 +544,9 @@ function _create_modified_model(
 )
     # Create new graph evaluation data preserving the original GQ classification
     # We must explicitly keep the original `generated_quantities` to avoid them being reclassified.
-    original_gq = Set(generated_quantities(
-        isnothing(model.base_model) ? model : model.base_model
-    ))
+    original_gq = Set(
+        generated_quantities(isnothing(model.base_model) ? model : model.base_model)
+    )
     new_graph_evaluation_data = GraphEvaluationData(new_graph; gq_override=original_gq)
     new_parameters = new_graph_evaluation_data.model_parameters
 
@@ -591,7 +591,10 @@ function _regenerate_log_density_function(
     graph_evaluation_data::GraphEvaluationData,
 )
     lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
-        model_def, graph, evaluation_env
+        model_def,
+        graph,
+        evaluation_env;
+        generated_quantities=Set(graph_evaluation_data.generated_quantities),
     )
 
     if !isnothing(lowered_model_def)
@@ -611,9 +614,15 @@ function _regenerate_log_density_function(
             node in graph_evaluation_data.sorted_nodes
         end
 
-        # Update graph evaluation data with the correct sorted nodes
+        # Update graph evaluation data with the correct sorted nodes. Preserve the same
+        # generated-quantity classification that was used to generate the function above;
+        # otherwise the 3-argument constructor would re-derive it from the (possibly
+        # conditioned) graph and disagree with the generated code.
         updated_graph_evaluation_data = GraphEvaluationData(
-            graph, sorted_nodes, graph_evaluation_data.model_parameters
+            graph,
+            sorted_nodes,
+            graph_evaluation_data.model_parameters;
+            gq_override=Set(graph_evaluation_data.generated_quantities),
         )
 
         return new_log_density_computation_function, updated_graph_evaluation_data
