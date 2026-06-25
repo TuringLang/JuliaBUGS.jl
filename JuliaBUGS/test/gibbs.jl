@@ -511,8 +511,7 @@ using StatsBase: mode
             # correctly excluded from model_parameters, so they don't need samplers.
             # Test various ways to specify the sampler map
             sampler_map1 = OrderedDict(
-                @varname(μ) => IndependentMH(),
-                @varname(θ) => IndependentMH(),
+                @varname(μ) => IndependentMH(), @varname(θ) => IndependentMH()
             )
             @test verify_sampler_map(model, sampler_map1)
 
