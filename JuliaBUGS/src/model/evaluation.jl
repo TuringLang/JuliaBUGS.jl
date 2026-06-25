@@ -278,7 +278,7 @@ If `model` is in `UseAutoMarginalization` mode its discrete latents were summed 
 log density and have no value in `evaluation_env`. A generated quantity may depend on such a
 latent (directly or indirectly), so before forward-sampling, the marginalized discrete
 latents are first recovered by sampling from their conditional posterior
-`p(z | θ, y)` (see [`_sample_discrete_latents!!`](@ref)). Generated quantities with no
+`p(z | θ, y)` (see `_sample_discrete_latents!!`). Generated quantities with no
 marginalized-discrete ancestor are unaffected by this step.
 
 This is the post-processing step that turns a posterior draw of the model parameters into a
