@@ -130,3 +130,35 @@
         Symbol("A[1, 1:3][3]"),
     ])
 end
+
+@testset "forward-sampled generated quantities in chains" begin
+    model_def = @bugs begin
+        mu ~ dnorm(0, 1)
+        y ~ dnorm(mu, 1)
+        z ~ dnorm(mu, 1)      # stochastic generated quantity
+        pred = mu + 1.0       # deterministic generated quantity
+    end
+    model = compile(model_def, (; y=0.5))
+    @test LogDensityProblems.dimension(model) == 1
+
+    # Synthetic posterior draws of the single model parameter `mu`.
+    samples = [[m] for m in range(-1.0, 1.0; length=25)]
+    chn = JuliaBUGS.gen_chains(model, samples, Symbol[], []; rng=StableRNG(2024))
+
+    colnames = names(chn)
+    @test :mu in colnames
+    @test :z in colnames       # stochastic generated quantity surfaced
+    @test :pred in colnames    # deterministic generated quantity surfaced
+
+    A = Array(chn)
+    mucol = A[:, findfirst(==(:mu), colnames)]
+    zcol = A[:, findfirst(==(:z), colnames)]
+    predcol = A[:, findfirst(==(:pred), colnames)]
+
+    # Stochastic generated quantity is forward-sampled, not frozen at one value.
+    @test length(unique(zcol)) > 1
+    # Deterministic generated quantity equals f(model parameter) for every draw.
+    @test all(predcol .≈ mucol .+ 1.0)
+    # Model-parameter column matches the synthetic samples in order.
+    @test mucol ≈ [s[1] for s in samples]
+end

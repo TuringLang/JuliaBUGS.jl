@@ -8,10 +8,11 @@ using JuliaBUGS:
     find_generated_quantities_variables,
     evaluate!!,
     getparams
-using JuliaBUGS.Model: UseAutoMarginalization, model_parameters
+using JuliaBUGS.Model: model_parameters, forward_sample_generated_quantities!!
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.Accessors
 using MCMCChains: Chains
+using Random: default_rng
 
 function JuliaBUGS.gen_chains(
     model::AbstractMCMC.LogDensityModel{<:BUGSModel},
@@ -127,6 +128,7 @@ function JuliaBUGS.gen_chains(
     samples,
     stats_names,
     stats_values;
+    rng=default_rng(),
     discard_initial=0,
     thinning=1,
     kwargs...,
@@ -135,8 +137,8 @@ function JuliaBUGS.gen_chains(
     # Filter parameters based on evaluation mode and MCMC partition.
     param_vars = model_parameters(model)
 
-    # Find and order generated quantities
-    # Exclude parameters to avoid double counting forward-sampled variables
+    # Generated quantities (no observed descendants) are reported in topological order;
+    # they are disjoint from the model parameters by construction.
     generated_vars = find_generated_quantities_variables(model.g)
     param_set = Set(param_vars)
     generated_vars = [v for v in gd.sorted_nodes if v in generated_vars && v ∉ param_set]
@@ -147,6 +149,11 @@ function JuliaBUGS.gen_chains(
     for i in axes(samples)[1]
         # Set parameters and evaluate the model
         evaluation_env = first(evaluate!!(model, samples[i]))
+
+        # Forward-sample the stochastic generated quantities (and recompute deterministic
+        # ones) for this draw, so the reported values are genuine posterior-predictive
+        # draws rather than the stale environment values left by `evaluate!!`.
+        evaluation_env = forward_sample_generated_quantities!!(rng, model, evaluation_env)
 
         # Get parameter values from the evaluation environment
         # (they were just set by evaluate!!, so they match samples[i])

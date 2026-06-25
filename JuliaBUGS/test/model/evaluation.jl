@@ -668,3 +668,36 @@ end
         @test isa(logp, Real)
     end
 end
+
+@testset "forward_sample_generated_quantities!!" begin
+    model_def = @bugs begin
+        mu ~ Normal(0, 1)
+        y ~ Normal(mu, 1)
+        z ~ Normal(mu, 1)       # stochastic generated quantity
+        z2 ~ Normal(z, 1)       # chained stochastic generated quantity
+        pred = mu + 1.0         # deterministic generated quantity
+    end
+    model = compile(model_def, (; y=0.5))
+    fsgq = JuliaBUGS.Model.forward_sample_generated_quantities!!
+
+    base_env, _ = AbstractPPL.evaluate!!(model, JuliaBUGS.getparams(model))
+    mu0 = AbstractPPL.getvalue(base_env, @varname(mu))
+
+    e1 = fsgq(StableRNG(1), model, deepcopy(base_env))
+    e2 = fsgq(StableRNG(2), model, deepcopy(base_env))
+    e1b = fsgq(StableRNG(1), model, deepcopy(base_env))
+
+    # Model parameter and observation are left untouched.
+    @test AbstractPPL.getvalue(e1, @varname(mu)) == mu0
+    @test AbstractPPL.getvalue(e1, @varname(y)) == 0.5
+
+    # Stochastic generated quantities are redrawn; different rng -> different values.
+    @test AbstractPPL.getvalue(e1, @varname(z)) != AbstractPPL.getvalue(e2, @varname(z))
+    @test AbstractPPL.getvalue(e1, @varname(z2)) != AbstractPPL.getvalue(e2, @varname(z2))
+
+    # Same rng -> identical draws.
+    @test AbstractPPL.getvalue(e1, @varname(z)) == AbstractPPL.getvalue(e1b, @varname(z))
+
+    # Deterministic generated quantity is recomputed from its (sampled) parents.
+    @test AbstractPPL.getvalue(e1, @varname(pred)) ≈ mu0 + 1.0
+end
