@@ -287,7 +287,9 @@ function _evaluate_active_parameters_with_values!!(
             value = if transformed
                 b_inv = Bijectors.inverse(Bijectors.bijector(dist))
                 reconstructed_value = reconstruct(
-                    b_inv, dist, view(flattened_values, current_idx:(current_idx + l - 1))
+                    b_inv,
+                    dist,
+                    view(flattened_values, current_idx:(current_idx + l - 1)),
                 )
                 first(Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value))
             else
