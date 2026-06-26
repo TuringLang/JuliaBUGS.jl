@@ -258,6 +258,49 @@ function evaluate_with_values!!(
     )
 end
 
+function _evaluate_active_parameters_with_values!!(
+    model::BUGSModel, flattened_values::AbstractVector; transformed=true
+)
+    var_lengths = if transformed
+        model.transformed_var_lengths
+    else
+        model.untransformed_var_lengths
+    end
+
+    evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
+    active_parameters = Set(_active_parameters(model))
+    current_idx = 1
+
+    gd = model.graph_evaluation_data
+    for (i, vn) in enumerate(gd.sorted_nodes)
+        node_function = gd.node_function_vals[i]
+        loop_vars = gd.loop_vars_vals[i]
+
+        if gd.variable_types[i] == GeneratedQuantity
+            continue
+        elseif !gd.is_stochastic_vals[i]
+            value = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        elseif !gd.is_observed_vals[i] && vn in active_parameters
+            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            l = var_lengths[vn]
+            value = if transformed
+                b_inv = Bijectors.inverse(Bijectors.bijector(dist))
+                reconstructed_value = reconstruct(
+                    b_inv, dist, view(flattened_values, current_idx:(current_idx + l - 1))
+                )
+                first(Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value))
+            else
+                reconstruct(dist, view(flattened_values, current_idx:(current_idx + l - 1)))
+            end
+            current_idx += l
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        end
+    end
+
+    return evaluation_env
+end
+
 """
     forward_sample_generated_quantities!!(
         rng::Random.AbstractRNG,
@@ -865,7 +908,9 @@ function evaluate_with_marginalization_values!!(
     memo = Dict{Tuple{Int,Tuple},Tuple{T,T}}()
     sizehint!(memo, expected_entries)
 
-    evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
+    evaluation_env = _evaluate_active_parameters_with_values!!(
+        model, flattened_values; transformed=model.transformed
+    )
 
     log_prior, log_likelihood = _marginalize_recursive(
         model,
