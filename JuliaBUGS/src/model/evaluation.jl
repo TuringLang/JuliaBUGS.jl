@@ -279,10 +279,10 @@ function _evaluate_active_parameters_with_values!!(
         if gd.variable_types[i] == GeneratedQuantity
             continue
         elseif !gd.is_stochastic_vals[i]
-            value = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            value = node_function(evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         elseif !gd.is_observed_vals[i] && vn in active_parameters
-            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             l = var_lengths[vn]
             value = if transformed
                 b_inv = Bijectors.inverse(Bijectors.bijector(dist))
