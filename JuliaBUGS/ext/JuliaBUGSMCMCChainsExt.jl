@@ -134,7 +134,8 @@ function JuliaBUGS.gen_chains(
     kwargs...,
 )
     gd = model.graph_evaluation_data
-    # Filter parameters based on evaluation mode and MCMC partition.
+    # Report model parameters. In auto-marginalization, continuous parameters come from
+    # the sample row and finite discrete latents are recovered below from p(z | theta, y).
     param_vars = model_parameters(model)
 
     # Generated quantities (no observed descendants) are reported in topological order;
@@ -155,8 +156,7 @@ function JuliaBUGS.gen_chains(
         # draws rather than the stale environment values left by `evaluate!!`.
         evaluation_env = forward_sample_generated_quantities!!(rng, model, evaluation_env)
 
-        # Get parameter values from the evaluation environment
-        # (they were just set by evaluate!!, so they match samples[i])
+        # Get parameter values from the reconstructed evaluation environment.
         push!(
             param_vals,
             [AbstractPPL.getvalue(evaluation_env, param_var) for param_var in param_vars],

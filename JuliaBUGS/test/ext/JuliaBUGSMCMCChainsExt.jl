@@ -162,3 +162,34 @@ end
     # Model-parameter column matches the synthetic samples in order.
     @test mucol ≈ [s[1] for s in samples]
 end
+
+@testset "auto-marginalized chains reconstruct generated quantities from samples" begin
+    model_def = @bugs begin
+        mu ~ Normal(0, 1)
+        z ~ Categorical(w[1:2])
+        y ~ Normal(mu + z, 1)
+        pred = mu + 1.0
+    end
+
+    model = compile(model_def, (; w=[0.5, 0.5], y=1.0))
+    model = JuliaBUGS.settrans(model, true)
+    model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseAutoMarginalization())
+    @test LogDensityProblems.dimension(model) == 1
+
+    samples = [[m] for m in range(-1.0, 1.0; length=25)]
+    chn = JuliaBUGS.gen_chains(model, samples, Symbol[], []; rng=StableRNG(2024))
+
+    colnames = names(chn)
+    @test :mu in colnames
+    @test :z in colnames       # recovered marginalized latent
+    @test :pred in colnames    # deterministic generated quantity
+
+    A = Array(chn)
+    mucol = A[:, findfirst(==(:mu), colnames)]
+    zcol = A[:, findfirst(==(:z), colnames)]
+    predcol = A[:, findfirst(==(:pred), colnames)]
+
+    @test mucol ≈ [s[1] for s in samples]
+    @test predcol ≈ mucol .+ 1.0
+    @test all(z -> z in (1, 2), zcol)
+end
