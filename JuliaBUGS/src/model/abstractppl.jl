@@ -542,12 +542,17 @@ function _create_modified_model(
     new_evaluation_env::NamedTuple;
     base_model=nothing,
 )
-    # Create new graph evaluation data preserving the original GQ classification
-    # We must explicitly keep the original `generated_quantities` to avoid them being reclassified.
-    original_gq = Set(
+    # Preserve the base model's generated-quantity policy, but only for variables
+    # that still have no observed descendants in the modified graph. Conditioning a
+    # former generated quantity makes it an observation, so its ancestors may need
+    # to move back into the model-parameter partition.
+    base_gq = Set(
         generated_quantities(isnothing(model.base_model) ? model : model.base_model)
     )
-    new_graph_evaluation_data = GraphEvaluationData(new_graph; gq_override=original_gq)
+    surviving_gq = find_generated_quantities_variables(new_graph)
+    new_graph_evaluation_data = GraphEvaluationData(
+        new_graph; gq_override=intersect(base_gq, surviving_gq)
+    )
     new_parameters = new_graph_evaluation_data.model_parameters
 
     # Calculate new parameter lengths

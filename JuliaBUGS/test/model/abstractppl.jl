@@ -3,9 +3,14 @@ using JuliaBUGS
 using JuliaBUGS.Model:
     condition,
     decondition,
+    generated_quantities,
+    model_parameters,
     parameters,
     set_evaluation_mode,
     set_observed_values!,
+    variable_type,
+    ModelParameter,
+    Observation,
     regenerate_log_density_function,
     UseGeneratedLogDensityFunction,
     UseGraph
@@ -48,6 +53,36 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             )
 
             @test logp1 ≈ logp2
+        end
+
+        @testset "conditioning generated quantity updates ancestor classification" begin
+            model_def = @bugs begin
+                theta ~ Normal(0, 1)
+                z ~ Normal(theta, 1)
+                y ~ Normal(0, 1)
+            end
+
+            model = compile(model_def, (; y=0.0))
+            @test isempty(model_parameters(model))
+            @test @varname(theta) in generated_quantities(model)
+            @test @varname(z) in generated_quantities(model)
+
+            model_cond = condition(model, Dict(@varname(z) => 0.5))
+            @test variable_type(model_cond, @varname(z)) == Observation
+            @test variable_type(model_cond, @varname(theta)) == ModelParameter
+            @test model_parameters(model_cond) == [@varname(theta)]
+            @test @varname(theta) ∉ generated_quantities(model_cond)
+            @test LogDensityProblems.dimension(model_cond) == 1
+
+            params = [0.25]
+            lp_graph = Base.invokelatest(LogDensityProblems.logdensity, model_cond, params)
+            model_cond_gen = set_evaluation_mode(
+                model_cond, UseGeneratedLogDensityFunction()
+            )
+            lp_gen = Base.invokelatest(
+                LogDensityProblems.logdensity, model_cond_gen, params
+            )
+            @test lp_gen ≈ lp_graph
         end
 
         @testset "Array model conditioning with correct parameter ordering" begin
