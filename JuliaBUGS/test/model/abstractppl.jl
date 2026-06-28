@@ -67,22 +67,24 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             @test @varname(theta) in generated_quantities(model)
             @test @varname(z) in generated_quantities(model)
 
-            model_cond = condition(model, Dict(@varname(z) => 0.5))
-            @test variable_type(model_cond, @varname(z)) == Observation
-            @test variable_type(model_cond, @varname(theta)) == ModelParameter
-            @test model_parameters(model_cond) == [@varname(theta)]
-            @test @varname(theta) ∉ generated_quantities(model_cond)
-            @test LogDensityProblems.dimension(model_cond) == 1
+            conditioned_model = condition(model, Dict(@varname(z) => 0.5))
+            @test variable_type(conditioned_model, @varname(z)) == Observation
+            @test variable_type(conditioned_model, @varname(theta)) == ModelParameter
+            @test model_parameters(conditioned_model) == [@varname(theta)]
+            @test @varname(theta) ∉ generated_quantities(conditioned_model)
+            @test LogDensityProblems.dimension(conditioned_model) == 1
 
             params = [0.25]
-            lp_graph = Base.invokelatest(LogDensityProblems.logdensity, model_cond, params)
-            model_cond_gen = set_evaluation_mode(
-                model_cond, UseGeneratedLogDensityFunction()
+            graph_logdensity = Base.invokelatest(
+                LogDensityProblems.logdensity, conditioned_model, params
             )
-            lp_gen = Base.invokelatest(
-                LogDensityProblems.logdensity, model_cond_gen, params
+            generated_conditioned_model = set_evaluation_mode(
+                conditioned_model, UseGeneratedLogDensityFunction()
             )
-            @test lp_gen ≈ lp_graph
+            generated_logdensity = Base.invokelatest(
+                LogDensityProblems.logdensity, generated_conditioned_model, params
+            )
+            @test generated_logdensity ≈ graph_logdensity
         end
 
         @testset "Array model conditioning with correct parameter ordering" begin

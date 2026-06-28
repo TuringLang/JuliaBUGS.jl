@@ -178,21 +178,22 @@
             z ~ Normal(mu, 1)
         end
         model = compile(model_def, (; y=0.5))
-        gen = JuliaBUGS.Model.set_evaluation_mode(
+        generated_model = JuliaBUGS.Model.set_evaluation_mode(
             model, JuliaBUGS.Model.UseGeneratedLogDensityFunction()
         )
-        @test Set(JuliaBUGS.Model.parameters(gen)) == Set(JuliaBUGS.Model.parameters(model))
+        @test Set(JuliaBUGS.Model.parameters(generated_model)) ==
+            Set(JuliaBUGS.Model.parameters(model))
 
-        d = @test_logs (:warn,) match_mode = :any to_distribution(gen)
-        @test d isa Distribution{Distributions.NamedTupleVariate{(:mu, :z)}}
+        distribution = @test_logs (:warn,) match_mode = :any to_distribution(generated_model)
+        @test distribution isa Distribution{Distributions.NamedTupleVariate{(:mu, :z)}}
 
-        nt = (mu=0.1, z=0.2)
-        expected =
-            logpdf(Normal(0, 1), nt.mu) +
-            logpdf(Normal(nt.mu, 1), 0.5) +
-            logpdf(Normal(nt.mu, 1), nt.z)
-        @test logpdf(d, nt) ≈ expected
-        @test_throws ArgumentError logpdf(d, (; mu=nt.mu))
+        parameter_values = (mu=0.1, z=0.2)
+        expected_logdensity =
+            logpdf(Normal(0, 1), parameter_values.mu) +
+            logpdf(Normal(parameter_values.mu, 1), 0.5) +
+            logpdf(Normal(parameter_values.mu, 1), parameter_values.z)
+        @test logpdf(distribution, parameter_values) ≈ expected_logdensity
+        @test_throws ArgumentError logpdf(distribution, (; mu=parameter_values.mu))
     end
 
     @testset "multivariate parameter nodes" begin

@@ -546,18 +546,21 @@ function _create_modified_model(
     # that still have no observed descendants in the modified graph. Conditioning a
     # former generated quantity makes it an observation, so its ancestors may need
     # to move back into the model-parameter partition.
-    base_gq = Set(
+    base_generated_quantities = Set(
         generated_quantities(isnothing(model.base_model) ? model : model.base_model)
     )
-    surviving_gq = find_generated_quantities_variables(new_graph)
+    surviving_generated_quantities = find_generated_quantities_variables(new_graph)
     new_graph_evaluation_data = GraphEvaluationData(
-        new_graph; gq_override=intersect(base_gq, surviving_gq)
+        new_graph;
+        generated_quantities=intersect(
+            base_generated_quantities, surviving_generated_quantities
+        ),
     )
-    new_parameters = new_graph_evaluation_data.model_parameters
+    new_model_parameters = new_graph_evaluation_data.model_parameters
 
     # Calculate new parameter lengths
     new_untransformed_param_length, new_transformed_param_length = _calculate_param_lengths(
-        model, new_parameters
+        model, new_model_parameters
     )
 
     # Recompute mutable symbols for the new graph
@@ -626,7 +629,7 @@ function _regenerate_log_density_function(
         updated_graph_evaluation_data = GraphEvaluationData(
             graph,
             sorted_nodes;
-            gq_override=Set(graph_evaluation_data.generated_quantities),
+            generated_quantities=Set(graph_evaluation_data.generated_quantities),
         )
 
         return new_log_density_computation_function, updated_graph_evaluation_data
