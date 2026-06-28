@@ -312,6 +312,7 @@ end
         # I1: classification and dimension do not depend on the evaluation mode.
         @test Set(JuliaBUGS.model_parameters(m_gen)) == mp
         @test Set(JuliaBUGS.generated_quantities(m_gen)) == gq
+        @test Set(JuliaBUGS.parameters(m_gen)) == allpar
         @test LogDensityProblems.dimension(m_gen) == dim
 
         # Per-model anchors so a silent reclassification can't pass unnoticed.

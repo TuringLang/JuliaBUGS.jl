@@ -625,8 +625,7 @@ function _regenerate_log_density_function(
         # conditioned) graph and disagree with the generated code.
         updated_graph_evaluation_data = GraphEvaluationData(
             graph,
-            sorted_nodes,
-            graph_evaluation_data.model_parameters;
+            sorted_nodes;
             gq_override=Set(graph_evaluation_data.generated_quantities),
         )
 

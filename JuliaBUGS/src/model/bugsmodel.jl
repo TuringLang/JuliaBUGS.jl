@@ -692,8 +692,7 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 # conditioned models).
                 new_gd = GraphEvaluationData(
                     model.g,
-                    sorted_nodes,
-                    model.graph_evaluation_data.model_parameters;
+                    sorted_nodes;
                     gq_override=Set(model.graph_evaluation_data.generated_quantities),
                 )
 
