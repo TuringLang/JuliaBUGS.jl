@@ -18,6 +18,7 @@ must be invalidated when the graph structure changes (e.g., during conditioning)
 - `param_lengths::Dict{VarName,Int}`: Transformed lengths for continuous parameters.
 - `param_offsets::Dict{VarName,Int}`: Start index in flattened parameter vector for each continuous param.
 - `n_discrete_finite::Int`: Number of discrete finite variables (for memo sizing).
+- `continuous_parameters::Vector{VarName}`: Continuous model parameters that remain in the flat parameter vector after marginalization.
 """
 struct MarginalizationCache{V<:VarName}
     minimal_cache_keys::Dict{Int,Vector{Int}}
@@ -26,6 +27,7 @@ struct MarginalizationCache{V<:VarName}
     param_lengths::Dict{V,Int}
     param_offsets::Dict{V,Int}
     n_discrete_finite::Int
+    continuous_parameters::Vector{V}
 end
 
 """
@@ -490,34 +492,6 @@ function initialize!(model::BUGSModel, initial_params::AbstractVector)
 end
 
 """
-    _active_parameters(model::BUGSModel)
-
-In `UseAutoMarginalization` mode, this filters out discrete variables that are being marginalized.
-Otherwise, it returns `model_parameters(model)`.
-"""
-function _active_parameters(model::BUGSModel)
-    if model.evaluation_mode isa UseAutoMarginalization
-        gd = model.graph_evaluation_data
-        mc = model.marginalization_cache
-        return filter(model_parameters(model)) do vn
-            idx = findfirst(==(vn), gd.sorted_nodes)
-            if idx !== nothing
-                node_type = mc.node_types[idx]
-                if node_type == :discrete_infinite
-                    error(
-                        "Model contains discrete infinite variable $(vn) which cannot be marginalized. " *
-                        "Use UseGraph evaluation mode instead.",
-                    )
-                end
-                return node_type == :continuous
-            end
-            return false
-        end
-    end
-    return model_parameters(model)
-end
-
-"""
     getparams([T::Type], model::BUGSModel, evaluation_env=model.evaluation_env)
 
 Extract parameter values from the model.
@@ -552,7 +526,11 @@ params_dict = getparams(Dict, model, custom_env)
 ```
 """
 function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
-    param_vars = _active_parameters(model)
+    param_vars = if model.evaluation_mode isa UseAutoMarginalization
+        model.marginalization_cache.continuous_parameters
+    else
+        model_parameters(model)
+    end
 
     # Compute total length for allocation
     param_length = 0
@@ -599,7 +577,11 @@ function getparams(
     T::Type{<:AbstractDict}, model::BUGSModel, evaluation_env=model.evaluation_env
 )
     d = T()
-    param_vars = _active_parameters(model)
+    param_vars = if model.evaluation_mode isa UseAutoMarginalization
+        model.marginalization_cache.continuous_parameters
+    else
+        model_parameters(model)
+    end
     for v in param_vars
         value = AbstractPPL.getvalue(evaluation_env, v)
         if !model.transformed
@@ -753,21 +735,38 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 vn_to_idx = Dict(sorted_nodes[i] => i for i in eachindex(sorted_nodes))
                 param_lengths = Dict{eltype(sorted_nodes),Int}()
                 param_offsets = Dict{eltype(sorted_nodes),Int}()
+                continuous_parameters = eltype(sorted_nodes)[]
                 offset = 1
                 for vn in gd.model_parameters
                     idx = get(vn_to_idx, vn, 0)
-                    if idx != 0 && node_types[idx] == :continuous
-                        len = model.transformed_var_lengths[vn]
-                        param_lengths[vn] = len
-                        param_offsets[vn] = offset
-                        offset += len
+                    if idx != 0
+                        node_type = node_types[idx]
+                        if node_type == :discrete_infinite
+                            error(
+                                "Model contains discrete infinite variable $(vn) which cannot be marginalized. " *
+                                "Use UseGraph evaluation mode instead.",
+                            )
+                        end
+                        if node_type == :continuous
+                            len = model.transformed_var_lengths[vn]
+                            param_lengths[vn] = len
+                            param_offsets[vn] = offset
+                            offset += len
+                            push!(continuous_parameters, vn)
+                        end
                     end
                 end
 
                 n_discrete_finite = count(==(:discrete_finite), node_types)
 
                 cache = MarginalizationCache(
-                    keys, order, node_types, param_lengths, param_offsets, n_discrete_finite
+                    keys,
+                    order,
+                    node_types,
+                    param_lengths,
+                    param_offsets,
+                    n_discrete_finite,
+                    continuous_parameters,
                 )
                 model = BangBang.setproperty!!(model, :marginalization_cache, cache)
             catch err
