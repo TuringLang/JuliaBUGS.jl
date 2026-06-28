@@ -440,8 +440,8 @@ function _backward_sample_recursive!!(
                 memo,
                 minimal_keys,
             )
-            # The continuous-prior part of branch_prior is constant across `val` and
-            # cancels in the softmax below; the rest captures all `val`-dependent terms.
+            # Keep the full branch weight: downstream prior and likelihood terms may
+            # both depend on this candidate value.
             log_weights[k] = logpdf(dist, val) + branch_prior + branch_lik
         end
         weights = exp.(log_weights .- LogExpFunctions.logsumexp(log_weights))
