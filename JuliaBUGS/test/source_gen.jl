@@ -436,8 +436,7 @@ end
             y ~ Normal(h, 1)
         end), (;))
 
-        @test JuliaBUGS.variable_type(model, @varname(h)) ==
-            JuliaBUGS.TransformedParameter
+        @test JuliaBUGS.variable_type(model, @varname(h)) == JuliaBUGS.TransformedParameter
         check_gq_invariants(model; n_params=2, n_gq=0, has_stochastic_gq=false)
 
         graph_model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())

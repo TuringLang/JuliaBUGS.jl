@@ -80,7 +80,8 @@ function evaluate_with_rng!!(
                 value = rand(rng, dist)
             end
 
-            should_score = is_observed ||
+            should_score =
+                is_observed ||
                 include_generated_quantities ||
                 model.graph_evaluation_data.is_model_parameter_vals[i]
             if should_score

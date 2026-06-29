@@ -494,7 +494,11 @@ function _generate_lowered_model_def(
         generated_quantities
     end
     var_types = __determine_var_types(
-        g, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values, generated_quantity_vars
+        g,
+        stmt_id_to_var,
+        stmt_id_to_stmt,
+        induction_variable_values,
+        generated_quantity_vars,
     )
     lowered_model_def = _lower_model_def_to_represent_observe_stmts(
         reconstructed_model_def, stmt_to_stmt_id, var_types, evaluation_env

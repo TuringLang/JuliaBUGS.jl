@@ -89,9 +89,7 @@ using Test
             y ~ Normal(mu + delta[z], sigma)
         end
 
-        model = compile(
-            model_def, (K=2, w=[0.3, 0.7], delta=[0.0, 2.0], sigma=1.0, y=1.5)
-        )
+        model = compile(model_def, (K=2, w=[0.3, 0.7], delta=[0.0, 2.0], sigma=1.0, y=1.5))
         model = JuliaBUGS.settrans(model, true)
         model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseAutoMarginalization())
         transition, log_densities = JuliaBUGS.Model.evaluate_with_marginalization_values!!(

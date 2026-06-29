@@ -436,9 +436,7 @@ end
         end
 
         model = compile(model_def, (; y=0.0))
-        stale_env = JuliaBUGS.BangBang.setindex!!(
-            model.evaluation_env, -1.0, @varname(z)
-        )
+        stale_env = JuliaBUGS.BangBang.setindex!!(model.evaluation_env, -1.0, @varname(z))
 
         _, ld_excl = JuliaBUGS.evaluate_with_env!!(
             model, stale_env; include_generated_quantities=false

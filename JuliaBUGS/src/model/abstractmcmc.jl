@@ -37,9 +37,7 @@ function AbstractMCMC.ParamsWithStats(
             lds
         else
             model_with_env = BangBang.setproperty!!(bugs_model, :evaluation_env, transition_env)
-            _, lds = evaluate_with_env!!(
-                model_with_env; transformed=bugs_model.transformed
-            )
+            _, lds = evaluate_with_env!!(model_with_env; transformed=bugs_model.transformed)
             lds
         end
         (lp=log_densities.tempered_logjoint,)

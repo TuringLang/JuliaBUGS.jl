@@ -162,7 +162,8 @@ function GraphEvaluationData(
             # empty, which a generator comprehension would not.
             can_reach_stochastic = Dict{VarName,Bool}()
             generated_quantity_vars = filter(
-                vn -> !g[vn].is_stochastic &&
+                vn ->
+                    !g[vn].is_stochastic &&
                     !_can_reach_stochastic(g, vn, can_reach_stochastic),
                 generated_quantity_vars,
             )
