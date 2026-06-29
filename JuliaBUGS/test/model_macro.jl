@@ -272,11 +272,13 @@ custom_transform_for_test(x) = x^2 + 1
                 end
             end)
 
-            @test_throws LoadError eval(quote
-                JuliaBUGS.@model function just_number(42, x)
-                    # Should fail - first arg must be destructuring
+            @test_throws LoadError eval(
+                quote
+                    JuliaBUGS.@model function just_number(42, x)
+                        # Should fail - first arg must be destructuring
+                    end
                 end
-            end)
+            )
         end
     end
 

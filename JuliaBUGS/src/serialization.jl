@@ -11,32 +11,31 @@ function Serialization.serialize(s::Serialization.AbstractSerializer, model::BUG
     Serialization.serialize(s, BUGSModel)
 
     # Serialize minimal state; skip generated functions and caches
-    Serialization.serialize(
-        s,
-        (
-            transformed=model.transformed,
-            model_def=model.model_def,
-            data=model.data,
-            evaluation_env=model.evaluation_env,
-            evaluation_mode=model.evaluation_mode,
-        ),
-    )
+    Serialization.serialize(s, (
+        transformed = model.transformed,
+        model_def = model.model_def,
+        data = model.data,
+        evaluation_env = model.evaluation_env,
+        evaluation_mode = model.evaluation_mode
+    ))
     return nothing
 end
 
 # Serialize BUGSModelWithGradient by storing the AD type and base model.
 function Serialization.serialize(
-    s::Serialization.AbstractSerializer, gw::JuliaBUGS.Model.BUGSModelWithGradient
+    s::Serialization.AbstractSerializer,
+    gw::JuliaBUGS.Model.BUGSModelWithGradient,
 )
     Serialization.writetag(s.io, Serialization.OBJECT_TAG)
     Serialization.serialize(s, JuliaBUGS.Model.BUGSModelWithGradient)
-    Serialization.serialize(s, (adtype=gw.adtype, base_model=gw.base_model))
+    Serialization.serialize(s, (adtype = gw.adtype, base_model = gw.base_model))
     return nothing
 end
 
 # Deserialize `BUGSModelWithGradient` and rebuild the gradient wrapper locally.
 function Serialization.deserialize(
-    s::Serialization.AbstractSerializer, ::Type{<:JuliaBUGS.Model.BUGSModelWithGradient}
+    s::Serialization.AbstractSerializer,
+    ::Type{<:JuliaBUGS.Model.BUGSModelWithGradient},
 )
     state = Serialization.deserialize(s)
     base_model = state.base_model
@@ -44,13 +43,9 @@ function Serialization.deserialize(
         # Gradient initialization is performed locally on this process.
         # Use invokelatest because compile() (called during base_model deserialization)
         # defines new methods that aren't visible in the current world age.
-        return Base.invokelatest(
-            JuliaBUGS.Model.BUGSModelWithGradient, base_model, state.adtype
-        )
+        return Base.invokelatest(JuliaBUGS.Model.BUGSModelWithGradient, base_model, state.adtype)
     catch err
-        @warn "Failed to reconstruct BUGSModelWithGradient" exception=(
-            err, catch_backtrace()
-        )
+        @warn "Failed to reconstruct BUGSModelWithGradient" exception=(err, catch_backtrace())
         rethrow(err)
     end
 end

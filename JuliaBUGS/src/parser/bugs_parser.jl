@@ -543,8 +543,8 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
         end
         variable_name_buffer = String[]
         while peek(ps) == K"Identifier" ||
-              peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR ||
-              peek(ps) == K"Bool"
+                  peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR ||
+                  peek(ps) == K"Bool"
             if peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR || peek(ps) == K"Bool"
                 push!(variable_name_buffer, "var\"$(peek_raw(ps))\"") # wrap in `var"..."` to avoid syntax error
             else
