@@ -1,5 +1,19 @@
 # JuliaBUGS Changelog
 
+## 0.15.0
+
+### Highlights
+
+- **Generated quantities (#501).** Every node now carries an explicit `VariableType`: `Observation`, `ModelParameter`, `TransformedParameter`, or `GeneratedQuantity`. A *generated quantity* is an unobserved node (stochastic or deterministic) with no observed descendants, so it lies outside the log-density target. Generated quantities are excluded from the log density in all three evaluation modes (`UseGraph`, `UseGeneratedLogDensityFunction`, `UseAutoMarginalization`) and recovered after sampling by forward simulation instead of being sampled by MCMC. Under auto-marginalization, a generated quantity that depends on a marginalized discrete latent first recovers that latent from its conditional posterior `p(z | θ, y)`. `gen_chains` applies this automatically, so reported generated quantities are genuine posterior(-predictive) draws.
+
+- **New API:** `model_parameters(model)`, `generated_quantities(model)`, `variable_type(model, vn)`, the `VariableType` enum and its instances, and `Model.forward_sample_generated_quantities!!`.
+
+### Breaking Changes
+
+- Unobserved stochastic nodes with **no observed descendants** (e.g. posterior-predictive draws, or priors unused by any likelihood) are now generated quantities: excluded from `model_parameters`, the parameter vector, and `LogDensityProblems.dimension`, and forward-sampled in post-processing instead of sampled by MCMC/Gibbs. The joint distribution is unchanged.
+- `parameters(model)` (all unobserved stochastic nodes) and `model_parameters(model)` (the MCMC target) can now differ, and `dimension` follows `model_parameters`. Use `LogDensityProblems.dimension(model)` (or `length(model_parameters(model))`) where you previously relied on `length(parameters(model))` as the parameter-vector length.
+- `Gibbs` sampler maps that reference a reclassified variable now error, since it is no longer in `model_parameters`.
+
 ## 0.14.1
 
 ### Highlights
