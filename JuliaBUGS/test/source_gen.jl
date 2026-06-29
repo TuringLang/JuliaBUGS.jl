@@ -495,6 +495,24 @@ end
         )
     end
 
+    @testset "single statement mixes observed, parameter, and GQ iterations" begin
+        model = compile(
+            (@bugs begin
+                mu ~ Normal(0, 1)
+                for i in 1:3
+                    y[i] ~ Normal(mu, 1)
+                    z[i] ~ Normal(y[i], 1)
+                end
+            end),
+            (; y=[0.1, missing, missing], z=[missing, 0.2, missing]),
+        )
+
+        @test JuliaBUGS.variable_type(model, @varname(y[1])) == JuliaBUGS.Observation
+        @test JuliaBUGS.variable_type(model, @varname(y[2])) == JuliaBUGS.ModelParameter
+        @test JuliaBUGS.variable_type(model, @varname(y[3])) == JuliaBUGS.GeneratedQuantity
+        check_gq_invariants(model; n_params=2, n_gq=3, has_stochastic_gq=true)
+    end
+
     @testset "mixed loops (observed + parameter in x, observed + GQ in z)" begin
         # x[1], x[3] are parameters; x[2], x[4] observed; z[1], z[3] observed
         # likelihoods; z[2], z[4] are generated quantities.
