@@ -409,6 +409,47 @@ end
         )
     end
 
+    @testset "_generate_lowered_model_def derives GQ classification by default" begin
+        model = compile((@bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Normal(mu, 1)
+            pred = mu + 1.0
+        end), (; y=0.5))
+
+        lowered_default, _ = JuliaBUGS._generate_lowered_model_def(
+            model.model_def, model.g, model.evaluation_env
+        )
+        lowered_cached, _ = JuliaBUGS._generate_lowered_model_def(
+            model.model_def,
+            model.g,
+            model.evaluation_env;
+            generated_quantities=Set(JuliaBUGS.generated_quantities(model)),
+        )
+        @test lowered_default == lowered_cached
+    end
+
+    @testset "prior-only deterministic ancestor of stochastic parameter" begin
+        model = compile((@bugs begin
+            x ~ Normal(0, 1)
+            h = x + 1
+            y ~ Normal(h, 1)
+        end), (;))
+
+        @test JuliaBUGS.variable_type(model, @varname(h)) ==
+            JuliaBUGS.TransformedParameter
+        check_gq_invariants(model; n_params=2, n_gq=0, has_stochastic_gq=false)
+
+        graph_model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        generated_model = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
+        for values in ([0.0, 0.0], [1.0, 2.0], [-2.0, 0.5])
+            @test LogDensityProblems.logdensity(graph_model, values) ≈
+                LogDensityProblems.logdensity(generated_model, values)
+        end
+    end
+
     @testset "chained GQ" begin
         # z and z2 form a GQ chain hanging off mu.
         check_gq_invariants(

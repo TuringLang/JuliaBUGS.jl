@@ -424,7 +424,7 @@ function _generate_lowered_model_def(
     g::JuliaBUGS.BUGSGraph,
     evaluation_env::NamedTuple;
     diagnostics::Vector{String}=String[],
-    generated_quantities::Set{<:VarName}=Set{VarName}(),
+    generated_quantities::Union{Nothing,Set{<:VarName}}=nothing,
 )
     __check_for_reserved_names(model_def)
     stmt_to_stmt_id = _build_stmt_to_stmt_id(model_def)
@@ -488,8 +488,13 @@ function _generate_lowered_model_def(
         sorted_fissioned_stmts
     )
     induction_variable_values = _var_to_loop_vars(model_def, evaluation_env)
+    generated_quantity_vars = if generated_quantities === nothing
+        Set(Model.GraphEvaluationData(g).generated_quantities)
+    else
+        generated_quantities
+    end
     var_types = __determine_var_types(
-        g, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values, generated_quantities
+        g, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values, generated_quantity_vars
     )
     lowered_model_def = _lower_model_def_to_represent_observe_stmts(
         reconstructed_model_def, stmt_to_stmt_id, var_types, evaluation_env
@@ -596,8 +601,9 @@ function __variable_type(g::JuliaBUGS.BUGSGraph, var, generated_quantities)
     if g[var].is_stochastic && g[var].is_observed
         return :observed
     elseif var in generated_quantities
-        # No observed descendants: stochastic ones are forward-sampled and deterministic
-        # ones are recomputed in post-processing, so neither belongs in the log density.
+        # Outside the target closure: stochastic ones are forward-sampled and
+        # deterministic ones are recomputed in post-processing, so neither belongs in
+        # the log density.
         return :generated_quantity
     elseif g[var].is_stochastic
         return :model_parameter

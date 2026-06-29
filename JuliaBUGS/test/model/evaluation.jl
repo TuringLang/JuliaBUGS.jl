@@ -426,6 +426,29 @@ end
         @test log_densities.logprior ≈ expected_logprior
         @test log_densities.loglikelihood ≈ expected_loglikelihood
     end
+
+    @testset "Excluded generated quantities are not evaluated" begin
+        model_def = @bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Exponential(1)
+            w ~ Gamma(z, 1)
+        end
+
+        model = compile(model_def, (; y=0.0))
+        stale_env = JuliaBUGS.BangBang.setindex!!(
+            model.evaluation_env, -1.0, @varname(z)
+        )
+
+        _, ld_excl = JuliaBUGS.evaluate_with_env!!(
+            model, stale_env; include_generated_quantities=false
+        )
+        @test isfinite(ld_excl.tempered_logjoint)
+
+        @test_throws DomainError JuliaBUGS.evaluate_with_env!!(
+            model, stale_env; include_generated_quantities=true
+        )
+    end
 end
 
 @testset "evaluate_with_values!!" begin
