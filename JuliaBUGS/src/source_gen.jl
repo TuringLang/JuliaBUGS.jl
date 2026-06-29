@@ -346,9 +346,9 @@ end
 
 # Lower a statement that has generated-quantity iterations. Generated quantities never
 # contribute to the log density (stochastic ones are forward-sampled, deterministic ones
-# recomputed, in post-processing), so the emitted code guards the surviving categories
-# with explicit per-iteration conditions and lets generated-quantity iterations fall
-# through. Returns `nothing` when the whole statement is generated quantities.
+# recomputed, in post-processing), so the emitted code uses loop-index guards for
+# the surviving categories and lets generated-quantity iterations fall through. Returns
+# `nothing` when the whole statement is generated quantities.
 function __lower_stmt_with_generated_quantities(
     statement, observed_loop_vars, model_parameter_loop_vars, deterministic_loop_vars
 )
