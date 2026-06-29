@@ -80,21 +80,25 @@ function evaluate_with_rng!!(
                 value = rand(rng, dist)
             end
 
-            if transformed
-                value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
-                logp =
+            should_score =
+                is_observed ||
+                include_generated_quantities ||
+                model.graph_evaluation_data.is_model_parameter_vals[i]
+            if should_score
+                logp = if transformed
+                    value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
                     Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
                         Bijectors.inverse(Bijectors.bijector(dist)), value_transformed
                     )
-            else
-                logp = Distributions.logpdf(dist, value)
-            end
+                else
+                    Distributions.logpdf(dist, value)
+                end
 
-            if is_observed
-                loglikelihood += logp
-            elseif include_generated_quantities ||
-                model.graph_evaluation_data.is_model_parameter_vals[i]
-                logprior += logp
+                if is_observed
+                    loglikelihood += logp
+                else
+                    logprior += logp
+                end
             end
 
             evaluation_env = setindex!!(evaluation_env, value, vn)
@@ -144,7 +148,10 @@ function evaluate_with_env!!(
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
 
-        if !is_stochastic
+        if model.graph_evaluation_data.variable_types[i] == GeneratedQuantity &&
+            !include_generated_quantities
+            continue
+        elseif !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
@@ -218,7 +225,9 @@ function evaluate_with_values!!(
         is_observed = model.graph_evaluation_data.is_observed_vals[i]
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
-        if !is_stochastic
+        if model.graph_evaluation_data.variable_types[i] == GeneratedQuantity
+            continue
+        elseif !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         elseif !is_observed && model.graph_evaluation_data.is_model_parameter_vals[i]
@@ -315,11 +324,11 @@ end
 Forward-sample the generated quantities of `model` given an environment that already holds
 the model parameters, observations, and transformed parameters.
 
-Generated quantities are the nodes with no observed descendants. Stochastic ones are drawn
-from their conditional distribution given their (already-set) parents (`rand`); deterministic
-ones are recomputed. Model parameters, observations, and transformed parameters are left
-untouched. Nodes are visited in topological order, so chains of generated quantities are
-sampled with their parents already in place.
+Generated quantities are the nodes outside the log-density target dependency closure.
+Stochastic ones are drawn from their conditional distribution given their (already-set)
+parents (`rand`); deterministic ones are recomputed. Model parameters, observations, and
+transformed parameters are left untouched. Nodes are visited in topological order, so chains
+of generated quantities are sampled with their parents already in place.
 
 If `model` is in `UseAutoMarginalization` mode its discrete latents were summed out of the
 log density and have no value in `evaluation_env`. A generated quantity may depend on such a
@@ -750,7 +759,7 @@ function _marginalize_recursive(
     rest_indices = @view(remaining_indices[2:end])
 
     result = if gd.variable_types[current_idx] == GeneratedQuantity
-        # Generated quantities have no observed descendants, so the whole generated-quantity
+        # Generated quantities are outside the target closure, so the generated-quantity
         # block integrates/sums to one and factors out of the marginalized target p(θ, y).
         # Skip it entirely: don't read the parameter vector (it has no slot there) and don't
         # marginalize it. They are recovered later by forward sampling, not here.

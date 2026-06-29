@@ -38,7 +38,8 @@ Classification of each node in the model graph.
 - `Observation`: a stochastic node with observed data
 - `ModelParameter`: a stochastic node that influences observations (sampled by MCMC)
 - `TransformedParameter`: a deterministic node that needs to be computed during each iteration of sampling
-- `GeneratedQuantity`: a stochastic or deterministic node with no observed descendants (computed after getting samples)
+- `GeneratedQuantity`: a stochastic or deterministic node outside the log-density target
+  closure (computed after getting samples)
 """
 @enum VariableType Observation ModelParameter TransformedParameter GeneratedQuantity
 
@@ -51,7 +52,7 @@ Classification of each node in the model graph.
     return if is_stochastic && is_observed
         Observation
     elseif vn in generated_quantity_vars
-        # No observed descendants
+        # Outside the log-density target closure.
         GeneratedQuantity
     elseif is_stochastic
         # Stochastic node that influences observed likelihood terms.
@@ -60,6 +61,24 @@ Classification of each node in the model graph.
         # Deterministic node needed during each sampling iteration.
         TransformedParameter
     end
+end
+
+function _can_reach_stochastic(
+    g::BUGSGraph, vn::VarName, can_reach_stochastic::Dict{VarName,Bool}
+)
+    if haskey(can_reach_stochastic, vn)
+        return can_reach_stochastic[vn]
+    end
+
+    for child in MetaGraphsNext.outneighbor_labels(g, vn)
+        if g[child].is_stochastic || _can_reach_stochastic(g, child, can_reach_stochastic)
+            can_reach_stochastic[vn] = true
+            return true
+        end
+    end
+
+    can_reach_stochastic[vn] = false
+    return false
 end
 
 """
@@ -72,7 +91,7 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 - `sorted_nodes::Vector{<:VarName}`: Variables in topological order for evaluation
 - `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
 - `model_parameters::Vector{<:VarName}`: Unobserved stochastic variables that influence observations
-- `generated_quantities::Vector{<:VarName}`: Variables (stochastic or deterministic) with no observed descendants
+- `generated_quantities::Vector{<:VarName}`: Variables (stochastic or deterministic) outside the log-density target closure
 - `variable_types::Vector{VariableType}`: Classification of each node
 - `is_model_parameter_vals::Vector{Bool}`: Whether each node is part of the MCMC parameter vector (true exactly for `model_parameters`)
 - `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable
@@ -136,12 +155,17 @@ function GraphEvaluationData(
         if !has_observations
             # Without observations every stochastic node trivially lacks observed
             # descendants, but those are priors to be sampled, not generated quantities.
-            # Deterministic nodes, however, are still genuine derived quantities, so keep
-            # them classified as generated quantities (e.g. for reporting in chains).
+            # Deterministic ancestors of those stochastic parameters are needed by the
+            # target and must be recomputed during log-density evaluation; only purely
+            # terminal deterministic derived quantities remain generated quantities.
             # `filter` preserves the `Set{VarName}` element type even when the result is
             # empty, which a generator comprehension would not.
+            can_reach_stochastic = Dict{VarName,Bool}()
             generated_quantity_vars = filter(
-                vn -> !g[vn].is_stochastic, generated_quantity_vars
+                vn ->
+                    !g[vn].is_stochastic &&
+                    !_can_reach_stochastic(g, vn, can_reach_stochastic),
+                generated_quantity_vars,
             )
         end
     end
@@ -438,7 +462,8 @@ model_parameters(model::BUGSModel) = model.graph_evaluation_data.model_parameter
 """
     generated_quantities(model::BUGSModel)
 
-Return a vector of `VarName` containing variables with no observed descendants. These can be computed after getting samples.
+Return a vector of `VarName` containing variables outside the log-density target
+closure. These can be computed after getting samples.
 """
 generated_quantities(model::BUGSModel) = model.graph_evaluation_data.generated_quantities
 

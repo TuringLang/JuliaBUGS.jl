@@ -1,10 +1,11 @@
 # Generated Quantities
 
-A **generated quantity** is an unobserved node — stochastic or deterministic — that has
-**no observed descendants**: no directed path leads from it to any observation. Because it
-cannot influence the likelihood, it contributes nothing to the posterior over the model
-parameters. JuliaBUGS therefore keeps generated quantities *out of the inference target* and
-recovers them afterwards by forward sampling.
+A **generated quantity** is an unobserved node — stochastic or deterministic — that is
+outside the log-density target dependency closure. In a model with observations, this usually
+means the node has **no observed descendants**: no directed path leads from it to any
+observation. Because it cannot influence the target density over the model parameters,
+JuliaBUGS keeps generated quantities *out of the inference target* and recovers them
+afterwards by forward sampling.
 
 Typical generated quantities are posterior-predictive draws, derived summaries, or latent
 states you want to report but not sample directly:
@@ -27,9 +28,10 @@ generated quantities.
 Every node is assigned a [`VariableType`](@ref JuliaBUGS.VariableType): `Observation`, `ModelParameter`,
 `TransformedParameter`, or `GeneratedQuantity`. The partition that matters for inference is:
 
-- **Model parameters** — unobserved stochastic nodes that influence an observation. These are
-  what MCMC samples; they make up the parameter vector and the dimension.
-- **Generated quantities** — unobserved nodes with no observed descendants.
+- **Model parameters** — unobserved stochastic nodes in the target. These are what MCMC
+  samples; they make up the parameter vector and the dimension.
+- **Transformed parameters** — deterministic nodes needed to evaluate the target density.
+- **Generated quantities** — unobserved nodes outside the target dependency closure.
 
 The two sets are disjoint, and no model parameter or observation ever has a generated
 quantity as an ancestor.
@@ -91,11 +93,28 @@ are unaffected.
 
 ## Models with no observations
 
-The classification depends on a model having at least one observation. If a model has **no**
-observations at all, JuliaBUGS does *not* treat every node as a generated quantity (which
-would leave nothing to sample); instead all unobserved stochastic nodes are kept as model
-parameters, so the model is sampled as the full prior. Add data (or `condition` on some
-variables) to obtain a non-trivial generated-quantity partition.
+If a model has **no** observations at all, JuliaBUGS does *not* treat every node as a
+generated quantity (which would leave nothing to sample). Instead all unobserved stochastic
+nodes are kept as model parameters, so the model is sampled as the full prior. Deterministic
+ancestors of those stochastic parameters are transformed parameters and are recomputed during
+log-density evaluation. Terminal deterministic nodes that do not feed any stochastic factor
+can still be generated quantities.
+
+For example, in this prior-only model `h` is **not** a generated quantity because the prior
+factor for `y` depends on it:
+
+```julia
+model_def = @bugs begin
+    x ~ Normal(0, 1)
+    h = x + 1
+    y ~ Normal(h, 1)
+end
+model = compile(model_def, (;))
+JuliaBUGS.variable_type(model, @varname(h))  # TransformedParameter
+```
+
+Add data (or `condition` on some variables) to obtain the usual observed-data
+generated-quantity partition.
 
 ## API
 
