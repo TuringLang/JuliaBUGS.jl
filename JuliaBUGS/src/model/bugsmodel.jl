@@ -709,7 +709,9 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 new_gd = GraphEvaluationData(
                     model.g,
                     sorted_nodes;
-                    generated_quantities=Set(model.graph_evaluation_data.generated_quantities),
+                    generated_quantities=Set(
+                        model.graph_evaluation_data.generated_quantities
+                    ),
                 )
 
                 model = BangBang.setproperty!!(model, :graph_evaluation_data, new_gd)

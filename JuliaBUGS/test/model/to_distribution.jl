@@ -184,7 +184,9 @@
         @test Set(JuliaBUGS.Model.parameters(generated_model)) ==
             Set(JuliaBUGS.Model.parameters(model))
 
-        distribution = @test_logs (:warn,) match_mode = :any to_distribution(generated_model)
+        distribution = @test_logs (:warn,) match_mode = :any to_distribution(
+            generated_model
+        )
         @test distribution isa Distribution{Distributions.NamedTupleVariate{(:mu, :z)}}
 
         parameter_values = (mu=0.1, z=0.2)

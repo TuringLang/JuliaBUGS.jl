@@ -490,9 +490,7 @@ end
         conditioned_model = condition(
             model, Dict(@varname(x[1]) => 0.5, @varname(x[3]) => 1.5)
         )
-        check_gq_invariants(
-            conditioned_model; n_params=4, n_gq=0, has_stochastic_gq=false
-        )
+        check_gq_invariants(conditioned_model; n_params=4, n_gq=0, has_stochastic_gq=false)
     end
 
     @testset "conditioning preserves a surviving generated quantity" begin
@@ -505,8 +503,6 @@ end
             z ~ Normal(mu, 1)
         end), (; y=0.5))
         conditioned_model = condition(model, Dict(@varname(mu) => 0.3))
-        check_gq_invariants(
-            conditioned_model; n_params=0, n_gq=1, has_stochastic_gq=true
-        )
+        check_gq_invariants(conditioned_model; n_params=0, n_gq=1, has_stochastic_gq=true)
     end
 end
