@@ -134,7 +134,13 @@ function GraphEvaluationData(
         generated_quantity_vars = find_generated_quantities_variables(g)
         has_observations = any(g[vn].is_observed for vn in labels(g) if g[vn].is_stochastic)
         if !has_observations
-            generated_quantity_vars = Set{VarName}()
+            # Without observations every stochastic node trivially lacks observed
+            # descendants, but those are priors to be sampled, not generated quantities.
+            # Deterministic nodes, however, are still genuine derived quantities, so keep
+            # them classified as generated quantities (e.g. for reporting in chains).
+            generated_quantity_vars = Set(
+                vn for vn in generated_quantity_vars if !g[vn].is_stochastic
+            )
         end
     end
 
