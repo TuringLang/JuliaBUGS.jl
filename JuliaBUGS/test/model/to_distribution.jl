@@ -171,6 +171,33 @@
         @test logpdf(d, NamedTuple()) ≈ manual
     end
 
+    @testset "generated-mode model keeps stochastic generated quantities" begin
+        model_def = @bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Normal(mu, 1)
+        end
+        model = compile(model_def, (; y=0.5))
+        generated_model = JuliaBUGS.Model.set_evaluation_mode(
+            model, JuliaBUGS.Model.UseGeneratedLogDensityFunction()
+        )
+        @test Set(JuliaBUGS.Model.parameters(generated_model)) ==
+            Set(JuliaBUGS.Model.parameters(model))
+
+        distribution = @test_logs (:warn,) match_mode = :any to_distribution(
+            generated_model
+        )
+        @test distribution isa Distribution{Distributions.NamedTupleVariate{(:mu, :z)}}
+
+        parameter_values = (mu=0.1, z=0.2)
+        expected_logdensity =
+            logpdf(Normal(0, 1), parameter_values.mu) +
+            logpdf(Normal(parameter_values.mu, 1), 0.5) +
+            logpdf(Normal(parameter_values.mu, 1), parameter_values.z)
+        @test logpdf(distribution, parameter_values) ≈ expected_logdensity
+        @test_throws ArgumentError logpdf(distribution, (; mu=parameter_values.mu))
+    end
+
     @testset "multivariate parameter nodes" begin
         # A single multivariate stochastic node packs into one NamedTuple field.
         @testset "ddirich (simplex-valued)" begin

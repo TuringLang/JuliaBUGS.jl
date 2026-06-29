@@ -292,56 +292,62 @@ end
     #       both `getparams` and the log density unchanged, in both modes.
     JuliaBUGS.@bugs_primitive Normal
 
-    fsgq = JuliaBUGS.Model.forward_sample_generated_quantities!!
+    forward_sample_generated_quantities =
+        JuliaBUGS.Model.forward_sample_generated_quantities!!
 
     # `n_params` is the number of (scalar) model parameters = the expected `dimension`;
     # `n_gq` the number of generated-quantity nodes; `has_stochastic_gq` whether at least
     # one GQ is stochastic (so re-sampling actually perturbs the environment).
     function check_gq_invariants(model; n_params, n_gq, has_stochastic_gq)
-        m_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
-        m_gen = JuliaBUGS.set_evaluation_mode(
+        graph_model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        generated_model = JuliaBUGS.set_evaluation_mode(
             model, JuliaBUGS.UseGeneratedLogDensityFunction()
         )
-        @test !isnothing(m_gen.log_density_computation_function)
+        @test !isnothing(generated_model.log_density_computation_function)
 
-        mp = Set(JuliaBUGS.model_parameters(m_graph))
-        gq = Set(JuliaBUGS.generated_quantities(m_graph))
-        allpar = Set(JuliaBUGS.parameters(m_graph))
-        dim = LogDensityProblems.dimension(m_graph)
+        model_parameter_set = Set(JuliaBUGS.model_parameters(graph_model))
+        generated_quantity_set = Set(JuliaBUGS.generated_quantities(graph_model))
+        parameter_set = Set(JuliaBUGS.parameters(graph_model))
+        dimension = LogDensityProblems.dimension(graph_model)
 
         # I1: classification and dimension do not depend on the evaluation mode.
-        @test Set(JuliaBUGS.model_parameters(m_gen)) == mp
-        @test Set(JuliaBUGS.generated_quantities(m_gen)) == gq
-        @test LogDensityProblems.dimension(m_gen) == dim
+        @test Set(JuliaBUGS.model_parameters(generated_model)) == model_parameter_set
+        @test Set(JuliaBUGS.generated_quantities(generated_model)) == generated_quantity_set
+        @test Set(JuliaBUGS.parameters(generated_model)) == parameter_set
+        @test LogDensityProblems.dimension(generated_model) == dimension
 
         # Per-model anchors so a silent reclassification can't pass unnoticed.
-        @test length(mp) == n_params
-        @test length(gq) == n_gq
-        @test dim == n_params
+        @test length(model_parameter_set) == n_params
+        @test length(generated_quantity_set) == n_gq
+        @test dimension == n_params
 
         # I2: model parameters and generated quantities partition the unobserved
         # stochastic nodes; `parameters` is their union (it also lists stochastic GQ).
-        @test isempty(intersect(mp, gq))
-        @test issubset(mp, allpar)
-        @test issubset(allpar, union(mp, gq))
+        @test isempty(intersect(model_parameter_set, generated_quantity_set))
+        @test issubset(model_parameter_set, parameter_set)
+        @test issubset(parameter_set, union(model_parameter_set, generated_quantity_set))
 
         # I3: the parameter vector covers exactly the model parameters; no GQ leaks in.
-        @test length(JuliaBUGS.getparams(m_graph)) == dim
-        param_keys = Set(keys(JuliaBUGS.getparams(Dict, m_graph)))
-        @test param_keys == mp
-        @test isempty(intersect(param_keys, gq))
+        @test length(JuliaBUGS.getparams(graph_model)) == dimension
+        param_keys = Set(keys(JuliaBUGS.getparams(Dict, graph_model)))
+        @test param_keys == model_parameter_set
+        @test isempty(intersect(param_keys, generated_quantity_set))
 
         # I4: generated log density matches graph evaluation at matched values.
         for seed in 1:8
             env, _ = Base.invokelatest(
                 JuliaBUGS.AbstractPPL.evaluate!!, Random.MersenneTwister(seed), model
             )
-            xg = JuliaBUGS.getparams(m_graph, env)
-            xgen = JuliaBUGS.getparams(m_gen, env)
-            @test length(xg) == length(xgen) == dim
-            lp_graph = Base.invokelatest(LogDensityProblems.logdensity, m_graph, xg)
-            lp_gen = Base.invokelatest(LogDensityProblems.logdensity, m_gen, xgen)
-            @test isapprox(lp_graph, lp_gen; atol=1e-10)
+            graph_parameters = JuliaBUGS.getparams(graph_model, env)
+            generated_parameters = JuliaBUGS.getparams(generated_model, env)
+            @test length(graph_parameters) == length(generated_parameters) == dimension
+            graph_logdensity = Base.invokelatest(
+                LogDensityProblems.logdensity, graph_model, graph_parameters
+            )
+            generated_logdensity = Base.invokelatest(
+                LogDensityProblems.logdensity, generated_model, generated_parameters
+            )
+            @test isapprox(graph_logdensity, generated_logdensity; atol=1e-10)
         end
 
         # I5: log density is invariant to the values of generated quantities. Two forward
@@ -349,25 +355,32 @@ end
         base_env, _ = Base.invokelatest(
             JuliaBUGS.AbstractPPL.evaluate!!, Random.MersenneTwister(99), model
         )
-        # `fsgq` calls the compiled node functions directly, so invoke it in the latest
+        # This helper calls the compiled node functions directly, so invoke it in the latest
         # world age (the helper is defined before these models are compiled).
         env_a = Base.invokelatest(
-            fsgq, Random.MersenneTwister(1), model, deepcopy(base_env)
+            forward_sample_generated_quantities,
+            Random.MersenneTwister(1),
+            model,
+            deepcopy(base_env),
         )
         env_b = Base.invokelatest(
-            fsgq, Random.MersenneTwister(2), model, deepcopy(base_env)
+            forward_sample_generated_quantities,
+            Random.MersenneTwister(2),
+            model,
+            deepcopy(base_env),
         )
-        @test JuliaBUGS.getparams(m_graph, env_a) == JuliaBUGS.getparams(m_graph, env_b)
+        @test JuliaBUGS.getparams(graph_model, env_a) ==
+            JuliaBUGS.getparams(graph_model, env_b)
         if has_stochastic_gq
             # Guard against a vacuous test: the GQ values really did change.
             @test any(
                 vn ->
                     JuliaBUGS.AbstractPPL.getvalue(env_a, vn) !=
                     JuliaBUGS.AbstractPPL.getvalue(env_b, vn),
-                gq,
+                generated_quantity_set,
             )
         end
-        for m in (m_graph, m_gen)
+        for m in (graph_model, generated_model)
             m_a = BangBang.setproperty!!(m, :evaluation_env, env_a)
             m_b = BangBang.setproperty!!(m, :evaluation_env, env_b)
             lp_a = Base.invokelatest(
@@ -474,8 +487,10 @@ end
                 y[i] ~ Normal(x[i], 1)
             end
         end), (;))
-        model_cond = condition(model, Dict(@varname(x[1]) => 0.5, @varname(x[3]) => 1.5))
-        check_gq_invariants(model_cond; n_params=4, n_gq=0, has_stochastic_gq=false)
+        conditioned_model = condition(
+            model, Dict(@varname(x[1]) => 0.5, @varname(x[3]) => 1.5)
+        )
+        check_gq_invariants(conditioned_model; n_params=4, n_gq=0, has_stochastic_gq=false)
     end
 
     @testset "conditioning preserves a surviving generated quantity" begin
@@ -487,7 +502,7 @@ end
             y ~ Normal(mu, 1)
             z ~ Normal(mu, 1)
         end), (; y=0.5))
-        model_cond = condition(model, Dict(@varname(mu) => 0.3))
-        check_gq_invariants(model_cond; n_params=0, n_gq=1, has_stochastic_gq=true)
+        conditioned_model = condition(model, Dict(@varname(mu) => 0.3))
+        check_gq_invariants(conditioned_model; n_params=0, n_gq=1, has_stochastic_gq=true)
     end
 end

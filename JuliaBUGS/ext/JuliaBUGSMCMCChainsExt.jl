@@ -2,12 +2,7 @@ module JuliaBUGSMCMCChainsExt
 
 using AbstractMCMC
 using JuliaBUGS
-using JuliaBUGS:
-    BUGSModel,
-    BUGSModelWithGradient,
-    find_generated_quantities_variables,
-    evaluate!!,
-    getparams
+using JuliaBUGS: BUGSModel, BUGSModelWithGradient, evaluate!!, getparams
 using JuliaBUGS.Model: model_parameters, forward_sample_generated_quantities!!
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.Accessors
@@ -133,16 +128,13 @@ function JuliaBUGS.gen_chains(
     thinning=1,
     kwargs...,
 )
-    gd = model.graph_evaluation_data
     # Report model parameters. In auto-marginalization, continuous parameters come from
     # the sample row and finite discrete latents are recovered below from p(z | theta, y).
     param_vars = model_parameters(model)
 
     # Generated quantities (no observed descendants) are reported in topological order;
     # they are disjoint from the model parameters by construction.
-    generated_vars = find_generated_quantities_variables(model.g)
-    param_set = Set(param_vars)
-    generated_vars = [v for v in gd.sorted_nodes if v in generated_vars && v ∉ param_set]
+    generated_vars = JuliaBUGS.Model.generated_quantities(model)
 
     # Evaluate model for each sample to get parameter values and generated quantities
     param_vals = []

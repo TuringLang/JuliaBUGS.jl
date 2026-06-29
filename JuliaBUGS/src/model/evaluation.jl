@@ -258,7 +258,7 @@ function evaluate_with_values!!(
     )
 end
 
-function _evaluate_active_parameters_with_values!!(
+function _evaluate_continuous_model_parameters_with_values!!(
     model::BUGSModel, flattened_values::AbstractVector; transformed=true
 )
     var_lengths = if transformed
@@ -268,7 +268,9 @@ function _evaluate_active_parameters_with_values!!(
     end
 
     evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
-    active_parameters = Set(_active_parameters(model))
+    continuous_model_parameters = Set(
+        model.marginalization_cache.continuous_model_parameters
+    )
     current_idx = 1
 
     gd = model.graph_evaluation_data
@@ -281,7 +283,7 @@ function _evaluate_active_parameters_with_values!!(
         elseif !gd.is_stochastic_vals[i]
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-        elseif !gd.is_observed_vals[i] && vn in active_parameters
+        elseif !gd.is_observed_vals[i] && vn in continuous_model_parameters
             dist = node_function(evaluation_env, loop_vars)
             l = var_lengths[vn]
             value = if transformed
@@ -438,8 +440,8 @@ function _backward_sample_recursive!!(
                 memo,
                 minimal_keys,
             )
-            # The continuous-prior part of branch_prior is constant across `val` and
-            # cancels in the softmax below; the rest captures all `val`-dependent terms.
+            # Keep the full branch weight: downstream prior and likelihood terms may
+            # both depend on this candidate value.
             log_weights[k] = logpdf(dist, val) + branch_prior + branch_lik
         end
         weights = exp.(log_weights .- LogExpFunctions.logsumexp(log_weights))
@@ -910,7 +912,7 @@ function evaluate_with_marginalization_values!!(
     memo = Dict{Tuple{Int,Tuple},Tuple{T,T}}()
     sizehint!(memo, expected_entries)
 
-    evaluation_env = _evaluate_active_parameters_with_values!!(
+    evaluation_env = _evaluate_continuous_model_parameters_with_values!!(
         model, flattened_values; transformed=model.transformed
     )
 

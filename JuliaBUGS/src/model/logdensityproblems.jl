@@ -30,7 +30,7 @@ function LogDensityProblems.dimension(model::BUGSModel)
     # Auto-marginalization needs the continuous-only filter; other modes can use the
     # precomputed parameter lengths (already accumulated over `model_parameters`).
     if model.evaluation_mode isa UseAutoMarginalization
-        param_vars = _active_parameters(model)
+        param_vars = model.marginalization_cache.continuous_model_parameters
         dim = 0
         if model.transformed
             for vn in param_vars
