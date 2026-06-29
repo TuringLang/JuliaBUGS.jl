@@ -164,10 +164,10 @@ end
 end
 
 @testset "chains use cached generated-quantity classification" begin
-    # Even without any observations, a deterministic node has no observed descendants
-    # and is therefore a generated quantity; the stochastic node remains a model
+    # Even without any observations, a terminal deterministic node that feeds no
+    # stochastic factor is a generated quantity; the stochastic node remains a model
     # parameter. `gen_chains` reads the cached classification, so this guards against
-    # the cached generated-quantity set dropping deterministic nodes.
+    # the cached generated-quantity set dropping terminal deterministic nodes.
     model_def = @bugs begin
         x ~ dnorm(0, 1)
         pred = x + 1.0
