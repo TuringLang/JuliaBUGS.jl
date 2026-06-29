@@ -164,20 +164,24 @@ end
 end
 
 @testset "chains use cached generated-quantity classification" begin
+    # Even without any observations, a deterministic node has no observed descendants
+    # and is therefore a generated quantity; the stochastic node remains a model
+    # parameter. `gen_chains` reads the cached classification, so this guards against
+    # the cached generated-quantity set dropping deterministic nodes.
     model_def = @bugs begin
         x ~ dnorm(0, 1)
         pred = x + 1.0
     end
     model = compile(model_def, (;))
 
-    @test isempty(JuliaBUGS.Model.generated_quantities(model))
+    @test !isempty(JuliaBUGS.Model.generated_quantities(model))
 
     samples = [[-0.5], [0.5]]
     chn = JuliaBUGS.gen_chains(model, samples, Symbol[], []; rng=StableRNG(2024))
 
     colnames = names(chn)
     @test :x in colnames
-    @test :pred ∉ colnames
+    @test :pred in colnames
 end
 
 @testset "auto-marginalized chains reconstruct generated quantities from samples" begin
