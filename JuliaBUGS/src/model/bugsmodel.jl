@@ -138,8 +138,10 @@ function GraphEvaluationData(
             # descendants, but those are priors to be sampled, not generated quantities.
             # Deterministic nodes, however, are still genuine derived quantities, so keep
             # them classified as generated quantities (e.g. for reporting in chains).
-            generated_quantity_vars = Set(
-                vn for vn in generated_quantity_vars if !g[vn].is_stochastic
+            # `filter` preserves the `Set{VarName}` element type even when the result is
+            # empty, which a generator comprehension would not.
+            generated_quantity_vars = filter(
+                vn -> !g[vn].is_stochastic, generated_quantity_vars
             )
         end
     end
