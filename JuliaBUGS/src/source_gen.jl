@@ -259,29 +259,40 @@ function _lower_model_def_to_represent_observe_stmts(
             _contains_generated_quantity = !isempty(generated_quantity_loop_vars)
 
             if _contains_generated_quantity
-                # Generated-quantity iterations are forward-sampled in post-processing and
-                # must not enter the log density. Emit code only for the model-parameter,
-                # observed, and kept-deterministic iterations; generated-quantity
-                # iterations fall through. A statement that is entirely generated
-                # quantities is dropped.
+                # Generated quantities are outside the target closure. Lower only the
+                # iterations that contribute to, or are needed by, the log density.
                 new_stmt = __lower_stmt_with_generated_quantities(
                     statement,
                     observed_loop_vars,
                     model_parameter_loop_vars,
+                    generated_quantity_loop_vars,
                     deterministic_loop_vars,
                 )
                 isnothing(new_stmt) || push!(lowered_model_def.args, new_stmt)
             elseif _contains_observed
                 if _contains_model_parameter
                     MacroTools.@capture(statement, lhs_ ~ rhs_)
-                    new_stmt = MacroTools.@q if condition_placeholder
-                        $(lhs) ~ $(rhs)
+                    tilde_stmt = MacroTools.@q $(lhs) ~ $(rhs)
+                    observe_stmt = MacroTools.@q $(lhs) ≂ $(rhs)
+                    # Use the shorter condition; the complementary iterations take the
+                    # else branch while loop order preserves parameter consumption.
+                    if length(observed_loop_vars) < length(model_parameter_loop_vars)
+                        new_stmt = Expr(
+                            :if,
+                            __generate_model_parameter_condition_expr(observed_loop_vars),
+                            Expr(:block, observe_stmt),
+                            Expr(:block, tilde_stmt),
+                        )
                     else
-                        $(lhs) ≂ $(rhs)
+                        new_stmt = Expr(
+                            :if,
+                            __generate_model_parameter_condition_expr(
+                                model_parameter_loop_vars
+                            ),
+                            Expr(:block, tilde_stmt),
+                            Expr(:block, observe_stmt),
+                        )
                     end
-                    new_stmt.args[1] = __generate_model_parameter_condition_expr(
-                        model_parameter_loop_vars
-                    )
                     push!(lowered_model_def.args, new_stmt)
                 else
                     MacroTools.@capture(statement, lhs_ ~ rhs_)
@@ -344,13 +355,24 @@ function __generate_model_parameter_condition_expr(model_param_nt_vec)
     end
 end
 
-# Lower a statement that has generated-quantity iterations. Generated quantities never
-# contribute to the log density (stochastic ones are forward-sampled, deterministic ones
-# recomputed, in post-processing), so the emitted code guards the surviving categories
-# with explicit per-iteration conditions and lets generated-quantity iterations fall
-# through. Returns `nothing` when the whole statement is generated quantities.
+# Build a guard for `keep` iterations while keeping the emitted boolean expression short.
+# If the dropped set is smaller, guard on it and negate the condition.
+function __select_keep_condition(keep_loop_vars, drop_loop_vars)
+    if !isempty(drop_loop_vars) && length(drop_loop_vars) < length(keep_loop_vars)
+        return Expr(:call, :!, __generate_model_parameter_condition_expr(drop_loop_vars))
+    else
+        return __generate_model_parameter_condition_expr(keep_loop_vars)
+    end
+end
+
+# Lower a statement with generated-quantity iterations. Generated quantities are omitted
+# from the target; remaining iterations are guarded by loop index as needed.
 function __lower_stmt_with_generated_quantities(
-    statement, observed_loop_vars, model_parameter_loop_vars, deterministic_loop_vars
+    statement,
+    observed_loop_vars,
+    model_parameter_loop_vars,
+    generated_quantity_loop_vars,
+    deterministic_loop_vars,
 )
     if Meta.isexpr(statement, :call)
         # Stochastic `~` statement: keep model-parameter (`~`) and observed (`≂`) iterations.
@@ -360,6 +382,7 @@ function __lower_stmt_with_generated_quantities(
         tilde_stmt = MacroTools.@q $(lhs) ~ $(rhs)
         observe_stmt = MacroTools.@q $(lhs) ≂ $(rhs)
         if has_model_parameter && has_observed
+            # Omit the generated-quantity iterations by leaving no final else branch.
             return Expr(
                 :if,
                 __generate_model_parameter_condition_expr(model_parameter_loop_vars),
@@ -371,31 +394,41 @@ function __lower_stmt_with_generated_quantities(
                 ),
             )
         elseif has_model_parameter
+            # Keep `~` only where the variable remains a model parameter.
             return Expr(
                 :if,
-                __generate_model_parameter_condition_expr(model_parameter_loop_vars),
+                __select_keep_condition(
+                    model_parameter_loop_vars, generated_quantity_loop_vars
+                ),
                 Expr(:block, tilde_stmt),
             )
         elseif has_observed
+            # Keep `≂` only where the variable is observed.
             return Expr(
                 :if,
-                __generate_model_parameter_condition_expr(observed_loop_vars),
+                __select_keep_condition(observed_loop_vars, generated_quantity_loop_vars),
                 Expr(:block, observe_stmt),
             )
         else
             return nothing
         end
     else
-        # Deterministic `=` statement: keep the iterations that feed observations
-        # (transformed parameters); drop the generated-quantity ones.
+        # Deterministic generated quantities may be recomputed here because their values
+        # do not affect the target. Avoid the branch when dropped iterations are few;
+        # otherwise guard the kept deterministic iterations.
         if isempty(deterministic_loop_vars)
             return nothing
+        elseif length(generated_quantity_loop_vars) <= length(deterministic_loop_vars)
+            return statement
+        else
+            return Expr(
+                :if,
+                __select_keep_condition(
+                    deterministic_loop_vars, generated_quantity_loop_vars
+                ),
+                Expr(:block, statement),
+            )
         end
-        return Expr(
-            :if,
-            __generate_model_parameter_condition_expr(deterministic_loop_vars),
-            Expr(:block, statement),
-        )
     end
 end
 
