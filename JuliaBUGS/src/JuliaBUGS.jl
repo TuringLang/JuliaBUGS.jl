@@ -36,9 +36,6 @@ include("parser/Parser.jl")
 using .Parser
 using .Parser.CompilerUtils
 
-# The `@bugs` / `@bugs"..."` user macros and the callable `BUGSModelDef` wrapper live here,
-# alongside `compile`: a model definition is a *modeling* object that compiles to a
-# `BUGSModel`. `Parser` keeps the pure syntax frontend (`bugs_top`, `_bugs_string_input`).
 """
     BUGSModelDef
 
@@ -365,15 +362,9 @@ function compile(
     return base_model
 end
 
-# `@bugs` / `@bugs"..."` produce a `BUGSModelDef` wrapping the model-definition AST.
-# Compiling unwraps to the underlying `Expr`, so `compile` (and everything below it) keeps
-# operating on `Expr` and `BUGSModel.model_def` stays an `Expr` (serialization, source gen).
 function compile(model_def::BUGSModelDef, args...; kwargs...)
     return compile(model_def.model_def, args...; kwargs...)
 end
-
-# Make a model definition callable: `model_def(data)` compiles it, unifying `@bugs`/
-# `@bugs_str` with the `@model` workflow (see issue #383).
 function (model_def::BUGSModelDef)(data::NamedTuple=(;); kwargs...)
     return compile(model_def.model_def, data; kwargs...)
 end

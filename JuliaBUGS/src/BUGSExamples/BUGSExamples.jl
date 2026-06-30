@@ -13,8 +13,6 @@ struct Example{DNT <: NamedTuple, INT <: NamedTuple, INT2 <: NamedTuple, RNT}
     reference_results::RNT
 end
 
-# `@bugs` now returns a `BUGSModelDef`; unwrap to the underlying `Expr` so the stored
-# `model_def` field (and every consumer that reads it) keeps seeing an `Expr`.
 function Example(name, model_def::BUGSModelDef, rest...)
     return Example(name, model_def.model_def, rest...)
 end

@@ -27,10 +27,6 @@ function bugs_top(@nospecialize(expr), __source__)
         error("Invalid model definition.")
     end
 end
-
-# Convenience for callers (tests, internal tooling) that want the transformed BUGS AST
-# `Expr` for a quoted program directly, without supplying a source location. `@bugs` and
-# `@model` call the 2-arg form with their `__source__`.
 bugs_top(@nospecialize(expr)) = bugs_top(expr, LineNumberNode(0))
 
 function bugs_block_body(@nospecialize(expr), __source__)
