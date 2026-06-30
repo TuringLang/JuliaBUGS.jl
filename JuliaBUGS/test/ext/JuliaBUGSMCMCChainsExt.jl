@@ -130,3 +130,87 @@
         Symbol("A[1, 1:3][3]"),
     ])
 end
+
+@testset "forward-sampled generated quantities in chains" begin
+    model_def = @bugs begin
+        mu ~ dnorm(0, 1)
+        y ~ dnorm(mu, 1)
+        z ~ dnorm(mu, 1)      # stochastic generated quantity
+        pred = mu + 1.0       # deterministic generated quantity
+    end
+    model = compile(model_def, (; y=0.5))
+    @test LogDensityProblems.dimension(model) == 1
+
+    # Synthetic posterior draws of the single model parameter `mu`.
+    samples = [[m] for m in range(-1.0, 1.0; length=25)]
+    chn = JuliaBUGS.gen_chains(model, samples, Symbol[], []; rng=StableRNG(2024))
+
+    colnames = names(chn)
+    @test :mu in colnames
+    @test :z in colnames       # stochastic generated quantity surfaced
+    @test :pred in colnames    # deterministic generated quantity surfaced
+
+    A = Array(chn)
+    mucol = A[:, findfirst(==(:mu), colnames)]
+    zcol = A[:, findfirst(==(:z), colnames)]
+    predcol = A[:, findfirst(==(:pred), colnames)]
+
+    # Stochastic generated quantity is forward-sampled, not frozen at one value.
+    @test length(unique(zcol)) > 1
+    # Deterministic generated quantity equals f(model parameter) for every draw.
+    @test all(predcol .≈ mucol .+ 1.0)
+    # Model-parameter column matches the synthetic samples in order.
+    @test mucol ≈ [s[1] for s in samples]
+end
+
+@testset "chains use cached generated-quantity classification" begin
+    # Even without any observations, a terminal deterministic node that feeds no
+    # stochastic factor is a generated quantity; the stochastic node remains a model
+    # parameter. `gen_chains` reads the cached classification, so this guards against
+    # the cached generated-quantity set dropping terminal deterministic nodes.
+    model_def = @bugs begin
+        x ~ dnorm(0, 1)
+        pred = x + 1.0
+    end
+    model = compile(model_def, (;))
+
+    @test !isempty(JuliaBUGS.Model.generated_quantities(model))
+
+    samples = [[-0.5], [0.5]]
+    chn = JuliaBUGS.gen_chains(model, samples, Symbol[], []; rng=StableRNG(2024))
+
+    colnames = names(chn)
+    @test :x in colnames
+    @test :pred in colnames
+end
+
+@testset "auto-marginalized chains reconstruct generated quantities from samples" begin
+    model_def = @bugs begin
+        mu ~ Normal(0, 1)
+        z ~ Categorical(w[1:2])
+        y ~ Normal(mu + z, 1)
+        pred = mu + 1.0
+    end
+
+    model = compile(model_def, (; w=[0.5, 0.5], y=1.0))
+    model = JuliaBUGS.settrans(model, true)
+    model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseAutoMarginalization())
+    @test LogDensityProblems.dimension(model) == 1
+
+    samples = [[m] for m in range(-1.0, 1.0; length=25)]
+    chn = JuliaBUGS.gen_chains(model, samples, Symbol[], []; rng=StableRNG(2024))
+
+    colnames = names(chn)
+    @test :mu in colnames
+    @test :z in colnames       # recovered marginalized latent
+    @test :pred in colnames    # deterministic generated quantity
+
+    A = Array(chn)
+    mucol = A[:, findfirst(==(:mu), colnames)]
+    zcol = A[:, findfirst(==(:z), colnames)]
+    predcol = A[:, findfirst(==(:pred), colnames)]
+
+    @test mucol ≈ [s[1] for s in samples]
+    @test predcol ≈ mucol .+ 1.0
+    @test all(z -> z in (1, 2), zcol)
+end

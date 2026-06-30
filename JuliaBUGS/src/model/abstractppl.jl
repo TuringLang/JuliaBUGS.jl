@@ -52,9 +52,10 @@ julia> model_def = @bugs begin
                x[i] ~ Normal(0, 1)
            end
            y ~ Normal(sum(x[:]), 1)
+           z ~ Normal(y, 1)
        end;
 
-julia> model = compile(model_def, (;));
+julia> model = compile(model_def, (; z=1.0));
 
 julia> # Basic conditioning
        model_cond = condition(model, Dict(@varname(x[1]) => 1.0, @varname(x[2]) => 2.0));
@@ -109,11 +110,11 @@ julia> sort(parameters(model_cond3); by=string)  # y removed, only x[i] remain
 
 julia> # Error cases
        try
-           condition(model, Dict(@varname(z) => 1.0))
+           condition(model, Dict(@varname(w) => 1.0))
        catch e
            println(e)
        end
-ArgumentError("Variable z does not exist in the model")
+ArgumentError("Variable w does not exist in the model")
 
 julia> # Using vector of VarNames (conditions using current values)
        model_init = initialize!(model, (; x=[1.0, 2.0, 3.0], y=4.0));
@@ -541,13 +542,25 @@ function _create_modified_model(
     new_evaluation_env::NamedTuple;
     base_model=nothing,
 )
-    # Create new graph evaluation data
-    new_graph_evaluation_data = GraphEvaluationData(new_graph)
-    new_parameters = new_graph_evaluation_data.sorted_parameters
+    # Preserve the base model's generated-quantity policy, but only for variables
+    # that still have no observed descendants in the modified graph. Conditioning a
+    # former generated quantity makes it an observation, so its ancestors may need
+    # to move back into the model-parameter partition.
+    base_generated_quantities = Set(
+        generated_quantities(isnothing(model.base_model) ? model : model.base_model)
+    )
+    surviving_generated_quantities = find_generated_quantities_variables(new_graph)
+    new_graph_evaluation_data = GraphEvaluationData(
+        new_graph;
+        generated_quantities=intersect(
+            base_generated_quantities, surviving_generated_quantities
+        ),
+    )
+    new_model_parameters = new_graph_evaluation_data.model_parameters
 
     # Calculate new parameter lengths
     new_untransformed_param_length, new_transformed_param_length = _calculate_param_lengths(
-        model, new_parameters
+        model, new_model_parameters
     )
 
     # Recompute mutable symbols for the new graph
@@ -586,7 +599,10 @@ function _regenerate_log_density_function(
     graph_evaluation_data::GraphEvaluationData,
 )
     lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
-        model_def, graph, evaluation_env
+        model_def,
+        graph,
+        evaluation_env;
+        generated_quantities=Set(graph_evaluation_data.generated_quantities),
     )
 
     if !isnothing(lowered_model_def)
@@ -606,8 +622,15 @@ function _regenerate_log_density_function(
             node in graph_evaluation_data.sorted_nodes
         end
 
-        # Update graph evaluation data with the correct sorted nodes
-        updated_graph_evaluation_data = GraphEvaluationData(graph, sorted_nodes)
+        # Update graph evaluation data with the correct sorted nodes. Preserve the same
+        # generated-quantity classification that was used to generate the function above;
+        # otherwise the 3-argument constructor would re-derive it from the (possibly
+        # conditioned) graph and disagree with the generated code.
+        updated_graph_evaluation_data = GraphEvaluationData(
+            graph,
+            sorted_nodes;
+            generated_quantities=Set(graph_evaluation_data.generated_quantities),
+        )
 
         return new_log_density_computation_function, updated_graph_evaluation_data
     else

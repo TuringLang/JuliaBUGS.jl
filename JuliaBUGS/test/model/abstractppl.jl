@@ -3,9 +3,14 @@ using JuliaBUGS
 using JuliaBUGS.Model:
     condition,
     decondition,
+    generated_quantities,
+    model_parameters,
     parameters,
     set_evaluation_mode,
     set_observed_values!,
+    variable_type,
+    ModelParameter,
+    Observation,
     regenerate_log_density_function,
     UseGeneratedLogDensityFunction,
     UseGraph
@@ -50,6 +55,38 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             @test logp1 ≈ logp2
         end
 
+        @testset "conditioning generated quantity updates ancestor classification" begin
+            model_def = @bugs begin
+                theta ~ Normal(0, 1)
+                z ~ Normal(theta, 1)
+                y ~ Normal(0, 1)
+            end
+
+            model = compile(model_def, (; y=0.0))
+            @test isempty(model_parameters(model))
+            @test @varname(theta) in generated_quantities(model)
+            @test @varname(z) in generated_quantities(model)
+
+            conditioned_model = condition(model, Dict(@varname(z) => 0.5))
+            @test variable_type(conditioned_model, @varname(z)) == Observation
+            @test variable_type(conditioned_model, @varname(theta)) == ModelParameter
+            @test model_parameters(conditioned_model) == [@varname(theta)]
+            @test @varname(theta) ∉ generated_quantities(conditioned_model)
+            @test LogDensityProblems.dimension(conditioned_model) == 1
+
+            params = [0.25]
+            graph_logdensity = Base.invokelatest(
+                LogDensityProblems.logdensity, conditioned_model, params
+            )
+            generated_conditioned_model = set_evaluation_mode(
+                conditioned_model, UseGeneratedLogDensityFunction()
+            )
+            generated_logdensity = Base.invokelatest(
+                LogDensityProblems.logdensity, generated_conditioned_model, params
+            )
+            @test generated_logdensity ≈ graph_logdensity
+        end
+
         @testset "Array model conditioning with correct parameter ordering" begin
             # This was the main bug - parameter ordering mismatch
             model_def = @bugs begin
@@ -81,7 +118,7 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             @test !isnothing(model_cond_gen.log_density_computation_function)
 
             # Use zeros to avoid parameter order issues
-            params = zeros(length(parameters(model_cond)))
+            params = zeros(LogDensityProblems.dimension(model_cond))
             logp1 = Base.invokelatest(LogDensityProblems.logdensity, model_cond_gen, params)
 
             # Compare with graph evaluation on the SAME model (model_cond_gen)
@@ -221,7 +258,7 @@ JuliaBUGS.@bugs_primitive Normal Gamma
                 @test m2.evaluation_mode isa UseGraph
 
                 # Can switch to generated mode explicitly and match graph
-                params = zeros(length(parameters(m2)))
+                params = zeros(LogDensityProblems.dimension(m2))
                 logp_gen = Base.invokelatest(
                     LogDensityProblems.logdensity,
                     set_evaluation_mode(m2, UseGeneratedLogDensityFunction()),

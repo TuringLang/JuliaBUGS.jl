@@ -54,6 +54,7 @@ function evaluate_with_rng!!(
     sample_observed=false,
     temperature=1.0,
     transformed=true,
+    include_generated_quantities=false,
 )
     logprior = 0.0
     loglikelihood = 0.0
@@ -79,20 +80,25 @@ function evaluate_with_rng!!(
                 value = rand(rng, dist)
             end
 
-            if transformed
-                value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
-                logp =
+            should_score =
+                is_observed ||
+                include_generated_quantities ||
+                model.graph_evaluation_data.is_model_parameter_vals[i]
+            if should_score
+                logp = if transformed
+                    value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
                     Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
                         Bijectors.inverse(Bijectors.bijector(dist)), value_transformed
                     )
-            else
-                logp = Distributions.logpdf(dist, value)
-            end
+                else
+                    Distributions.logpdf(dist, value)
+                end
 
-            if is_observed
-                loglikelihood += logp
-            else
-                logprior += logp
+                if is_observed
+                    loglikelihood += logp
+                else
+                    logprior += logp
+                end
             end
 
             evaluation_env = setindex!!(evaluation_env, value, vn)
@@ -131,6 +137,7 @@ function evaluate_with_env!!(
     evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols);
     temperature=1.0,
     transformed=true,
+    include_generated_quantities=false,
 )
     logprior = 0.0
     loglikelihood = 0.0
@@ -141,7 +148,10 @@ function evaluate_with_env!!(
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
 
-        if !is_stochastic
+        if model.graph_evaluation_data.variable_types[i] == GeneratedQuantity &&
+            !include_generated_quantities
+            continue
+        elseif !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
@@ -163,7 +173,8 @@ function evaluate_with_env!!(
 
             if is_observed
                 loglikelihood += logp
-            else
+            elseif include_generated_quantities ||
+                model.graph_evaluation_data.is_model_parameter_vals[i]
                 logprior += logp
             end
         end
@@ -214,36 +225,38 @@ function evaluate_with_values!!(
         is_observed = model.graph_evaluation_data.is_observed_vals[i]
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
-        if !is_stochastic
+        if model.graph_evaluation_data.variable_types[i] == GeneratedQuantity
+            continue
+        elseif !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        elseif !is_observed && model.graph_evaluation_data.is_model_parameter_vals[i]
+            dist = node_function(evaluation_env, loop_vars)
+            l = var_lengths[vn]
+            if transformed
+                b = Bijectors.bijector(dist)
+                b_inv = Bijectors.inverse(b)
+                reconstructed_value = reconstruct(
+                    b_inv, dist, view(flattened_values, current_idx:(current_idx + l - 1))
+                )
+                value, logjac = Bijectors.with_logabsdet_jacobian(
+                    b_inv, reconstructed_value
+                )
+            else
+                value = reconstruct(
+                    dist, view(flattened_values, current_idx:(current_idx + l - 1))
+                )
+                logjac = 0.0
+            end
+            current_idx += l
+            logprior += logpdf(dist, value) + logjac
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        elseif !is_observed
+            # Generated quantity: not part of the MCMC parameter vector. Leave its
+            # current env value untouched here; it is forward-sampled separately.
         else
             dist = node_function(evaluation_env, loop_vars)
-            if !is_observed
-                l = var_lengths[vn]
-                if transformed
-                    b = Bijectors.bijector(dist)
-                    b_inv = Bijectors.inverse(b)
-                    reconstructed_value = reconstruct(
-                        b_inv,
-                        dist,
-                        view(flattened_values, current_idx:(current_idx + l - 1)),
-                    )
-                    value, logjac = Bijectors.with_logabsdet_jacobian(
-                        b_inv, reconstructed_value
-                    )
-                else
-                    value = reconstruct(
-                        dist, view(flattened_values, current_idx:(current_idx + l - 1))
-                    )
-                    logjac = 0.0
-                end
-                current_idx += l
-                logprior += logpdf(dist, value) + logjac
-                evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-            else
-                loglikelihood += logpdf(dist, AbstractPPL.getvalue(evaluation_env, vn))
-            end
+            loglikelihood += logpdf(dist, AbstractPPL.getvalue(evaluation_env, vn))
         end
     end
     return evaluation_env,
@@ -251,6 +264,220 @@ function evaluate_with_values!!(
         logprior=logprior,
         loglikelihood=loglikelihood,
         tempered_logjoint=logprior + temperature * loglikelihood,
+    )
+end
+
+function _evaluate_continuous_model_parameters_with_values!!(
+    model::BUGSModel, flattened_values::AbstractVector; transformed=true
+)
+    var_lengths = if transformed
+        model.transformed_var_lengths
+    else
+        model.untransformed_var_lengths
+    end
+
+    evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
+    continuous_model_parameters = Set(
+        model.marginalization_cache.continuous_model_parameters
+    )
+    current_idx = 1
+
+    gd = model.graph_evaluation_data
+    for (i, vn) in enumerate(gd.sorted_nodes)
+        node_function = gd.node_function_vals[i]
+        loop_vars = gd.loop_vars_vals[i]
+
+        if gd.variable_types[i] == GeneratedQuantity
+            continue
+        elseif !gd.is_stochastic_vals[i]
+            value = node_function(evaluation_env, loop_vars)
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        elseif !gd.is_observed_vals[i] && vn in continuous_model_parameters
+            dist = node_function(evaluation_env, loop_vars)
+            l = var_lengths[vn]
+            value = if transformed
+                b_inv = Bijectors.inverse(Bijectors.bijector(dist))
+                reconstructed_value = reconstruct(
+                    b_inv,
+                    dist,
+                    view(flattened_values, current_idx:(current_idx + l - 1)),
+                )
+                first(Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value))
+            else
+                reconstruct(dist, view(flattened_values, current_idx:(current_idx + l - 1)))
+            end
+            current_idx += l
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        end
+    end
+
+    return evaluation_env
+end
+
+"""
+    forward_sample_generated_quantities!!(
+        rng::Random.AbstractRNG,
+        model::BUGSModel,
+        evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols),
+    )
+
+Forward-sample the generated quantities of `model` given an environment that already holds
+the model parameters, observations, and transformed parameters.
+
+Generated quantities are the nodes outside the log-density target dependency closure.
+Stochastic ones are drawn from their conditional distribution given their (already-set)
+parents (`rand`); deterministic ones are recomputed. Model parameters, observations, and
+transformed parameters are left untouched. Nodes are visited in topological order, so chains
+of generated quantities are sampled with their parents already in place.
+
+If `model` is in `UseAutoMarginalization` mode its discrete latents were summed out of the
+log density and have no value in `evaluation_env`. A generated quantity may depend on such a
+latent (directly or indirectly), so before forward-sampling, the marginalized discrete
+latents are first recovered by sampling from their conditional posterior
+`p(z | θ, y)` (see `_sample_discrete_latents!!`). Generated quantities with no
+marginalized-discrete ancestor are unaffected by this step.
+
+This is the post-processing step that turns a posterior draw of the model parameters into a
+joint posterior(-predictive) draw that also includes the generated quantities.
+
+# Returns
+- `evaluation_env`: The environment with generated-quantity values filled in.
+"""
+function forward_sample_generated_quantities!!(
+    rng::Random.AbstractRNG,
+    model::BUGSModel,
+    evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols),
+)
+    # Under marginalization the discrete latents were summed out and carry no value, so
+    # recover them from their conditional posterior before any generated quantity that
+    # depends on them is forward-sampled.
+    if model.evaluation_mode isa UseAutoMarginalization
+        evaluation_env = _sample_discrete_latents!!(rng, model, evaluation_env)
+    end
+    gd = model.graph_evaluation_data
+    for (i, vn) in enumerate(gd.sorted_nodes)
+        gd.variable_types[i] == GeneratedQuantity || continue
+        node_function = gd.node_function_vals[i]
+        loop_vars = gd.loop_vars_vals[i]
+        value = if gd.is_stochastic_vals[i]
+            rand(rng, node_function(evaluation_env, loop_vars))
+        else
+            node_function(evaluation_env, loop_vars)
+        end
+        evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+    end
+    return evaluation_env
+end
+
+"""
+    _sample_discrete_latents!!(rng, model, evaluation_env)
+
+Recover the marginalized discrete latents of an `UseAutoMarginalization` model by sampling
+them from their conditional posterior `p(z | θ, y)`, given an environment that already holds
+the continuous parameters and observations.
+
+The latents are drawn in the marginalization order: each discrete latent `z_i` is sampled
+from the weights `p(z_i = v | pa) · p(y, z_{>i} | z_i = v, …)`, where the second factor is
+the marginalized joint of everything downstream (computed by [`_marginalize_recursive`](@ref)
+with `z_i` fixed to `v` and the not-yet-sampled latents summed out). Normalizing over `v`
+gives exactly `p(z_i = v | z_{<i}, θ, y)`, so sampling the latents sequentially in
+topological order yields a draw from the joint posterior `p(z | θ, y)`. Continuous parameters
+are taken from `evaluation_env`; generated quantities are skipped (they are forward-sampled
+separately).
+"""
+function _sample_discrete_latents!!(
+    rng::Random.AbstractRNG, model::BUGSModel, evaluation_env
+)
+    mc = model.marginalization_cache
+    (mc === nothing || mc.n_discrete_finite == 0) && return evaluation_env
+    # Continuous parameters in the order/offsets expected by `_marginalize_recursive`.
+    param_values = getparams(model, evaluation_env)
+    return _backward_sample_recursive!!(
+        rng,
+        model,
+        evaluation_env,
+        mc.marginalization_order,
+        param_values,
+        mc.param_offsets,
+        mc.param_lengths,
+        mc.minimal_cache_keys,
+    )
+end
+
+function _backward_sample_recursive!!(
+    rng::Random.AbstractRNG,
+    model::BUGSModel,
+    env::NamedTuple,
+    remaining_indices::AbstractVector{Int},
+    param_values::AbstractVector,
+    param_offsets::Dict{<:VarName,Int},
+    var_lengths::Dict{<:VarName,Int},
+    minimal_keys::Dict{Int,Vector{Int}},
+)
+    isempty(remaining_indices) && return env
+
+    gd = model.graph_evaluation_data
+    mc = model.marginalization_cache
+
+    current_idx = remaining_indices[1]
+    current_vn = gd.sorted_nodes[current_idx]
+    rest_indices = @view(remaining_indices[2:end])
+    node_function = gd.node_function_vals[current_idx]
+    loop_vars = gd.loop_vars_vals[current_idx]
+
+    if gd.variable_types[current_idx] == GeneratedQuantity
+        # Generated quantities are forward-sampled separately; skip here.
+    elseif !gd.is_stochastic_vals[current_idx]
+        env = BangBang.setindex!!(env, node_function(env, loop_vars), current_vn)
+    elseif gd.is_observed_vals[current_idx]
+        # Observed value is already in the environment.
+    elseif mc.node_types[current_idx] == :discrete_finite
+        # Sample this latent from p(z_i = v | z_{<i}, θ, y), with z_{>i} marginalized.
+        dist = node_function(env, loop_vars)
+        possible_values = collect(_enumerate_discrete_values(dist))
+        log_weights = Vector{Float64}(undef, length(possible_values))
+        for (k, val) in enumerate(possible_values)
+            branch_env = BangBang.setindex!!(env, val, current_vn)
+            memo = Dict{Tuple{Int,Tuple},Tuple{Float64,Float64}}()
+            branch_prior, branch_lik = _marginalize_recursive(
+                model,
+                branch_env,
+                rest_indices,
+                param_values,
+                param_offsets,
+                var_lengths,
+                memo,
+                minimal_keys,
+            )
+            # Keep the full branch weight: downstream prior and likelihood terms may
+            # both depend on this candidate value.
+            log_weights[k] = logpdf(dist, val) + branch_prior + branch_lik
+        end
+        weights = exp.(log_weights .- LogExpFunctions.logsumexp(log_weights))
+        sampled = possible_values[rand(rng, Distributions.Categorical(weights))]
+        env = BangBang.setindex!!(env, sampled, current_vn)
+    else
+        # Continuous (or discrete-infinite) parameter: set its value from the vector.
+        dist = node_function(env, loop_vars)
+        b_inv = Bijectors.inverse(Bijectors.bijector(dist))
+        len = var_lengths[current_vn]
+        start_idx = param_offsets[current_vn]
+        param_slice = view(param_values, start_idx:(start_idx + len - 1))
+        value, _ = Bijectors.with_logabsdet_jacobian(
+            b_inv, reconstruct(b_inv, dist, param_slice)
+        )
+        env = BangBang.setindex!!(env, value, current_vn)
+    end
+
+    return _backward_sample_recursive!!(
+        rng,
+        model,
+        env,
+        rest_indices,
+        param_values,
+        param_offsets,
+        var_lengths,
+        minimal_keys,
     )
 end
 
@@ -285,9 +512,8 @@ end
 Return the finite support for a discrete univariate distribution.
 Relies on Distributions.support to provide an iterable, finite range.
 """
-_enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) = Distributions.support(
-    dist
-)
+_enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) =
+    Distributions.support(dist)
 
 """
     _classify_node_type(dist)
@@ -532,7 +758,23 @@ function _marginalize_recursive(
     loop_vars = gd.loop_vars_vals[current_idx]
     rest_indices = @view(remaining_indices[2:end])
 
-    result = if !gd.is_stochastic_vals[current_idx]
+    result = if gd.variable_types[current_idx] == GeneratedQuantity
+        # Generated quantities are outside the target closure, so the generated-quantity
+        # block integrates/sums to one and factors out of the marginalized target p(θ, y).
+        # Skip it entirely: don't read the parameter vector (it has no slot there) and don't
+        # marginalize it. They are recovered later by forward sampling, not here.
+        _marginalize_recursive(
+            model,
+            env,
+            rest_indices,
+            parameter_values,
+            param_offsets,
+            var_lengths,
+            memo,
+            minimal_keys,
+        )
+
+    elseif !gd.is_stochastic_vals[current_idx]
         # Deterministic node: compute value and continue
         value = node_function(env, loop_vars)
         new_env = BangBang.setindex!!(env, value, current_vn)
@@ -679,7 +921,9 @@ function evaluate_with_marginalization_values!!(
     memo = Dict{Tuple{Int,Tuple},Tuple{T,T}}()
     sizehint!(memo, expected_entries)
 
-    evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
+    evaluation_env = _evaluate_continuous_model_parameters_with_values!!(
+        model, flattened_values; transformed=model.transformed
+    )
 
     log_prior, log_likelihood = _marginalize_recursive(
         model,

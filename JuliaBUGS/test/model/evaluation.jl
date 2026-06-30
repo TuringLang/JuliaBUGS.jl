@@ -361,13 +361,13 @@ end
 
     @testset "blockers" begin
         test_bugs_model_log_density(
-            JuliaBUGS.BUGSExamples.VOLUME_1.blockers, -8418.416388326123
+            JuliaBUGS.BUGSExamples.VOLUME_1.blockers, -8417.497576569103
         )
     end
 
     @testset "bones" begin
         test_bugs_model_log_density(
-            JuliaBUGS.BUGSExamples.VOLUME_1.bones, -161.6492002285034
+            JuliaBUGS.BUGSExamples.VOLUME_1.bones, -139.03545202758394
         )
     end
 
@@ -425,6 +425,27 @@ end
         expected_loglikelihood = logpdf(Normal(3.0, 1), 2.0)
         @test log_densities.logprior ≈ expected_logprior
         @test log_densities.loglikelihood ≈ expected_loglikelihood
+    end
+
+    @testset "Excluded generated quantities are not evaluated" begin
+        model_def = @bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Exponential(1)
+            w ~ Gamma(z, 1)
+        end
+
+        model = compile(model_def, (; y=0.0))
+        stale_env = JuliaBUGS.BangBang.setindex!!(model.evaluation_env, -1.0, @varname(z))
+
+        _, ld_excl = JuliaBUGS.evaluate_with_env!!(
+            model, stale_env; include_generated_quantities=false
+        )
+        @test isfinite(ld_excl.tempered_logjoint)
+
+        @test_throws DomainError JuliaBUGS.evaluate_with_env!!(
+            model, stale_env; include_generated_quantities=true
+        )
     end
 end
 
@@ -667,4 +688,37 @@ end
         @test eval_env.y == 2.0
         @test isa(logp, Real)
     end
+end
+
+@testset "forward_sample_generated_quantities!!" begin
+    model_def = @bugs begin
+        mu ~ Normal(0, 1)
+        y ~ Normal(mu, 1)
+        z ~ Normal(mu, 1)       # stochastic generated quantity
+        z2 ~ Normal(z, 1)       # chained stochastic generated quantity
+        pred = mu + 1.0         # deterministic generated quantity
+    end
+    model = compile(model_def, (; y=0.5))
+    fsgq = JuliaBUGS.Model.forward_sample_generated_quantities!!
+
+    base_env, _ = AbstractPPL.evaluate!!(model, JuliaBUGS.getparams(model))
+    mu0 = AbstractPPL.getvalue(base_env, @varname(mu))
+
+    e1 = fsgq(StableRNG(1), model, deepcopy(base_env))
+    e2 = fsgq(StableRNG(2), model, deepcopy(base_env))
+    e1b = fsgq(StableRNG(1), model, deepcopy(base_env))
+
+    # Model parameter and observation are left untouched.
+    @test AbstractPPL.getvalue(e1, @varname(mu)) == mu0
+    @test AbstractPPL.getvalue(e1, @varname(y)) == 0.5
+
+    # Stochastic generated quantities are redrawn; different rng -> different values.
+    @test AbstractPPL.getvalue(e1, @varname(z)) != AbstractPPL.getvalue(e2, @varname(z))
+    @test AbstractPPL.getvalue(e1, @varname(z2)) != AbstractPPL.getvalue(e2, @varname(z2))
+
+    # Same rng -> identical draws.
+    @test AbstractPPL.getvalue(e1, @varname(z)) == AbstractPPL.getvalue(e1b, @varname(z))
+
+    # Deterministic generated quantity is recomputed from its (sampled) parents.
+    @test AbstractPPL.getvalue(e1, @varname(pred)) ≈ mu0 + 1.0
 end

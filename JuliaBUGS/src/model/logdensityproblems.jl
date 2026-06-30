@@ -27,36 +27,26 @@ function LogDensityProblems.logdensity(model::BUGSModel, x::AbstractArray)
 end
 
 function LogDensityProblems.dimension(model::BUGSModel)
-    # For auto marginalization, only count continuous parameters
+    # Auto-marginalization needs the continuous-only filter; other modes can use the
+    # precomputed parameter lengths (already accumulated over `model_parameters`).
     if model.evaluation_mode isa UseAutoMarginalization
-        mc = model.marginalization_cache
-        continuous_param_length = 0
-        for (i, vn) in enumerate(model.graph_evaluation_data.sorted_parameters)
-            idx = findfirst(==(vn), model.graph_evaluation_data.sorted_nodes)
-            if idx !== nothing
-                node_type = mc.node_types[idx]
-                # Only include continuous variables (exclude all discrete)
-                if node_type == :continuous
-                    if model.transformed
-                        continuous_param_length += model.transformed_var_lengths[vn]
-                    else
-                        continuous_param_length += model.untransformed_var_lengths[vn]
-                    end
-                elseif node_type == :discrete_infinite
-                    error(
-                        "Model contains discrete infinite variable $(vn) which cannot be marginalized. " *
-                        "Use UseGraph evaluation mode instead.",
-                    )
-                end
+        param_vars = model.marginalization_cache.continuous_model_parameters
+        dim = 0
+        if model.transformed
+            for vn in param_vars
+                dim += model.transformed_var_lengths[vn]
+            end
+        else
+            for vn in param_vars
+                dim += model.untransformed_var_lengths[vn]
             end
         end
-        return continuous_param_length
+        return dim
+    end
+    return if model.transformed
+        model.transformed_param_length
     else
-        return if model.transformed
-            model.transformed_param_length
-        else
-            model.untransformed_param_length
-        end
+        model.untransformed_param_length
     end
 end
 

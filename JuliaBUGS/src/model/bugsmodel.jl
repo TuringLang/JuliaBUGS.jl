@@ -18,6 +18,7 @@ must be invalidated when the graph structure changes (e.g., during conditioning)
 - `param_lengths::Dict{VarName,Int}`: Transformed lengths for continuous parameters.
 - `param_offsets::Dict{VarName,Int}`: Start index in flattened parameter vector for each continuous param.
 - `n_discrete_finite::Int`: Number of discrete finite variables (for memo sizing).
+- `continuous_model_parameters::Vector{VarName}`: Continuous model parameters that remain in the flat parameter vector after marginalization.
 """
 struct MarginalizationCache{V<:VarName}
     minimal_cache_keys::Dict{Int,Vector{Int}}
@@ -26,6 +27,58 @@ struct MarginalizationCache{V<:VarName}
     param_lengths::Dict{V,Int}
     param_offsets::Dict{V,Int}
     n_discrete_finite::Int
+    continuous_model_parameters::Vector{V}
+end
+
+"""
+    VariableType
+
+Classification of each node in the model graph.
+
+- `Observation`: a stochastic node with observed data
+- `ModelParameter`: a stochastic node that influences observations (sampled by MCMC)
+- `TransformedParameter`: a deterministic node that needs to be computed during each iteration of sampling
+- `GeneratedQuantity`: a stochastic or deterministic node outside the log-density target
+  closure (computed after getting samples)
+"""
+@enum VariableType Observation ModelParameter TransformedParameter GeneratedQuantity
+
+@inline function _classify_variable_type(
+    vn::VarName,
+    is_stochastic::Bool,
+    is_observed::Bool,
+    generated_quantity_vars::Set{<:VarName},
+)
+    return if is_stochastic && is_observed
+        Observation
+    elseif vn in generated_quantity_vars
+        # Outside the log-density target closure.
+        GeneratedQuantity
+    elseif is_stochastic
+        # Stochastic node that influences observed likelihood terms.
+        ModelParameter
+    else
+        # Deterministic node needed during each sampling iteration.
+        TransformedParameter
+    end
+end
+
+function _can_reach_stochastic(
+    g::BUGSGraph, vn::VarName, can_reach_stochastic::Dict{VarName,Bool}
+)
+    if haskey(can_reach_stochastic, vn)
+        return can_reach_stochastic[vn]
+    end
+
+    for child in MetaGraphsNext.outneighbor_labels(g, vn)
+        if g[child].is_stochastic || _can_reach_stochastic(g, child, can_reach_stochastic)
+            can_reach_stochastic[vn] = true
+            return true
+        end
+    end
+
+    can_reach_stochastic[vn] = false
+    return false
 end
 
 """
@@ -37,6 +90,10 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 # Fields
 - `sorted_nodes::Vector{<:VarName}`: Variables in topological order for evaluation
 - `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
+- `model_parameters::Vector{<:VarName}`: Unobserved stochastic variables that influence observations
+- `generated_quantities::Vector{<:VarName}`: Variables (stochastic or deterministic) outside the log-density target closure
+- `variable_types::Vector{VariableType}`: Classification of each node
+- `is_model_parameter_vals::Vector{Bool}`: Whether each node is part of the MCMC parameter vector (true exactly for `model_parameters`)
 - `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable
 - `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
 - `node_function_vals::TNF`: Functions that define each node's computation
@@ -45,6 +102,10 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 struct GraphEvaluationData{TNF,TV}
     sorted_nodes::Vector{<:VarName}
     sorted_parameters::Vector{<:VarName}
+    model_parameters::Vector{<:VarName}
+    generated_quantities::Vector{<:VarName}
+    variable_types::Vector{VariableType}
+    is_model_parameter_vals::Vector{Bool}
     is_stochastic_vals::Vector{Bool}
     is_observed_vals::Vector{Bool}
     node_function_vals::TNF
@@ -52,23 +113,62 @@ struct GraphEvaluationData{TNF,TV}
 end
 
 """
-    GraphEvaluationData(g::BUGSGraph, [sorted_nodes], [active_parameters])
+    GraphEvaluationData(g::BUGSGraph, [sorted_nodes], [active_parameters]; [generated_quantities])
 
 Create a `GraphEvaluationData` from a `BUGSGraph`, extracting and caching node information
 for efficient evaluation.
+
+`sorted_nodes` gives the evaluation order and defaults to the graph's topological order.
+`active_parameters`, when provided, is a filter for the parameter lists: only unobserved
+stochastic variables in that vector are added to `sorted_parameters`; non-generated
+stochastic variables outside the filter are also left out of `model_parameters`.
+
+`generated_quantities` optionally supplies the set of variables to classify as
+`GeneratedQuantity`. When it is `nothing`, the set is derived from the graph. Passing it
+is useful when rebuilding graph evaluation data after conditioning or source generation,
+where the caller needs the cached classification to match the classification used by the
+existing model.
 """
 function GraphEvaluationData(
     g::BUGSGraph,
     sorted_nodes::Vector{<:VarName}=VarName[
         label_for(g, node) for node in topological_sort(g)
     ],
-    active_parameters::Union{Nothing,Vector{<:VarName}}=nothing,
+    active_parameters::Union{Nothing,Vector{<:VarName}}=nothing;
+    generated_quantities::Union{Nothing,Set{<:VarName}}=nothing,
 )
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
     node_function_vals = Array{Any}(undef, length(sorted_nodes))
     loop_vars_vals = Array{Any}(undef, length(sorted_nodes))
     sorted_parameters = VarName[]
+    model_parameters = VarName[]
+    generated_quantity_nodes = VarName[]
+    variable_types = Vector{VariableType}(undef, length(sorted_nodes))
+    is_model_parameter_vals = fill(false, length(sorted_nodes))
+
+    if generated_quantities !== nothing
+        generated_quantity_vars = generated_quantities
+    else
+        generated_quantity_vars = find_generated_quantities_variables(g)
+        has_observations = any(g[vn].is_observed for vn in labels(g) if g[vn].is_stochastic)
+        if !has_observations
+            # Without observations every stochastic node trivially lacks observed
+            # descendants, but those are priors to be sampled, not generated quantities.
+            # Deterministic ancestors of those stochastic parameters are needed by the
+            # target and must be recomputed during log-density evaluation; only purely
+            # terminal deterministic derived quantities remain generated quantities.
+            # `filter` preserves the `Set{VarName}` element type even when the result is
+            # empty, which a generator comprehension would not.
+            can_reach_stochastic = Dict{VarName,Bool}()
+            generated_quantity_vars = filter(
+                vn ->
+                    !g[vn].is_stochastic &&
+                    !_can_reach_stochastic(g, vn, can_reach_stochastic),
+                generated_quantity_vars,
+            )
+        end
+    end
 
     for (i, vn) in enumerate(sorted_nodes)
         (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
@@ -77,11 +177,24 @@ function GraphEvaluationData(
         node_function_vals[i] = node_function
         loop_vars_vals[i] = loop_vars
 
-        # If it's a stochastic variable and not observed, it's a parameter
-        # If active_parameters is specified, only include those that are in the list
-        if is_stochastic && !is_observed
+        # Classify each node
+        variable_types[i] = _classify_variable_type(
+            vn, is_stochastic, is_observed, generated_quantity_vars
+        )
+
+        if variable_types[i] == GeneratedQuantity
+            # Both stochastic and deterministic nodes go here
+            push!(generated_quantity_nodes, vn)
+            if is_stochastic && !is_observed
+                if active_parameters === nothing || vn in active_parameters
+                    push!(sorted_parameters, vn)
+                end
+            end
+        elseif is_stochastic && !is_observed
             if active_parameters === nothing || vn in active_parameters
                 push!(sorted_parameters, vn)
+                push!(model_parameters, vn)
+                is_model_parameter_vals[i] = true
             end
         end
     end
@@ -89,6 +202,10 @@ function GraphEvaluationData(
     return GraphEvaluationData{typeof(node_function_vals),typeof(loop_vars_vals)}(
         sorted_nodes,
         sorted_parameters,
+        model_parameters,
+        generated_quantity_nodes,
+        variable_types,
+        is_model_parameter_vals,
         is_stochastic_vals,
         is_observed_vals,
         map(identity, node_function_vals),
@@ -284,8 +401,10 @@ function BUGSModel(
                 else
                     length(Bijectors.transformed(dist))
                 end
-                untransformed_param_length += untransformed_var_lengths[vn]
-                transformed_param_length += transformed_var_lengths[vn]
+                if graph_evaluation_data.is_model_parameter_vals[i]
+                    untransformed_param_length += untransformed_var_lengths[vn]
+                    transformed_param_length += transformed_var_lengths[vn]
+                end
 
                 if haskey(initial_params, AbstractPPL.getsym(vn))
                     initialization = AbstractPPL.getvalue(initial_params, vn)
@@ -328,9 +447,38 @@ end
 """
     parameters(model::BUGSModel)
 
-Return a vector of `VarName` containing the names of the model parameters (unobserved stochastic variables).
+Return a vector of `VarName` containing the names of all unobserved stochastic variables.
 """
 parameters(model::BUGSModel) = model.graph_evaluation_data.sorted_parameters
+
+"""
+    model_parameters(model::BUGSModel)
+
+Return a vector of `VarName` containing the stochastic variables that influence observations
+and should be sampled directly.
+"""
+model_parameters(model::BUGSModel) = model.graph_evaluation_data.model_parameters
+
+"""
+    generated_quantities(model::BUGSModel)
+
+Return a vector of `VarName` containing variables outside the log-density target
+closure. These can be computed after getting samples.
+"""
+generated_quantities(model::BUGSModel) = model.graph_evaluation_data.generated_quantities
+
+"""
+    variable_type(model::BUGSModel, vn::VarName)
+
+Return the `VariableType` classification for variable `vn` in the model.
+"""
+function variable_type(model::BUGSModel, vn::VarName)
+    gd = model.graph_evaluation_data
+    idx = findfirst(==(vn), gd.sorted_nodes)
+    idx === nothing &&
+        throw(ArgumentError("Variable \"$(vn)\" does not exist in the model"))
+    return gd.variable_types[idx]
+end
 
 """
     variables(model::BUGSModel)
@@ -427,17 +575,10 @@ params_dict = getparams(Dict, model, custom_env)
 ```
 """
 function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
-    # Determine which parameters to include based on evaluation mode
-    gd = model.graph_evaluation_data
     param_vars = if model.evaluation_mode isa UseAutoMarginalization
-        # Only include continuous parameters when auto marginalizing
-        mc = model.marginalization_cache
-        filter(gd.sorted_parameters) do vn
-            idx = findfirst(==(vn), gd.sorted_nodes)
-            idx !== nothing && mc.node_types[idx] == :continuous
-        end
+        model.marginalization_cache.continuous_model_parameters
     else
-        gd.sorted_parameters
+        model_parameters(model)
     end
 
     # Compute total length for allocation
@@ -485,16 +626,10 @@ function getparams(
     T::Type{<:AbstractDict}, model::BUGSModel, evaluation_env=model.evaluation_env
 )
     d = T()
-    gd = model.graph_evaluation_data
-    # Respect evaluation mode when selecting parameters
     param_vars = if model.evaluation_mode isa UseAutoMarginalization
-        mc = model.marginalization_cache
-        filter(gd.sorted_parameters) do vn
-            idx = findfirst(==(vn), gd.sorted_nodes)
-            idx !== nothing && mc.node_types[idx] == :continuous
-        end
+        model.marginalization_cache.continuous_model_parameters
     else
-        gd.sorted_parameters
+        model_parameters(model)
     end
     for v in param_vars
         value = AbstractPPL.getvalue(evaluation_env, v)
@@ -568,7 +703,10 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
         # Lazily generate log density function if not already present
         if isnothing(model.log_density_computation_function)
             lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
-                model.model_def, model.g, model.evaluation_env
+                model.model_def,
+                model.g,
+                model.evaluation_env;
+                generated_quantities=Set(model.graph_evaluation_data.generated_quantities),
             )
             if isnothing(lowered_model_def)
                 @warn(
@@ -596,8 +734,18 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     node in gd.sorted_nodes
                 end
 
-                # Create fresh GraphEvaluationData for the new order
-                new_gd = GraphEvaluationData(model.g, sorted_nodes)
+                # Create fresh GraphEvaluationData for the new order. Preserve the same
+                # generated-quantity classification used to generate the function above so
+                # the stored data and the generated code agree (the 3-argument constructor
+                # would otherwise re-derive GQ from the graph and disagree on, e.g.,
+                # conditioned models).
+                new_gd = GraphEvaluationData(
+                    model.g,
+                    sorted_nodes;
+                    generated_quantities=Set(
+                        model.graph_evaluation_data.generated_quantities
+                    ),
+                )
 
                 model = BangBang.setproperty!!(model, :graph_evaluation_data, new_gd)
                 model = BangBang.setproperty!!(
@@ -637,21 +785,38 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 vn_to_idx = Dict(sorted_nodes[i] => i for i in eachindex(sorted_nodes))
                 param_lengths = Dict{eltype(sorted_nodes),Int}()
                 param_offsets = Dict{eltype(sorted_nodes),Int}()
+                continuous_model_parameters = eltype(sorted_nodes)[]
                 offset = 1
-                for vn in gd.sorted_parameters
+                for vn in gd.model_parameters
                     idx = get(vn_to_idx, vn, 0)
-                    if idx != 0 && node_types[idx] == :continuous
-                        len = model.transformed_var_lengths[vn]
-                        param_lengths[vn] = len
-                        param_offsets[vn] = offset
-                        offset += len
+                    if idx != 0
+                        node_type = node_types[idx]
+                        if node_type == :discrete_infinite
+                            error(
+                                "Model contains discrete infinite variable $(vn) which cannot be marginalized. " *
+                                "Use UseGraph evaluation mode instead.",
+                            )
+                        end
+                        if node_type == :continuous
+                            len = model.transformed_var_lengths[vn]
+                            param_lengths[vn] = len
+                            param_offsets[vn] = offset
+                            offset += len
+                            push!(continuous_model_parameters, vn)
+                        end
                     end
                 end
 
                 n_discrete_finite = count(==(:discrete_finite), node_types)
 
                 cache = MarginalizationCache(
-                    keys, order, node_types, param_lengths, param_offsets, n_discrete_finite
+                    keys,
+                    order,
+                    node_types,
+                    param_lengths,
+                    param_offsets,
+                    n_discrete_finite,
+                    continuous_model_parameters,
                 )
                 model = BangBang.setproperty!!(model, :marginalization_cache, cache)
             catch err

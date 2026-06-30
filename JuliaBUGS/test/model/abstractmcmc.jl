@@ -81,4 +81,32 @@ using Test
         @test length(collected) == 3
         @test all(c -> haskey(c, :mu), collected)
     end
+
+    @testset "ParamsWithStats with auto-marginalization reports flat parameters" begin
+        model_def = @bugs begin
+            mu ~ Normal(0, 1)
+            z ~ Categorical(w[1:K])
+            y ~ Normal(mu + delta[z], sigma)
+        end
+
+        model = compile(model_def, (K=2, w=[0.3, 0.7], delta=[0.0, 2.0], sigma=1.0, y=1.5))
+        model = JuliaBUGS.settrans(model, true)
+        model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseAutoMarginalization())
+        transition, log_densities = JuliaBUGS.Model.evaluate_with_marginalization_values!!(
+            model, [0.0]
+        )
+
+        pws = AbstractMCMC.ParamsWithStats(
+            AbstractMCMC.LogDensityModel(model),
+            sampler,
+            transition,
+            state;
+            params=true,
+            stats=true,
+        )
+
+        @test haskey(pws.params, :mu)
+        @test !haskey(pws.params, :z)
+        @test pws.stats.lp ≈ log_densities.tempered_logjoint
+    end
 end

@@ -252,22 +252,47 @@ function _lower_model_def_to_represent_observe_stmts(
     for statement in reconstructed_model_def.args
         if Meta.isexpr(statement, (:(=), :call))
             stmt_id = stmt_to_stmt_id[statement]
-            observed_loop_vars, model_parameter_loop_vars, deterministic_loop_vars = var_types[stmt_id]
+            observed_loop_vars, model_parameter_loop_vars, generated_quantity_loop_vars, deterministic_loop_vars = var_types[stmt_id]
 
             _contains_observed = !isempty(observed_loop_vars)
             _contains_model_parameter = !isempty(model_parameter_loop_vars)
+            _contains_generated_quantity = !isempty(generated_quantity_loop_vars)
 
-            if _contains_observed
+            if _contains_generated_quantity
+                # Generated quantities are outside the target closure. Lower only the
+                # iterations that contribute to, or are needed by, the log density.
+                new_stmt = __lower_stmt_with_generated_quantities(
+                    statement,
+                    observed_loop_vars,
+                    model_parameter_loop_vars,
+                    generated_quantity_loop_vars,
+                    deterministic_loop_vars,
+                )
+                isnothing(new_stmt) || push!(lowered_model_def.args, new_stmt)
+            elseif _contains_observed
                 if _contains_model_parameter
                     MacroTools.@capture(statement, lhs_ ~ rhs_)
-                    new_stmt = MacroTools.@q if condition_placeholder
-                        $(lhs) ~ $(rhs)
+                    tilde_stmt = MacroTools.@q $(lhs) ~ $(rhs)
+                    observe_stmt = MacroTools.@q $(lhs) ≂ $(rhs)
+                    # Use the shorter condition; the complementary iterations take the
+                    # else branch while loop order preserves parameter consumption.
+                    if length(observed_loop_vars) < length(model_parameter_loop_vars)
+                        new_stmt = Expr(
+                            :if,
+                            __generate_model_parameter_condition_expr(observed_loop_vars),
+                            Expr(:block, observe_stmt),
+                            Expr(:block, tilde_stmt),
+                        )
                     else
-                        $(lhs) ≂ $(rhs)
+                        new_stmt = Expr(
+                            :if,
+                            __generate_model_parameter_condition_expr(
+                                model_parameter_loop_vars
+                            ),
+                            Expr(:block, tilde_stmt),
+                            Expr(:block, observe_stmt),
+                        )
                     end
-                    new_stmt.args[1] = __generate_model_parameter_condition_expr(
-                        model_parameter_loop_vars
-                    )
                     push!(lowered_model_def.args, new_stmt)
                 else
                     MacroTools.@capture(statement, lhs_ ~ rhs_)
@@ -330,6 +355,83 @@ function __generate_model_parameter_condition_expr(model_param_nt_vec)
     end
 end
 
+# Build a guard for `keep` iterations while keeping the emitted boolean expression short.
+# If the dropped set is smaller, guard on it and negate the condition.
+function __select_keep_condition(keep_loop_vars, drop_loop_vars)
+    if !isempty(drop_loop_vars) && length(drop_loop_vars) < length(keep_loop_vars)
+        return Expr(:call, :!, __generate_model_parameter_condition_expr(drop_loop_vars))
+    else
+        return __generate_model_parameter_condition_expr(keep_loop_vars)
+    end
+end
+
+# Lower a statement with generated-quantity iterations. Generated quantities are omitted
+# from the target; remaining iterations are guarded by loop index as needed.
+function __lower_stmt_with_generated_quantities(
+    statement,
+    observed_loop_vars,
+    model_parameter_loop_vars,
+    generated_quantity_loop_vars,
+    deterministic_loop_vars,
+)
+    if Meta.isexpr(statement, :call)
+        # Stochastic `~` statement: keep model-parameter (`~`) and observed (`≂`) iterations.
+        MacroTools.@capture(statement, lhs_ ~ rhs_)
+        has_model_parameter = !isempty(model_parameter_loop_vars)
+        has_observed = !isempty(observed_loop_vars)
+        tilde_stmt = MacroTools.@q $(lhs) ~ $(rhs)
+        observe_stmt = MacroTools.@q $(lhs) ≂ $(rhs)
+        if has_model_parameter && has_observed
+            # Omit the generated-quantity iterations by leaving no final else branch.
+            return Expr(
+                :if,
+                __generate_model_parameter_condition_expr(model_parameter_loop_vars),
+                Expr(:block, tilde_stmt),
+                Expr(
+                    :elseif,
+                    __generate_model_parameter_condition_expr(observed_loop_vars),
+                    Expr(:block, observe_stmt),
+                ),
+            )
+        elseif has_model_parameter
+            # Keep `~` only where the variable remains a model parameter.
+            return Expr(
+                :if,
+                __select_keep_condition(
+                    model_parameter_loop_vars, generated_quantity_loop_vars
+                ),
+                Expr(:block, tilde_stmt),
+            )
+        elseif has_observed
+            # Keep `≂` only where the variable is observed.
+            return Expr(
+                :if,
+                __select_keep_condition(observed_loop_vars, generated_quantity_loop_vars),
+                Expr(:block, observe_stmt),
+            )
+        else
+            return nothing
+        end
+    else
+        # Deterministic generated quantities may be recomputed here because their values
+        # do not affect the target. Avoid the branch when dropped iterations are few;
+        # otherwise guard the kept deterministic iterations.
+        if isempty(deterministic_loop_vars)
+            return nothing
+        elseif length(generated_quantity_loop_vars) <= length(deterministic_loop_vars)
+            return statement
+        else
+            return Expr(
+                :if,
+                __select_keep_condition(
+                    deterministic_loop_vars, generated_quantity_loop_vars
+                ),
+                Expr(:block, statement),
+            )
+        end
+    end
+end
+
 function __check_for_reserved_names(model_def::Expr)
     variable_names_and_numdims = JuliaBUGS.extract_variable_names_and_numdims(model_def)
     variable_names = keys(variable_names_and_numdims)
@@ -355,6 +457,7 @@ function _generate_lowered_model_def(
     g::JuliaBUGS.BUGSGraph,
     evaluation_env::NamedTuple;
     diagnostics::Vector{String}=String[],
+    generated_quantities::Union{Nothing,Set{<:VarName}}=nothing,
 )
     __check_for_reserved_names(model_def)
     stmt_to_stmt_id = _build_stmt_to_stmt_id(model_def)
@@ -418,8 +521,17 @@ function _generate_lowered_model_def(
         sorted_fissioned_stmts
     )
     induction_variable_values = _var_to_loop_vars(model_def, evaluation_env)
+    generated_quantity_vars = if generated_quantities === nothing
+        Set(Model.GraphEvaluationData(g).generated_quantities)
+    else
+        generated_quantities
+    end
     var_types = __determine_var_types(
-        g, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values
+        g,
+        stmt_id_to_var,
+        stmt_id_to_stmt,
+        induction_variable_values,
+        generated_quantity_vars,
     )
     lowered_model_def = _lower_model_def_to_represent_observe_stmts(
         reconstructed_model_def, stmt_to_stmt_id, var_types, evaluation_env
@@ -492,36 +604,46 @@ function _var_to_loop_vars(model_def, evaluation_env)
 end
 
 function __determine_var_types(
-    g::JuliaBUGS.BUGSGraph, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values
+    g::JuliaBUGS.BUGSGraph,
+    stmt_id_to_var,
+    stmt_id_to_stmt,
+    induction_variable_values,
+    generated_quantities,
 )
-    # for each statement, have three list to collect the var of each type
-    var_types = [([], [], []) for _ in 1:length(stmt_id_to_stmt)]
+    # For each statement, collect the loop-variable values of each variable category:
+    # (observed, model_parameter, generated_quantity, deterministic).
+    var_types = [([], [], [], []) for _ in 1:length(stmt_id_to_stmt)]
     for stmt_id in keys(stmt_id_to_stmt)
         if !haskey(stmt_id_to_var, stmt_id)
             continue
         end
         vars = stmt_id_to_var[stmt_id]
         for var in vars
-            var_type = __variable_type(g, var)
+            var_type = __variable_type(g, var, generated_quantities)
             if var_type == :observed
                 push!(var_types[stmt_id][1], induction_variable_values[var])
             elseif var_type == :model_parameter
                 push!(var_types[stmt_id][2], induction_variable_values[var])
-            else
+            elseif var_type == :generated_quantity
                 push!(var_types[stmt_id][3], induction_variable_values[var])
+            else
+                push!(var_types[stmt_id][4], induction_variable_values[var])
             end
         end
     end
     return var_types
 end
 
-function __variable_type(g::JuliaBUGS.BUGSGraph, var)
-    if g[var].is_stochastic
-        if g[var].is_observed
-            return :observed
-        else
-            return :model_parameter
-        end
+function __variable_type(g::JuliaBUGS.BUGSGraph, var, generated_quantities)
+    if g[var].is_stochastic && g[var].is_observed
+        return :observed
+    elseif var in generated_quantities
+        # Outside the target closure: stochastic ones are forward-sampled and
+        # deterministic ones are recomputed in post-processing, so neither belongs in
+        # the log density.
+        return :generated_quantity
+    elseif g[var].is_stochastic
+        return :model_parameter
     else
         return :deterministic
     end
