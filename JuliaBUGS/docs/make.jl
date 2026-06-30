@@ -20,6 +20,7 @@ makedocs(;
             "Automatic Differentiation" => "inference/ad.md",
             "Evaluation Modes" => "inference/evaluation_modes.md",
             "Auto-Marginalization" => "inference/auto_marginalization.md",
+            "Generated Quantities" => "inference/generated_quantities.md",
             "Parallel & Distributed Sampling" => "inference/parallel.md",
         ],
         "API Reference" => [

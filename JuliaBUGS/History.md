@@ -1,10 +1,20 @@
 # JuliaBUGS Changelog
 
-## 0.14.2
+## 0.15.0
 
 ### Highlights
 
+- **Generated quantities (#501).** Every node now carries an explicit `VariableType`: `Observation`, `ModelParameter`, `TransformedParameter`, or `GeneratedQuantity`. A *generated quantity* is an unobserved node (stochastic or deterministic) with no observed descendants, so it lies outside the log-density target. Generated quantities are excluded from the log density in all three evaluation modes (`UseGraph`, `UseGeneratedLogDensityFunction`, `UseAutoMarginalization`) and recovered after sampling by forward simulation instead of being sampled by MCMC. Under auto-marginalization, a generated quantity that depends on a marginalized discrete latent first recovers that latent from its conditional posterior `p(z | θ, y)`. `gen_chains` applies this automatically, so reported generated quantities are genuine posterior(-predictive) draws.
+
+- **New functions**, exported from the `JuliaBUGS.Model` submodule (like the existing `parameters`), so reachable as `JuliaBUGS.model_parameters` rather than via `using JuliaBUGS`: `model_parameters`, `generated_quantities`, `variable_type`, and the `VariableType` enum with its instances. `forward_sample_generated_quantities!!` is unexported, available as `JuliaBUGS.Model.forward_sample_generated_quantities!!`.
+
 - **FlexiChains support** (#483): Sampling can now collect results into a [`FlexiChains.FlexiChain{VarName}`](https://github.com/penelopeysm/FlexiChains.jl) by passing `chain_type=VNChain` (after `using FlexiChains`). Chains are keyed by `VarName`, so array-valued variables are stored whole instead of being flattened into scalar columns, and sampler statistics are stored as `FlexiChains.Extra` entries. This is the chain format the rest of the TuringLang ecosystem is moving to (Turing 0.45 uses it by default); the docs now use it in examples. `MCMCChains` remains fully supported via `chain_type=MCMCChains.Chains`, and a `FlexiChain` can be converted with `MCMCChains.Chains(chain)`.
+
+### Breaking Changes
+
+- Unobserved stochastic nodes with **no observed descendants** (e.g. posterior-predictive draws, or priors unused by any likelihood) are now generated quantities: excluded from `model_parameters`, the parameter vector, and `LogDensityProblems.dimension`, and forward-sampled in post-processing instead of sampled by MCMC/Gibbs. The joint distribution is unchanged.
+- `parameters(model)` (all unobserved stochastic nodes) and `model_parameters(model)` (the MCMC target) can now differ, and `dimension` follows `model_parameters`. Use `LogDensityProblems.dimension(model)` (or `length(model_parameters(model))`) where you previously relied on `length(parameters(model))` as the parameter-vector length.
+- `Gibbs` sampler maps that reference a reclassified variable now error, since it is no longer in `model_parameters`.
 
 ## 0.14.1
 

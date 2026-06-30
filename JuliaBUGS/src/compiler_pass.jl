@@ -839,7 +839,7 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
     args, node_function_expr, node_function = pass.f_dict[expr]
 
     vn = if lhs isa Symbol
-        AbstractPPL.VarName{lhs}(AbstractPPL.Iden())
+        AbstractPPL.VarName{lhs}()
     else
         v, indices... = lhs
         AbstractPPL.VarName{v}(AbstractPPL.Index((indices...,), (;)))

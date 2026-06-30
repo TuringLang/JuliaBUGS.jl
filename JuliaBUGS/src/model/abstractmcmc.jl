@@ -10,22 +10,18 @@ function AbstractMCMC.ParamsWithStats(
     extras::Bool=false,
 )
     bugs_model = model.logdensity
-    gd = bugs_model.graph_evaluation_data
 
+    transition_env = merge(bugs_model.evaluation_env, transition)
     param_vars = if bugs_model.evaluation_mode isa UseAutoMarginalization
-        mc = bugs_model.marginalization_cache
-        filter(gd.sorted_parameters) do vn
-            idx = findfirst(==(vn), gd.sorted_nodes)
-            idx !== nothing && mc.node_types[idx] == :continuous
-        end
+        bugs_model.marginalization_cache.continuous_model_parameters
     else
-        gd.sorted_parameters
+        model_parameters(bugs_model)
     end
 
     p = if params
         d = OrderedDict{String,Any}()
         for vn in param_vars
-            value = AbstractPPL.getvalue(transition, vn)
+            value = AbstractPPL.getvalue(transition_env, vn)
             d[string(vn)] = value
         end
         [k => v for (k, v) in d]
@@ -34,10 +30,16 @@ function AbstractMCMC.ParamsWithStats(
     end
 
     s = if stats
-        model_with_env = BangBang.setproperty!!(bugs_model, :evaluation_env, transition)
-        _, log_densities = evaluate_with_env!!(
-            model_with_env; transformed=bugs_model.transformed
-        )
+        log_densities = if bugs_model.evaluation_mode isa UseAutoMarginalization
+            _, lds = evaluate_with_marginalization_values!!(
+                bugs_model, getparams(bugs_model, transition_env)
+            )
+            lds
+        else
+            model_with_env = BangBang.setproperty!!(bugs_model, :evaluation_env, transition_env)
+            _, lds = evaluate_with_env!!(model_with_env; transformed=bugs_model.transformed)
+            lds
+        end
         (lp=log_densities.tempered_logjoint,)
     else
         NamedTuple()

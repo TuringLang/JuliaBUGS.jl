@@ -2,16 +2,12 @@ module JuliaBUGSMCMCChainsExt
 
 using AbstractMCMC
 using JuliaBUGS
-using JuliaBUGS:
-    BUGSModel,
-    BUGSModelWithGradient,
-    find_generated_quantities_variables,
-    evaluate!!,
-    getparams
-using JuliaBUGS.Model: UseAutoMarginalization
+using JuliaBUGS: BUGSModel, BUGSModelWithGradient, evaluate!!, getparams
+using JuliaBUGS.Model: model_parameters, forward_sample_generated_quantities!!
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.Accessors
 using MCMCChains: Chains
+using Random: default_rng
 
 function JuliaBUGS.gen_chains(
     model::AbstractMCMC.LogDensityModel{<:BUGSModel},
@@ -127,28 +123,18 @@ function JuliaBUGS.gen_chains(
     samples,
     stats_names,
     stats_values;
+    rng=default_rng(),
     discard_initial=0,
     thinning=1,
     kwargs...,
 )
-    gd = model.graph_evaluation_data
-    # Filter parameters based on evaluation mode - only include continuous parameters
-    # when auto-marginalization is active (discrete parameters are marginalized out)
-    param_vars = if model.evaluation_mode isa UseAutoMarginalization
-        mc = model.marginalization_cache
-        filter(gd.sorted_parameters) do vn
-            idx = findfirst(==(vn), gd.sorted_nodes)
-            idx !== nothing && mc.node_types[idx] == :continuous
-        end
-    else
-        gd.sorted_parameters
-    end
+    # Report model parameters. In auto-marginalization, continuous parameters come from
+    # the sample row and finite discrete latents are recovered below from p(z | theta, y).
+    param_vars = model_parameters(model)
 
-    # Find and order generated quantities
-    # Exclude parameters to avoid double counting forward-sampled variables
-    generated_vars = find_generated_quantities_variables(model.g)
-    param_set = Set(param_vars)
-    generated_vars = [v for v in gd.sorted_nodes if v in generated_vars && v ∉ param_set]
+    # Generated quantities (no observed descendants) are reported in topological order;
+    # they are disjoint from the model parameters by construction.
+    generated_vars = JuliaBUGS.Model.generated_quantities(model)
 
     # Evaluate model for each sample to get parameter values and generated quantities
     param_vals = []
@@ -157,8 +143,12 @@ function JuliaBUGS.gen_chains(
         # Set parameters and evaluate the model
         evaluation_env = first(evaluate!!(model, samples[i]))
 
-        # Get parameter values from the evaluation environment
-        # (they were just set by evaluate!!, so they match samples[i])
+        # Forward-sample the stochastic generated quantities (and recompute deterministic
+        # ones) for this draw, so the reported values are genuine posterior-predictive
+        # draws rather than the stale environment values left by `evaluate!!`.
+        evaluation_env = forward_sample_generated_quantities!!(rng, model, evaluation_env)
+
+        # Get parameter values from the reconstructed evaluation environment.
         push!(
             param_vals,
             [AbstractPPL.getvalue(evaluation_env, param_var) for param_var in param_vars],
