@@ -101,6 +101,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "gibbs" => () -> include("gibbs.jl"),
     "parallel_sampling" => () -> include("parallel_sampling.jl"),
     "distributed_sampling" => () -> include("distributed_sampling.jl"),
+    "serialization" => () -> include("serialization.jl"),
 )
 
 function print_test_usage()

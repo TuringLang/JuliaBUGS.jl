@@ -49,6 +49,7 @@ jobs:
           - "gibbs"
           - "parallel_sampling"
           - "distributed_sampling"
+          - "serialization"
 
     steps:
       - uses: actions/checkout@v7
