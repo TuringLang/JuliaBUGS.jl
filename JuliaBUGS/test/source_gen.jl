@@ -60,9 +60,11 @@ end
 
 @testset "reserved variable names are rejected" begin
     @test_throws ErrorException JuliaBUGS.__check_for_reserved_names(
-        JuliaBUGS.Parser.bugs_top(:(begin
-            __logp__ ~ dnorm(0, 1)
-        end))
+        JuliaBUGS.Parser.bugs_top(:(
+            begin
+                __logp__ ~ dnorm(0, 1)
+            end
+        ))
     )
 end
 
