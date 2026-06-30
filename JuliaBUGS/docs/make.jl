@@ -1,6 +1,7 @@
 using Documenter
 using DocumenterMermaid
 using JuliaBUGS
+using AbstractPPL
 using MetaGraphsNext
 using JuliaBUGS.BUGSPrimitives
 
@@ -21,6 +22,7 @@ makedocs(;
             "Evaluation Modes" => "inference/evaluation_modes.md",
             "Auto-Marginalization" => "inference/auto_marginalization.md",
             "Generated Quantities" => "inference/generated_quantities.md",
+            "Fixing Variables (`fix` / `unfix`)" => "inference/fixing.md",
             "Parallel & Distributed Sampling" => "inference/parallel.md",
         ],
         "API Reference" => [
