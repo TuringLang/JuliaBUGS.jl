@@ -2,7 +2,7 @@
 
 ```@setup abc
 using JuliaBUGS
-using AdvancedHMC, AbstractMCMC, LogDensityProblems, MCMCChains
+using AdvancedHMC, AbstractMCMC, LogDensityProblems, FlexiChains
 using ADTypes, Mooncake
 
 data = (
@@ -208,16 +208,18 @@ samples_and_stats = AbstractMCMC.sample(
                         model,
                         NUTS(0.8),
                         n_samples;
-                        chain_type = Chains,
+                        chain_type = VNChain,
                         n_adapts = n_adapts,
                         init_params = initial_θ,
                         discard_initial = n_adapts,
                         progress = false
                     )
-describe(samples_and_stats)
+summarystats(samples_and_stats)
 ```
 
 This is consistent with the result in the [OpenBUGS seeds example](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html).
+
+Here `chain_type = VNChain` collects the samples into a [`FlexiChains.FlexiChain`](https://github.com/penelopeysm/FlexiChains.jl) keyed by variable name. `MCMCChains` is also still supported: load it and pass `chain_type = MCMCChains.Chains` instead (or convert an existing chain with `MCMCChains.Chains(samples_and_stats)`).
 
 ## Next Steps
 
