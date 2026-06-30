@@ -294,7 +294,8 @@ function _evaluate_continuous_model_parameters_with_values!!(
         node_function = gd.node_function_vals[i]
         loop_vars = gd.loop_vars_vals[i]
 
-        if gd.variable_types[i] == GeneratedQuantity || gd.variable_types[i] == FixedParameter
+        if gd.variable_types[i] == GeneratedQuantity ||
+            gd.variable_types[i] == FixedParameter
             continue
         elseif !gd.is_stochastic_vals[i]
             value = node_function(evaluation_env, loop_vars)
@@ -770,75 +771,17 @@ function _marginalize_recursive(
     loop_vars = gd.loop_vars_vals[current_idx]
     rest_indices = @view(remaining_indices[2:end])
 
-    result = if gd.variable_types[current_idx] == GeneratedQuantity ||
-        gd.variable_types[current_idx] == FixedParameter
-        # Generated quantities are outside the target closure, so the generated-quantity
-        # block integrates/sums to one and factors out of the marginalized target p(θ, y).
-        # Skip it entirely: don't read the parameter vector (it has no slot there) and don't
-        # marginalize it. Fixed parameters keep their value in `env`; generated quantities
-        # are recovered later by forward sampling.
-        _marginalize_recursive(
-            model,
-            env,
-            rest_indices,
-            parameter_values,
-            param_offsets,
-            var_lengths,
-            memo,
-            minimal_keys,
-        )
-
-    elseif !gd.is_stochastic_vals[current_idx]
-        # Deterministic node: compute value and continue
-        value = node_function(env, loop_vars)
-        new_env = BangBang.setindex!!(env, value, current_vn)
-        _marginalize_recursive(
-            model,
-            new_env,
-            rest_indices,
-            parameter_values,
-            param_offsets,
-            var_lengths,
-            memo,
-            minimal_keys,
-        )
-
-    elseif gd.is_observed_vals[current_idx]
-        # Observed stochastic node: add to likelihood
-        dist = node_function(env, loop_vars)
-        obs_value = AbstractPPL.getvalue(env, current_vn)
-        obs_logp = logpdf(dist, obs_value)
-        obs_logp = isnan(obs_logp) ? -Inf : obs_logp
-
-        rest_prior, rest_lik = _marginalize_recursive(
-            model,
-            env,
-            rest_indices,
-            parameter_values,
-            param_offsets,
-            var_lengths,
-            memo,
-            minimal_keys,
-        )
-        (rest_prior, obs_logp + rest_lik)
-
-    elseif mc.node_types[current_idx] == :discrete_finite
-        # Discrete finite unobserved: marginalize by enumerating all values
-        dist = node_function(env, loop_vars)
-        possible_values = _enumerate_discrete_values(dist)
-
-        # Lazy allocation for type stability with AD
-        log_priors = nothing
-        log_liks = nothing
-
-        for (i, val) in enumerate(possible_values)
-            branch_env = BangBang.setindex!!(env, val, current_vn)
-            val_logp = logpdf(dist, val)
-            val_logp = isnan(val_logp) ? -Inf : val_logp
-
-            branch_prior, branch_lik = _marginalize_recursive(
+    result =
+        if gd.variable_types[current_idx] == GeneratedQuantity ||
+            gd.variable_types[current_idx] == FixedParameter
+            # Generated quantities are outside the target closure, so the generated-quantity
+            # block integrates/sums to one and factors out of the marginalized target p(θ, y).
+            # Skip it entirely: don't read the parameter vector (it has no slot there) and don't
+            # marginalize it. Fixed parameters keep their value in `env`; generated quantities
+            # are recovered later by forward sampling.
+            _marginalize_recursive(
                 model,
-                branch_env,
+                env,
                 rest_indices,
                 parameter_values,
                 param_offsets,
@@ -847,57 +790,116 @@ function _marginalize_recursive(
                 minimal_keys,
             )
 
-            # log P(z=val, rest_prior)
-            total_prior = val_logp + branch_prior
-            if log_priors === nothing
-                log_priors = Vector{typeof(total_prior)}(undef, length(possible_values))
-                log_liks = Vector{typeof(branch_lik)}(undef, length(possible_values))
+        elseif !gd.is_stochastic_vals[current_idx]
+            # Deterministic node: compute value and continue
+            value = node_function(env, loop_vars)
+            new_env = BangBang.setindex!!(env, value, current_vn)
+            _marginalize_recursive(
+                model,
+                new_env,
+                rest_indices,
+                parameter_values,
+                param_offsets,
+                var_lengths,
+                memo,
+                minimal_keys,
+            )
+
+        elseif gd.is_observed_vals[current_idx]
+            # Observed stochastic node: add to likelihood
+            dist = node_function(env, loop_vars)
+            obs_value = AbstractPPL.getvalue(env, current_vn)
+            obs_logp = logpdf(dist, obs_value)
+            obs_logp = isnan(obs_logp) ? -Inf : obs_logp
+
+            rest_prior, rest_lik = _marginalize_recursive(
+                model,
+                env,
+                rest_indices,
+                parameter_values,
+                param_offsets,
+                var_lengths,
+                memo,
+                minimal_keys,
+            )
+            (rest_prior, obs_logp + rest_lik)
+
+        elseif mc.node_types[current_idx] == :discrete_finite
+            # Discrete finite unobserved: marginalize by enumerating all values
+            dist = node_function(env, loop_vars)
+            possible_values = _enumerate_discrete_values(dist)
+
+            # Lazy allocation for type stability with AD
+            log_priors = nothing
+            log_liks = nothing
+
+            for (i, val) in enumerate(possible_values)
+                branch_env = BangBang.setindex!!(env, val, current_vn)
+                val_logp = logpdf(dist, val)
+                val_logp = isnan(val_logp) ? -Inf : val_logp
+
+                branch_prior, branch_lik = _marginalize_recursive(
+                    model,
+                    branch_env,
+                    rest_indices,
+                    parameter_values,
+                    param_offsets,
+                    var_lengths,
+                    memo,
+                    minimal_keys,
+                )
+
+                # log P(z=val, rest_prior)
+                total_prior = val_logp + branch_prior
+                if log_priors === nothing
+                    log_priors = Vector{typeof(total_prior)}(undef, length(possible_values))
+                    log_liks = Vector{typeof(branch_lik)}(undef, length(possible_values))
+                end
+                log_priors[i] = total_prior
+                log_liks[i] = branch_lik
             end
-            log_priors[i] = total_prior
-            log_liks[i] = branch_lik
+
+            # Marginalize: sum over all discrete values
+            # log_prior_marg = log Σ_z P(z, rest_prior)
+            # log_joint_marg = log Σ_z P(z, rest_prior, data)
+            log_prior_marg = LogExpFunctions.logsumexp(log_priors)
+            log_joint_marg = LogExpFunctions.logsumexp(log_priors .+ log_liks)
+
+            # log_lik = log P(data | params) = log_joint - log_prior
+            log_lik_marg =
+                isfinite(log_prior_marg) ? log_joint_marg - log_prior_marg : log_joint_marg
+            (log_prior_marg, log_lik_marg)
+
+        else
+            # Continuous or discrete-infinite unobserved: read from parameter vector
+            dist = node_function(env, loop_vars)
+            bijector = Bijectors.bijector(dist)
+
+            len = var_lengths[current_vn]
+            start_idx = param_offsets[current_vn]
+            param_slice = view(parameter_values, start_idx:(start_idx + len - 1))
+
+            b_inv = Bijectors.inverse(bijector)
+            reconstructed = reconstruct(b_inv, dist, param_slice)
+            value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed)
+
+            new_env = BangBang.setindex!!(env, value, current_vn)
+
+            dist_logp = logpdf(dist, value)
+            dist_logp = isnan(dist_logp) ? -Inf : dist_logp + logjac
+
+            rest_prior, rest_lik = _marginalize_recursive(
+                model,
+                new_env,
+                rest_indices,
+                parameter_values,
+                param_offsets,
+                var_lengths,
+                memo,
+                minimal_keys,
+            )
+            (dist_logp + rest_prior, rest_lik)
         end
-
-        # Marginalize: sum over all discrete values
-        # log_prior_marg = log Σ_z P(z, rest_prior)
-        # log_joint_marg = log Σ_z P(z, rest_prior, data)
-        log_prior_marg = LogExpFunctions.logsumexp(log_priors)
-        log_joint_marg = LogExpFunctions.logsumexp(log_priors .+ log_liks)
-
-        # log_lik = log P(data | params) = log_joint - log_prior
-        log_lik_marg =
-            isfinite(log_prior_marg) ? log_joint_marg - log_prior_marg : log_joint_marg
-        (log_prior_marg, log_lik_marg)
-
-    else
-        # Continuous or discrete-infinite unobserved: read from parameter vector
-        dist = node_function(env, loop_vars)
-        bijector = Bijectors.bijector(dist)
-
-        len = var_lengths[current_vn]
-        start_idx = param_offsets[current_vn]
-        param_slice = view(parameter_values, start_idx:(start_idx + len - 1))
-
-        b_inv = Bijectors.inverse(bijector)
-        reconstructed = reconstruct(b_inv, dist, param_slice)
-        value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed)
-
-        new_env = BangBang.setindex!!(env, value, current_vn)
-
-        dist_logp = logpdf(dist, value)
-        dist_logp = isnan(dist_logp) ? -Inf : dist_logp + logjac
-
-        rest_prior, rest_lik = _marginalize_recursive(
-            model,
-            new_env,
-            rest_indices,
-            parameter_values,
-            param_offsets,
-            var_lengths,
-            memo,
-            minimal_keys,
-        )
-        (dist_logp + rest_prior, rest_lik)
-    end
 
     memo[memo_key] = result
     return result

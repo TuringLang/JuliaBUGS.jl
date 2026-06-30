@@ -409,9 +409,7 @@ JuliaBUGS.@bugs_primitive Normal Gamma Bernoulli
                 LogDensityProblems.logdensity, conditioned_model, [0.0]
             )
             expected_conditioned_logp =
-                logpdf(Normal(0, 1), 0.0) +
-                logpdf(Normal(0, 1), 1.0) +
-                expected_fixed_logp
+                logpdf(Normal(0, 1), 0.0) + logpdf(Normal(0, 1), 1.0) + expected_fixed_logp
             @test conditioned_logp ≈ expected_conditioned_logp
             @test conditioned_logp != graph_logp
         end
@@ -507,9 +505,8 @@ JuliaBUGS.@bugs_primitive Normal Gamma Bernoulli
             auto_model = set_evaluation_mode(fixed_model, UseAutoMarginalization())
 
             @test LogDensityProblems.dimension(auto_model) == 0
-            @test Base.invokelatest(
-                LogDensityProblems.logdensity, auto_model, Float64[]
-            ) ≈ logpdf(Bernoulli(0.8), 1)
+            @test Base.invokelatest(LogDensityProblems.logdensity, auto_model, Float64[]) ≈
+                logpdf(Bernoulli(0.8), 1)
         end
     end
 

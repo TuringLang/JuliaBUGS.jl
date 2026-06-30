@@ -33,9 +33,7 @@ function find_generated_quantities_variables(
 
     for n in labels(g)
         if !is_observation(g, n) && n ∉ fixed_parameters
-            if !dfs_can_reach_observations(
-                g, n, can_reach_observations, fixed_parameters
-            )
+            if !dfs_can_reach_observations(g, n, can_reach_observations, fixed_parameters)
                 push!(generated_quantities_variables, n)
             end
         end

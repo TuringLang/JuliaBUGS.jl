@@ -852,7 +852,8 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 end
 
                 n_discrete_finite = count(eachindex(node_types)) do i
-                    node_types[i] == :discrete_finite && gd.variable_types[i] == ModelParameter
+                    node_types[i] == :discrete_finite &&
+                        gd.variable_types[i] == ModelParameter
                 end
 
                 cache = MarginalizationCache(

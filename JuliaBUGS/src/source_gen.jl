@@ -252,13 +252,7 @@ function _lower_model_def_to_represent_observe_stmts(
     for statement in reconstructed_model_def.args
         if Meta.isexpr(statement, (:(=), :call))
             stmt_id = stmt_to_stmt_id[statement]
-            (
-                observed_loop_vars,
-                model_parameter_loop_vars,
-                generated_quantity_loop_vars,
-                deterministic_loop_vars,
-                fixed_parameter_loop_vars,
-            ) = var_types[stmt_id]
+            (observed_loop_vars, model_parameter_loop_vars, generated_quantity_loop_vars, deterministic_loop_vars, fixed_parameter_loop_vars) = var_types[stmt_id]
 
             _contains_observed = !isempty(observed_loop_vars)
             _contains_model_parameter = !isempty(model_parameter_loop_vars)
@@ -535,7 +529,7 @@ function _generate_lowered_model_def(
     fixed_parameter_vars = Set{VarName}(fixed_parameters)
     generated_quantity_vars = if generated_quantities === nothing
         Set(
-            Model.GraphEvaluationData(g; fixed_parameters=fixed_parameter_vars).generated_quantities
+            Model.GraphEvaluationData(g; fixed_parameters=fixed_parameter_vars).generated_quantities,
         )
     else
         generated_quantities
@@ -652,7 +646,9 @@ function __determine_var_types(
     return var_types
 end
 
-function __variable_type(g::JuliaBUGS.BUGSGraph, var, generated_quantities, fixed_parameters)
+function __variable_type(
+    g::JuliaBUGS.BUGSGraph, var, generated_quantities, fixed_parameters
+)
     if g[var].is_stochastic && g[var].is_observed
         return :observed
     elseif var in fixed_parameters
