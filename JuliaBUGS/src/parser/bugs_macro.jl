@@ -18,11 +18,6 @@ function warn_cumulative_density_deviance(expr::Expr)
     end
 end
 
-macro bugs(expr::Expr)
-    warn_cumulative_density_deviance(expr)
-    return Meta.quot(bugs_top(expr, __source__))
-end
-
 function bugs_top(@nospecialize(expr), __source__)
     if Meta.isexpr(expr, :block)
         return Expr(:block, bugs_block_body(expr, __source__)...)
@@ -32,6 +27,11 @@ function bugs_top(@nospecialize(expr), __source__)
         error("Invalid model definition.")
     end
 end
+
+# Convenience for callers (tests, internal tooling) that want the transformed BUGS AST
+# `Expr` for a quoted program directly, without supplying a source location. `@bugs` and
+# `@model` call the 2-arg form with their `__source__`.
+bugs_top(@nospecialize(expr)) = bugs_top(expr, LineNumberNode(0))
 
 function bugs_block_body(@nospecialize(expr), __source__)
     if !(expr.args[1] isa LineNumberNode) # if the model is given using parentheses, the first line is not a LineNumberNode
@@ -158,25 +158,6 @@ function bugs_expression(expr, line_num)
     else
         error("Invalid expression at $line_num: `$expr`")
     end
-end
-
-"""
-    @bugs(program::Expr)
-    @bugs(program::String; replace_period::Bool=true, no_enclosure::Bool=false)
-
-Constructs a Julia Abstract Syntax Tree (AST) representation of a BUGS program. This macro supports two forms of input: a Julia expression or a string containing the BUGS program code. 
-
-- When provided with a string, the macro parses it as a BUGS program, with optional arguments to control parsing behavior.
-- When given an expression, it performs syntactic checks to ensure compatibility with BUGS syntax.
-
-## Arguments for String Input
-For the string input variant, the following optional arguments are available:
-- `replace_period::Bool`: When set to `true`, all periods (`.`) in the BUGS code are replaced. This is enabled by default.
-- `no_enclosure::Bool`: When `true`, the parser does not require the BUGS program to be enclosed within `model{ ... }` brackets. By default, this is set to `false`.
-
-"""
-macro bugs(prog::String, replace_period::Bool=true, no_enclosure::Bool=false)
-    return Meta.quot(_bugs_string_input(prog, replace_period, no_enclosure))
 end
 
 function _bugs_string_input(

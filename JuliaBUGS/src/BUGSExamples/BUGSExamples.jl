@@ -1,6 +1,6 @@
 module BUGSExamples
 
-using JuliaBUGS: JuliaBUGS, @bugs
+using JuliaBUGS: JuliaBUGS, @bugs, BUGSModelDef
 using JSON
 
 struct Example{DNT <: NamedTuple, INT <: NamedTuple, INT2 <: NamedTuple, RNT}
@@ -11,6 +11,12 @@ struct Example{DNT <: NamedTuple, INT <: NamedTuple, INT2 <: NamedTuple, RNT}
     inits::INT
     inits_alternative::INT2
     reference_results::RNT
+end
+
+# `@bugs` now returns a `BUGSModelDef`; unwrap to the underlying `Expr` so the stored
+# `model_def` field (and every consumer that reads it) keeps seeing an `Expr`.
+function Example(name, model_def::BUGSModelDef, rest...)
+    return Example(name, model_def.model_def, rest...)
 end
 
 include("./Volume_1/01_Rats.jl")

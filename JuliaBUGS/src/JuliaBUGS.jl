@@ -36,6 +36,62 @@ include("parser/Parser.jl")
 using .Parser
 using .Parser.CompilerUtils
 
+# The `@bugs` / `@bugs"..."` user macros and the callable `BUGSModelDef` wrapper live here,
+# alongside `compile`: a model definition is a *modeling* object that compiles to a
+# `BUGSModel`. `Parser` keeps the pure syntax frontend (`bugs_top`, `_bugs_string_input`).
+"""
+    BUGSModelDef
+
+Callable wrapper around the model-definition AST produced by [`@bugs`](@ref) (or the
+string form `@bugs"..."`). Calling it with a data `NamedTuple` compiles the model, so
+`@bugs`/`@bugs_str` behave like `@model`: a model definition is a callable that returns a
+`BUGSModel`.
+
+```julia
+model_def = @bugs begin
+    x ~ dnorm(0, 1)
+end
+model = model_def((;))   # equivalent to `compile(model_def, (;))`
+```
+
+The underlying `Expr` stays accessible via the `model_def` field for introspection,
+serialization, and source generation.
+"""
+struct BUGSModelDef
+    model_def::Expr
+end
+
+function Base.show(io::IO, m::BUGSModelDef)
+    print(io, "BUGSModelDef:\n")
+    return print(io, m.model_def)
+end
+
+"""
+    @bugs(program::Expr)
+    @bugs(program::String; replace_period::Bool=true, no_enclosure::Bool=false)
+
+Construct a [`BUGSModelDef`](@ref) from a BUGS model given as a Julia `begin ... end` block
+or as a string of BUGS source. The result is *callable*: passing a data `NamedTuple`
+compiles it into a `BUGSModel` (equivalently, `compile(model_def, data)`).
+
+- When given an expression, syntactic checks ensure compatibility with BUGS syntax.
+- When given a string, it is parsed as a BUGS program. `replace_period` (default `true`)
+  replaces `.` in names; `no_enclosure` (default `false`), when `true`, drops the
+  requirement that the program be wrapped in `model { ... }`.
+
+See also [`BUGSModelDef`](@ref), [`compile`](@ref), [`@model`](@ref).
+"""
+macro bugs(expr::Expr)
+    Parser.warn_cumulative_density_deviance(expr)
+    ast = Parser.bugs_top(expr, __source__)
+    return :($(BUGSModelDef)($(Meta.quot(ast))))
+end
+
+macro bugs(prog::String, replace_period::Bool=true, no_enclosure::Bool=false)
+    ast = Parser._bugs_string_input(prog, replace_period, no_enclosure)
+    return :($(BUGSModelDef)($(Meta.quot(ast))))
+end
+
 include("graphs.jl")
 include("compiler_pass.jl")
 include("model/Model.jl")
@@ -307,6 +363,19 @@ function compile(
     end
 
     return base_model
+end
+
+# `@bugs` / `@bugs"..."` produce a `BUGSModelDef` wrapping the model-definition AST.
+# Compiling unwraps to the underlying `Expr`, so `compile` (and everything below it) keeps
+# operating on `Expr` and `BUGSModel.model_def` stays an `Expr` (serialization, source gen).
+function compile(model_def::BUGSModelDef, args...; kwargs...)
+    return compile(model_def.model_def, args...; kwargs...)
+end
+
+# Make a model definition callable: `model_def(data)` compiles it, unifying `@bugs`/
+# `@bugs_str` with the `@model` workflow (see issue #383).
+function (model_def::BUGSModelDef)(data::NamedTuple=(;); kwargs...)
+    return compile(model_def.model_def, data; kwargs...)
 end
 
 """

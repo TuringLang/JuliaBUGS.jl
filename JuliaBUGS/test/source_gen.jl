@@ -60,9 +60,9 @@ end
 
 @testset "reserved variable names are rejected" begin
     @test_throws ErrorException JuliaBUGS.__check_for_reserved_names(
-        @bugs begin
+        JuliaBUGS.Parser.bugs_top(:(begin
             __logp__ ~ dnorm(0, 1)
-        end
+        end))
     )
 end
 
@@ -83,6 +83,7 @@ end
 @testset "state-space models (SSM) transformation" begin
     # Helper: check if source generation succeeds, returns (success::Bool, diagnostics)
     function can_generate_source(model_def, data)
+        model_def = model_def isa JuliaBUGS.BUGSModelDef ? model_def.model_def : model_def
         eval_env = JuliaBUGS.semantic_analysis(model_def, data)
         g = JuliaBUGS.create_graph(model_def, eval_env)
         diags = String[]

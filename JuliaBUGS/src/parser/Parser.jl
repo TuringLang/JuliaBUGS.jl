@@ -35,6 +35,6 @@ function to_julia_program(prog::String, replace_period=true, no_enclosure=false)
     return to_julia_program(ps.julia_token_vec, ps.text)
 end
 
-export @bugs, to_julia_program
+export to_julia_program
 
 end

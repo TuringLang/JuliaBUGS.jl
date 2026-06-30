@@ -1,5 +1,15 @@
 # JuliaBUGS Changelog
 
+## Unreleased
+
+### Highlights
+
+- **Unified model construction (#383).** `@bugs` and `@bugs"..."` now return a callable `BUGSModelDef` instead of a bare `Expr`. Calling it with a data `NamedTuple` compiles the model, mirroring `@model`: `model = (@bugs begin … end)(data)` is equivalent to `compile(model_def, data)`. This makes `compile` an implementation detail rather than a required step.
+
+### Breaking Changes
+
+- `@bugs` / `@bugs"..."` now return a `BUGSModelDef` rather than an `Expr`. The underlying AST stays accessible via the `model_def` field, and `compile` still accepts the wrapper (and raw `Expr`s), so existing `compile(@bugs(...), data)` code — and serialization/source generation — is unaffected. Code that introspected the macro result *as* an `Expr` (e.g. `(@bugs ...).args`) should use `(@bugs ...).model_def`.
+
 ## 0.15.0
 
 ### Highlights
