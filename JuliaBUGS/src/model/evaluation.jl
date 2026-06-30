@@ -65,8 +65,12 @@ function evaluate_with_rng!!(
         is_observed = model.graph_evaluation_data.is_observed_vals[i]
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
+        variable_type = model.graph_evaluation_data.variable_types[i]
         if !is_stochastic
             value = node_function(evaluation_env, loop_vars)
+            evaluation_env = setindex!!(evaluation_env, value, vn)
+        elseif variable_type == FixedParameter
+            value = AbstractPPL.getvalue(model.evaluation_env, vn)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(evaluation_env, loop_vars)
@@ -148,8 +152,10 @@ function evaluate_with_env!!(
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
 
-        if model.graph_evaluation_data.variable_types[i] == GeneratedQuantity &&
-            !include_generated_quantities
+        variable_type = model.graph_evaluation_data.variable_types[i]
+        if variable_type == FixedParameter
+            continue
+        elseif variable_type == GeneratedQuantity && !include_generated_quantities
             continue
         elseif !is_stochastic
             value = node_function(evaluation_env, loop_vars)
@@ -225,7 +231,8 @@ function evaluate_with_values!!(
         is_observed = model.graph_evaluation_data.is_observed_vals[i]
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
-        if model.graph_evaluation_data.variable_types[i] == GeneratedQuantity
+        variable_type = model.graph_evaluation_data.variable_types[i]
+        if variable_type == GeneratedQuantity || variable_type == FixedParameter
             continue
         elseif !is_stochastic
             value = node_function(evaluation_env, loop_vars)
@@ -287,7 +294,7 @@ function _evaluate_continuous_model_parameters_with_values!!(
         node_function = gd.node_function_vals[i]
         loop_vars = gd.loop_vars_vals[i]
 
-        if gd.variable_types[i] == GeneratedQuantity
+        if gd.variable_types[i] == GeneratedQuantity || gd.variable_types[i] == FixedParameter
             continue
         elseif !gd.is_stochastic_vals[i]
             value = node_function(evaluation_env, loop_vars)
@@ -425,7 +432,8 @@ function _backward_sample_recursive!!(
     node_function = gd.node_function_vals[current_idx]
     loop_vars = gd.loop_vars_vals[current_idx]
 
-    if gd.variable_types[current_idx] == GeneratedQuantity
+    if gd.variable_types[current_idx] == GeneratedQuantity ||
+        gd.variable_types[current_idx] == FixedParameter
         # Generated quantities are forward-sampled separately; skip here.
     elseif !gd.is_stochastic_vals[current_idx]
         env = BangBang.setindex!!(env, node_function(env, loop_vars), current_vn)
@@ -621,7 +629,8 @@ function _precompute_minimal_cache_keys(
             node_pos = label_to_pos[node_label]
             for parent_label in stochastic_parents[node_label]
                 if node_types[parent_label] == :discrete_finite &&
-                    !is_observed[parent_label]
+                    !is_observed[parent_label] &&
+                    gd.variable_types[parent_label] == ModelParameter
                     last_use_pos[parent_label] = max(
                         get(last_use_pos, parent_label, label_to_pos[parent_label]),
                         node_pos,
@@ -634,7 +643,9 @@ function _precompute_minimal_cache_keys(
     # Map: position → discrete finite variables that start at that position
     starts_at_pos = Dict{Int,Vector{Int}}()
     for label in 1:n
-        if node_types[label] == :discrete_finite && !is_observed[label]
+        if node_types[label] == :discrete_finite &&
+            !is_observed[label] &&
+            gd.variable_types[label] == ModelParameter
             pos = label_to_pos[label]
             push!(get!(starts_at_pos, pos, Int[]), label)
         end
@@ -698,7 +709,8 @@ function _compute_marginalization_order(
         if gd.is_stochastic_vals[idx] && gd.is_observed_vals[idx]
             for parent_idx in stochastic_parents[idx]
                 if node_types[parent_idx] == :discrete_finite &&
-                    !gd.is_observed_vals[parent_idx]
+                    !gd.is_observed_vals[parent_idx] &&
+                    gd.variable_types[parent_idx] == ModelParameter
                     place_with_deps(sorted_nodes[parent_idx])
                 end
             end
@@ -758,11 +770,13 @@ function _marginalize_recursive(
     loop_vars = gd.loop_vars_vals[current_idx]
     rest_indices = @view(remaining_indices[2:end])
 
-    result = if gd.variable_types[current_idx] == GeneratedQuantity
+    result = if gd.variable_types[current_idx] == GeneratedQuantity ||
+        gd.variable_types[current_idx] == FixedParameter
         # Generated quantities are outside the target closure, so the generated-quantity
         # block integrates/sums to one and factors out of the marginalized target p(θ, y).
         # Skip it entirely: don't read the parameter vector (it has no slot there) and don't
-        # marginalize it. They are recovered later by forward sampling, not here.
+        # marginalize it. Fixed parameters keep their value in `env`; generated quantities
+        # are recovered later by forward sampling.
         _marginalize_recursive(
             model,
             env,

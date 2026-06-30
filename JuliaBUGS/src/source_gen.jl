@@ -252,21 +252,30 @@ function _lower_model_def_to_represent_observe_stmts(
     for statement in reconstructed_model_def.args
         if Meta.isexpr(statement, (:(=), :call))
             stmt_id = stmt_to_stmt_id[statement]
-            observed_loop_vars, model_parameter_loop_vars, generated_quantity_loop_vars, deterministic_loop_vars = var_types[stmt_id]
+            (
+                observed_loop_vars,
+                model_parameter_loop_vars,
+                generated_quantity_loop_vars,
+                deterministic_loop_vars,
+                fixed_parameter_loop_vars,
+            ) = var_types[stmt_id]
 
             _contains_observed = !isempty(observed_loop_vars)
             _contains_model_parameter = !isempty(model_parameter_loop_vars)
             _contains_generated_quantity = !isempty(generated_quantity_loop_vars)
+            _contains_fixed_parameter = !isempty(fixed_parameter_loop_vars)
 
-            if _contains_generated_quantity
-                # Generated quantities are outside the target closure. Lower only the
-                # iterations that contribute to, or are needed by, the log density.
-                new_stmt = __lower_stmt_with_generated_quantities(
+            if _contains_generated_quantity || _contains_fixed_parameter
+                # Generated quantities and fixed parameters are outside the target
+                # closure. Lower only iterations that contribute to, or are needed by,
+                # the log density.
+                new_stmt = __lower_stmt_with_omitted_target_vars(
                     statement,
                     observed_loop_vars,
                     model_parameter_loop_vars,
                     generated_quantity_loop_vars,
                     deterministic_loop_vars,
+                    fixed_parameter_loop_vars,
                 )
                 isnothing(new_stmt) || push!(lowered_model_def.args, new_stmt)
             elseif _contains_observed
@@ -365,24 +374,27 @@ function __select_keep_condition(keep_loop_vars, drop_loop_vars)
     end
 end
 
-# Lower a statement with generated-quantity iterations. Generated quantities are omitted
-# from the target; remaining iterations are guarded by loop index as needed.
-function __lower_stmt_with_generated_quantities(
+# Lower a statement with iterations omitted from the target. Generated quantities
+# and fixed stochastic nodes are omitted; remaining iterations are guarded by loop
+# index as needed.
+function __lower_stmt_with_omitted_target_vars(
     statement,
     observed_loop_vars,
     model_parameter_loop_vars,
     generated_quantity_loop_vars,
     deterministic_loop_vars,
+    fixed_parameter_loop_vars,
 )
     if Meta.isexpr(statement, :call)
         # Stochastic `~` statement: keep model-parameter (`~`) and observed (`≂`) iterations.
         MacroTools.@capture(statement, lhs_ ~ rhs_)
         has_model_parameter = !isempty(model_parameter_loop_vars)
         has_observed = !isempty(observed_loop_vars)
+        omitted_loop_vars = vcat(generated_quantity_loop_vars, fixed_parameter_loop_vars)
         tilde_stmt = MacroTools.@q $(lhs) ~ $(rhs)
         observe_stmt = MacroTools.@q $(lhs) ≂ $(rhs)
         if has_model_parameter && has_observed
-            # Omit the generated-quantity iterations by leaving no final else branch.
+            # Omit generated/fixed iterations by leaving no final else branch.
             return Expr(
                 :if,
                 __generate_model_parameter_condition_expr(model_parameter_loop_vars),
@@ -397,16 +409,14 @@ function __lower_stmt_with_generated_quantities(
             # Keep `~` only where the variable remains a model parameter.
             return Expr(
                 :if,
-                __select_keep_condition(
-                    model_parameter_loop_vars, generated_quantity_loop_vars
-                ),
+                __select_keep_condition(model_parameter_loop_vars, omitted_loop_vars),
                 Expr(:block, tilde_stmt),
             )
         elseif has_observed
             # Keep `≂` only where the variable is observed.
             return Expr(
                 :if,
-                __select_keep_condition(observed_loop_vars, generated_quantity_loop_vars),
+                __select_keep_condition(observed_loop_vars, omitted_loop_vars),
                 Expr(:block, observe_stmt),
             )
         else
@@ -458,6 +468,7 @@ function _generate_lowered_model_def(
     evaluation_env::NamedTuple;
     diagnostics::Vector{String}=String[],
     generated_quantities::Union{Nothing,Set{<:VarName}}=nothing,
+    fixed_parameters::Set{<:VarName}=Set{VarName}(),
 )
     __check_for_reserved_names(model_def)
     stmt_to_stmt_id = _build_stmt_to_stmt_id(model_def)
@@ -521,8 +532,11 @@ function _generate_lowered_model_def(
         sorted_fissioned_stmts
     )
     induction_variable_values = _var_to_loop_vars(model_def, evaluation_env)
+    fixed_parameter_vars = Set{VarName}(fixed_parameters)
     generated_quantity_vars = if generated_quantities === nothing
-        Set(Model.GraphEvaluationData(g).generated_quantities)
+        Set(
+            Model.GraphEvaluationData(g; fixed_parameters=fixed_parameter_vars).generated_quantities
+        )
     else
         generated_quantities
     end
@@ -532,6 +546,7 @@ function _generate_lowered_model_def(
         stmt_id_to_stmt,
         induction_variable_values,
         generated_quantity_vars,
+        fixed_parameter_vars,
     )
     lowered_model_def = _lower_model_def_to_represent_observe_stmts(
         reconstructed_model_def, stmt_to_stmt_id, var_types, evaluation_env
@@ -609,23 +624,26 @@ function __determine_var_types(
     stmt_id_to_stmt,
     induction_variable_values,
     generated_quantities,
+    fixed_parameters,
 )
     # For each statement, collect the loop-variable values of each variable category:
-    # (observed, model_parameter, generated_quantity, deterministic).
-    var_types = [([], [], [], []) for _ in 1:length(stmt_id_to_stmt)]
+    # (observed, model_parameter, generated_quantity, deterministic, fixed_parameter).
+    var_types = [([], [], [], [], []) for _ in 1:length(stmt_id_to_stmt)]
     for stmt_id in keys(stmt_id_to_stmt)
         if !haskey(stmt_id_to_var, stmt_id)
             continue
         end
         vars = stmt_id_to_var[stmt_id]
         for var in vars
-            var_type = __variable_type(g, var, generated_quantities)
+            var_type = __variable_type(g, var, generated_quantities, fixed_parameters)
             if var_type == :observed
                 push!(var_types[stmt_id][1], induction_variable_values[var])
             elseif var_type == :model_parameter
                 push!(var_types[stmt_id][2], induction_variable_values[var])
             elseif var_type == :generated_quantity
                 push!(var_types[stmt_id][3], induction_variable_values[var])
+            elseif var_type == :fixed_parameter
+                push!(var_types[stmt_id][5], induction_variable_values[var])
             else
                 push!(var_types[stmt_id][4], induction_variable_values[var])
             end
@@ -634,9 +652,11 @@ function __determine_var_types(
     return var_types
 end
 
-function __variable_type(g::JuliaBUGS.BUGSGraph, var, generated_quantities)
+function __variable_type(g::JuliaBUGS.BUGSGraph, var, generated_quantities, fixed_parameters)
     if g[var].is_stochastic && g[var].is_observed
         return :observed
+    elseif var in fixed_parameters
+        return :fixed_parameter
     elseif var in generated_quantities
         # Outside the target closure: stochastic ones are forward-sampled and
         # deterministic ones are recomputed in post-processing, so neither belongs in

@@ -13,7 +13,7 @@ Organization:
 - Model creation helpers (regenerating log density functions)
 """
 
-import AbstractPPL: condition, decondition, evaluate!!
+import AbstractPPL: condition, decondition, evaluate!!, fix, unfix
 
 #######################
 # Conditioning API
@@ -158,6 +158,150 @@ function condition(model::BUGSModel, conditioning_spec)
     )
 end
 
+function condition(model::BUGSModel; values...)
+    return condition(model, NamedTuple(values))
+end
+
+#######################
+# Fixing API
+#######################
+
+function _as_varname(vn::VarName)
+    return vn
+end
+function _as_varname(sym::Symbol)
+    return VarName{sym}()
+end
+
+function _parse_var_value_spec(spec::NamedTuple, model::BUGSModel)
+    result = Dict{VarName,Any}()
+    for (k, v) in pairs(spec)
+        result[VarName{k}()] = v
+    end
+    return result
+end
+
+function _parse_var_value_spec(spec::AbstractDict, model::BUGSModel)
+    result = Dict{VarName,Any}()
+    for (k, v) in pairs(spec)
+        result[_as_varname(k)] = v
+    end
+    return result
+end
+
+function _parse_var_value_spec(spec::Pair{<:Union{VarName,Symbol},<:Any}, model::BUGSModel)
+    return Dict{VarName,Any}(_as_varname(first(spec)) => last(spec))
+end
+
+function _parse_var_value_spec(spec::Vector{<:VarName}, model::BUGSModel)
+    result = Dict{VarName,Any}()
+    for vn in spec
+        result[vn] = AbstractPPL.getvalue(model.evaluation_env, vn)
+    end
+    return result
+end
+
+function _parse_var_value_spec(specs::Tuple, model::BUGSModel)
+    result = Dict{VarName,Any}()
+    for spec in specs
+        merge!(result, _parse_var_value_spec(spec, model))
+    end
+    return result
+end
+
+"""
+    fix(model::BUGSModel, values...)
+    fix(model::BUGSModel; values...)
+
+Fix stochastic variables to supplied values. Fixed variables are treated as
+interventions: descendants see the fixed value, but the fixed variable's
+distribution does not contribute to the target density.
+"""
+function fix(model::BUGSModel, values...)
+    isempty(values) && return model
+
+    var_values = _parse_var_value_spec(values, model)::Dict{<:VarName,<:Any}
+    vars_to_fix = collect(keys(var_values))::Vector{<:VarName}
+    expanded_vars, expanded_var_values = _prepare_fixing_vars(
+        model, vars_to_fix, var_values
+    )
+
+    new_evaluation_env = _update_evaluation_env(model.evaluation_env, expanded_var_values)
+    new_fixed_parameters = union(
+        Set{VarName}(fixed_parameters(model)), Set{VarName}(expanded_vars)
+    )
+
+    return _create_modified_model(
+        model,
+        model.g,
+        new_evaluation_env;
+        fixed_parameters=new_fixed_parameters,
+        preserve_generated_quantities=false,
+    )
+end
+
+function fix(model::BUGSModel; values...)
+    return fix(model, NamedTuple(values))
+end
+
+function _parse_unfix_vars(vars)
+    parsed = VarName[]
+    for var in vars
+        if var isa VarName || var isa Symbol
+            push!(parsed, _as_varname(var))
+        elseif var isa AbstractVector
+            append!(parsed, _parse_unfix_vars(Tuple(var)))
+        else
+            throw(ArgumentError("Cannot unfix variable specified as $(typeof(var))"))
+        end
+    end
+    return parsed
+end
+
+"""
+    unfix(model::BUGSModel)
+    unfix(model::BUGSModel, vars...)
+
+Remove fixed interventions from `model`. Without `vars`, all fixed variables are
+unfixed.
+"""
+function unfix(model::BUGSModel)
+    isempty(fixed_parameters(model)) && return model
+    return _create_modified_model(
+        model,
+        model.g,
+        model.evaluation_env;
+        fixed_parameters=Set{VarName}(),
+        preserve_generated_quantities=false,
+    )
+end
+
+function unfix(model::BUGSModel, vars...)
+    vars_to_unfix = _parse_unfix_vars(vars)
+    current_fixed = Set{VarName}(fixed_parameters(model))
+    expanded_vars = _expand_subsumed_vars(
+        model,
+        vars_to_unfix,
+        "Unfixing subsumed fixed variables instead";
+        filter_fn=label -> label in current_fixed,
+    )
+
+    for vn in expanded_vars
+        if vn ∉ current_fixed
+            throw(ArgumentError("$vn is not currently fixed, cannot unfix"))
+        end
+    end
+
+    new_fixed_parameters = setdiff(current_fixed, Set{VarName}(expanded_vars))
+    return _create_modified_model(
+        model,
+        model.g,
+        model.evaluation_env;
+        fixed_parameters=new_fixed_parameters,
+        preserve_generated_quantities=false,
+    )
+end
+
 #######################
 # Conditioning Helpers
 #######################
@@ -217,13 +361,60 @@ function _check_conditioning_validity(model::BUGSModel, vars::Vector{<:VarName})
     _validate_stochastic_vars(model, expanded_vars, "conditioning")
 
     # Warn about already observed variables
+    fixed_parameter_set = Set{VarName}(fixed_parameters(model))
     for vn in expanded_vars
+        if vn in fixed_parameter_set
+            throw(ArgumentError("Cannot condition $vn: it is currently fixed"))
+        end
+
         if model.g[vn].is_observed
             @warn "$vn is already observed, conditioning on it may not have the expected effect"
         end
     end
 
     return expanded_vars
+end
+
+function _check_fixing_validity(model::BUGSModel, vars::Vector{<:VarName})
+    expanded_vars = _expand_subsumed_vars(model, vars, "Fixing subsumed variables instead")
+    _validate_stochastic_vars(model, expanded_vars, "fixing")
+
+    fixed_parameter_set = Set{VarName}(fixed_parameters(model))
+    for vn in expanded_vars
+        if model.g[vn].is_observed
+            throw(ArgumentError("Cannot fix $vn: it is already observed"))
+        end
+        if vn in fixed_parameter_set
+            @warn "$vn is already fixed; updating its fixed value"
+        end
+    end
+
+    return expanded_vars
+end
+
+function _prepare_fixing_vars(
+    model::BUGSModel, vars::Vector{<:VarName}, var_values::Dict{<:VarName,<:Any}
+)
+    expanded_vars = _check_fixing_validity(model, vars)
+
+    if length(expanded_vars) > length(vars)
+        expanded_var_values = Dict{VarName,Any}()
+        for vn in expanded_vars
+            if haskey(var_values, vn)
+                expanded_var_values[vn] = var_values[vn]
+            else
+                for (orig_vn, val) in var_values
+                    if AbstractPPL.subsumes(orig_vn, vn)
+                        expanded_var_values[vn] = AbstractPPL.getoptic(vn)(val)
+                        break
+                    end
+                end
+            end
+        end
+        return expanded_vars, expanded_var_values
+    else
+        return expanded_vars, var_values
+    end
 end
 
 """
@@ -356,7 +547,17 @@ function decondition(model::BUGSModel)
         )
     end
 
-    return BangBang.setproperty!!(model.base_model, :evaluation_env, model.evaluation_env)
+    restored_model = BangBang.setproperty!!(
+        model.base_model, :evaluation_env, model.evaluation_env
+    )
+    isempty(fixed_parameters(model)) && return restored_model
+    return _create_modified_model(
+        restored_model,
+        restored_model.g,
+        model.evaluation_env;
+        fixed_parameters=Set{VarName}(fixed_parameters(model)),
+        preserve_generated_quantities=false,
+    )
 end
 
 function decondition(model::BUGSModel, vars_to_decondition::Vector{<:VarName})
@@ -541,20 +742,31 @@ function _create_modified_model(
     new_graph::BUGSGraph,
     new_evaluation_env::NamedTuple;
     base_model=nothing,
+    fixed_parameters::Set{<:VarName}=Set{VarName}(
+        model.graph_evaluation_data.fixed_parameters
+    ),
+    preserve_generated_quantities::Bool=true,
 )
     # Preserve the base model's generated-quantity policy, but only for variables
     # that still have no observed descendants in the modified graph. Conditioning a
     # former generated quantity makes it an observation, so its ancestors may need
     # to move back into the model-parameter partition.
-    base_generated_quantities = Set(
-        generated_quantities(isnothing(model.base_model) ? model : model.base_model)
-    )
-    surviving_generated_quantities = find_generated_quantities_variables(new_graph)
+    fixed_parameter_set = Set{VarName}(fixed_parameters)
+    generated_quantity_set = if preserve_generated_quantities
+        base_generated_quantities = Set(
+            generated_quantities(isnothing(model.base_model) ? model : model.base_model)
+        )
+        surviving_generated_quantities = find_generated_quantities_variables(
+            new_graph; fixed_parameters=fixed_parameter_set
+        )
+        intersect(base_generated_quantities, surviving_generated_quantities)
+    else
+        nothing
+    end
     new_graph_evaluation_data = GraphEvaluationData(
         new_graph;
-        generated_quantities=intersect(
-            base_generated_quantities, surviving_generated_quantities
-        ),
+        generated_quantities=generated_quantity_set,
+        fixed_parameters=fixed_parameter_set,
     )
     new_model_parameters = new_graph_evaluation_data.model_parameters
 
@@ -603,6 +815,7 @@ function _regenerate_log_density_function(
         graph,
         evaluation_env;
         generated_quantities=Set(graph_evaluation_data.generated_quantities),
+        fixed_parameters=Set(graph_evaluation_data.fixed_parameters),
     )
 
     if !isnothing(lowered_model_def)
@@ -630,6 +843,7 @@ function _regenerate_log_density_function(
             graph,
             sorted_nodes;
             generated_quantities=Set(graph_evaluation_data.generated_quantities),
+            fixed_parameters=Set(graph_evaluation_data.fixed_parameters),
         )
 
         return new_log_density_computation_function, updated_graph_evaluation_data

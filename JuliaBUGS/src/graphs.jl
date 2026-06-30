@@ -25,14 +25,17 @@ Generated quantities variables are variables that do not affect the sampling pro
 They are variables that do not have any descendant variables that are observed.
 """
 function find_generated_quantities_variables(
-    g::MetaGraph{Int,<:SimpleDiGraph,Label,VertexData}
+    g::MetaGraph{Int,<:SimpleDiGraph,Label,VertexData};
+    fixed_parameters::Set{<:Label}=Set{Label}(),
 ) where {Label,VertexData}
     generated_quantities_variables = Set{Label}()
     can_reach_observations = Dict{Label,Bool}()
 
     for n in labels(g)
-        if !is_observation(g, n)
-            if !dfs_can_reach_observations(g, n, can_reach_observations)
+        if !is_observation(g, n) && n ∉ fixed_parameters
+            if !dfs_can_reach_observations(
+                g, n, can_reach_observations, fixed_parameters
+            )
                 push!(generated_quantities_variables, n)
             end
         end
@@ -40,9 +43,16 @@ function find_generated_quantities_variables(
     return generated_quantities_variables
 end
 
-function dfs_can_reach_observations(g, n, can_reach_observations)
+function dfs_can_reach_observations(
+    g, n, can_reach_observations, fixed_parameters=Set{typeof(n)}()
+)
     if haskey(can_reach_observations, n)
         return can_reach_observations[n]
+    end
+
+    if n in fixed_parameters
+        can_reach_observations[n] = false
+        return false
     end
 
     if is_observation(g, n)
@@ -52,7 +62,7 @@ function dfs_can_reach_observations(g, n, can_reach_observations)
 
     can_reach = false
     for child in MetaGraphsNext.outneighbor_labels(g, n)
-        if dfs_can_reach_observations(g, child, can_reach_observations)
+        if dfs_can_reach_observations(g, child, can_reach_observations, fixed_parameters)
             can_reach = true
             break
         end
