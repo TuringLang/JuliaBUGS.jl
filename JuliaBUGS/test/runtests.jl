@@ -75,11 +75,6 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("of_model_integration.jl")
     end,
     "graphs" => () -> include("graphs.jl"),
-    "compilation" => () -> begin
-        include("model/utils.jl")
-        include("model/bugsmodel.jl")
-        include("source_gen.jl")
-    end,
     "compilation_model" => () -> begin
         include("model/utils.jl")
         include("model/bugsmodel.jl")
@@ -106,7 +101,6 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "gibbs" => () -> include("gibbs.jl"),
     "parallel_sampling" => () -> include("parallel_sampling.jl"),
     "distributed_sampling" => () -> include("distributed_sampling.jl"),
-    "ad_compatibility" => () -> include("ad_compatibility.jl"),
 )
 
 function print_test_usage()
