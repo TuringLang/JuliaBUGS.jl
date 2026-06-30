@@ -6,7 +6,7 @@
 
 - **Generated quantities (#501).** Every node now carries an explicit `VariableType`: `Observation`, `ModelParameter`, `TransformedParameter`, or `GeneratedQuantity`. A *generated quantity* is an unobserved node (stochastic or deterministic) with no observed descendants, so it lies outside the log-density target. Generated quantities are excluded from the log density in all three evaluation modes (`UseGraph`, `UseGeneratedLogDensityFunction`, `UseAutoMarginalization`) and recovered after sampling by forward simulation instead of being sampled by MCMC. Under auto-marginalization, a generated quantity that depends on a marginalized discrete latent first recovers that latent from its conditional posterior `p(z | θ, y)`. `gen_chains` applies this automatically, so reported generated quantities are genuine posterior(-predictive) draws.
 
-- **New API:** `model_parameters(model)`, `generated_quantities(model)`, `variable_type(model, vn)`, the `VariableType` enum and its instances, and `Model.forward_sample_generated_quantities!!`.
+- **New functions**, exported from the `JuliaBUGS.Model` submodule (like the existing `parameters`), so reachable as `JuliaBUGS.model_parameters` rather than via `using JuliaBUGS`: `model_parameters`, `generated_quantities`, `variable_type`, and the `VariableType` enum with its instances. `forward_sample_generated_quantities!!` is unexported, available as `JuliaBUGS.Model.forward_sample_generated_quantities!!`.
 
 ### Breaking Changes
 
