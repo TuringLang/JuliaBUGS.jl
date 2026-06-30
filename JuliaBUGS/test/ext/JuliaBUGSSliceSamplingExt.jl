@@ -55,9 +55,7 @@ using JuliaBUGS: Gibbs
             b ~ Normal(0, 1)
             y ~ Normal(a + b, 1)
         end
-        multivariate_model = compile(
-            multivariate_model_def, (; y=0.5), (; a=0.0, b=0.0)
-        )
+        multivariate_model = compile(multivariate_model_def, (; y=0.5), (; a=0.0, b=0.0))
 
         chain = Base.invokelatest(
             AbstractMCMC.sample,
@@ -71,11 +69,8 @@ using JuliaBUGS: Gibbs
 
         @test chain isa Chains
         @test Set([:a, :b]) ⊆ Set(chain.name_map[:parameters])
-        @test chain.name_map[:internals] == [
-            :lp,
-            Symbol("num_proposals[1]"),
-            Symbol("num_proposals[2]"),
-        ]
+        @test chain.name_map[:internals] ==
+            [:lp, Symbol("num_proposals[1]"), Symbol("num_proposals[2]")]
         @test all(isfinite, vec(chain[:lp].data))
     end
 

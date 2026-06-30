@@ -23,7 +23,9 @@ function _slice_flat_info_stat_specs(ts)
                 id = (key, nothing)
                 if !(id in seen)
                     push!(seen, id)
-                    push!(specs, (name=Symbol(key), key=key, index=nothing, prototype=value))
+                    push!(
+                        specs, (name=Symbol(key), key=key, index=nothing, prototype=value)
+                    )
                 end
             elseif value isa AbstractArray{<:Real}
                 for index in CartesianIndices(value)
