@@ -23,7 +23,7 @@ A simple example model:
 ```julia
 using JuliaBUGS, Random, AbstractMCMC
 
-model = JuliaBUGS.@bugs"""
+normal_model = JuliaBUGS.@bugs"""
 model {
   for (i in 1:N) {
     y[i] ~ dnorm(mu, tau)
@@ -33,7 +33,8 @@ model {
 }
 """
 
-posterior = compile(model, (; N = 10, y = randn(10)))
+# The model definition is callable: pass data to construct a model.
+posterior = normal_model((; N = 10, y = randn(10)))
 rng, sampler = Random.MersenneTwister(123), JuliaBUGS.IndependentMH()
 
 chain = AbstractMCMC.sample(rng, posterior, sampler, 1000)

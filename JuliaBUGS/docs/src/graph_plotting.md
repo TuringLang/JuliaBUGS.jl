@@ -10,7 +10,7 @@ We have set up standard plotting routines with [`GraphMakie.jl`](https://github.
 Observed nodes are colored in gray, unobserved nodes are colored in white, and deterministic nodes are colored in light blue.
 
 ```julia
-model_def = @bugs begin
+graph_model = @bugs begin
     a ~ dnorm(f, c)
     f = b - 1
     b ~ dnorm(0, 1)
@@ -36,7 +36,7 @@ inits = (
     l = -2.0,
 )
 
-model = compile(model_def, data, inits)
+model = initialize!(graph_model(data), inits)
 ```
 
 ## [`GraphPlot.jl`](https://github.com/JuliaGraphs/GraphPlot.jl)

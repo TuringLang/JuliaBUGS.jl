@@ -15,7 +15,7 @@ JuliaBUGS supports multiple evaluation modes that determine how the log density 
 The default mode evaluates the log density by traversing the computational graph. It works with reverse-mode Mooncake, ReverseDiff, and ForwardDiff.
 
 ```julia
-model = compile(model_def, data)
+model = normal_model(data)
 # UseGraph() is the default, no need to set explicitly
 ```
 
@@ -24,7 +24,7 @@ model = compile(model_def, data)
 This mode generates and compiles a Julia function for the log density, which can be faster for some models.
 
 ```julia
-model = compile(model_def, data)
+model = normal_model(data)
 model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
 ```
 
@@ -40,7 +40,7 @@ model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
 For models with discrete latent variables, auto-marginalization enables gradient-based inference by marginalizing out discrete parameters. See [Auto-Marginalization](auto_marginalization.md) for details.
 
 ```julia
-model = compile(model_def, data)
+model = normal_model(data)
 model = JuliaBUGS.settrans(model, true)  # requires transformed space
 model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseAutoMarginalization())
 ```

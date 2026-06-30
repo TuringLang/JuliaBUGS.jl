@@ -1,6 +1,6 @@
 # BUGS Parser
 
-The macro [`@bugs`](@ref) produces a Julia `Expr` object that represents the BUGS model definition.
+The macro [`@bugs`](@ref) produces a callable [`BUGSModelDef`](@ref JuliaBUGS.BUGSModelDef) that wraps a Julia `Expr` representing the BUGS model definition (the underlying `Expr` is available via its `model_def` field). The rest of this page concerns that `Expr` and how it is produced and post-processed.
 
 If the input is a `String`, it's assumed to be a program in the original BUGS language. In this case, the macro will first convert the program to an equivalent Julia program, then use the Julia parser to parse the program into an `Expr` object.
 

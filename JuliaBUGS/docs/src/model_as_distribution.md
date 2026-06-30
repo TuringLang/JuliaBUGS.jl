@@ -13,7 +13,7 @@ observed data baked into the model). It is **not** an unconstrained-space target
 for gradient-based samplers — see the [Limitations](#Limitations-and-non-goals)
 admonition below.
 
-You obtain a `BUGSModel` by compiling a model definition with `compile`
+You obtain a `BUGSModel` by calling a model definition with your data
 (see [Getting Started](example.md) and
 [Two Macros: `@bugs` & `@model`](two_macros.md)), then pass it to
 `to_distribution`.
@@ -24,13 +24,13 @@ You obtain a `BUGSModel` by compiling a model definition with `compile`
 using JuliaBUGS, Distributions, Random
 Random.seed!(123)  # make the draw below reproducible
 
-model_def = @bugs begin
+normal_model = @bugs begin
     x ~ dnorm(0, 1)
     y ~ dnorm(x, 1)
 end
 
 # `y` is observed data; `x` is the only free parameter.
-model = compile(model_def, (; y = 1.0))
+model = normal_model((; y = 1.0))
 d = to_distribution(model)
 ```
 
@@ -134,14 +134,14 @@ model's own data is scored instead.
 ```@example modeldist_partial
 using JuliaBUGS, Distributions
 
-model_def = @bugs begin
+array_model = @bugs begin
     for i in 1:3
         x[i] ~ dnorm(0, 1)
     end
 end
 
 # x[1] observed, x[2] and x[3] free.
-model = compile(model_def, (; x = [1.0, missing, missing]))
+model = array_model((; x = [1.0, missing, missing]))
 d = to_distribution(model)
 
 # Pass a full-shaped array. The first slot's value is ignored — the model's
@@ -155,8 +155,9 @@ free positions before calling `logpdf`.
 !!! warning "Scoring different data requires a new model"
     Tweaking an observed or deterministic slot is **inert** — the observed data
     is part of the distribution's *identity*. To evaluate the density under
-    *different* observed data, `compile` a new model and call `to_distribution`
-    again; you cannot do it by changing the values you pass to `logpdf`. (This
+    *different* observed data, construct a new model — call the model definition
+    with the new data — and call `to_distribution` again; you cannot do it by
+    changing the values you pass to `logpdf`. (This
     is also why a value passed for a *deterministic* node is discarded: such a
     node is a function of the parameters and is always recomputed.)
 
