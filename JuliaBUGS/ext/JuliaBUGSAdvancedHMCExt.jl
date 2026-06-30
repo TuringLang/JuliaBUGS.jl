@@ -7,7 +7,7 @@ using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient, getparams, initialize!
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.Random
-using MCMCChains: Chains
+using MCMCChains
 
 import JuliaBUGS: gibbs_internal
 
@@ -70,7 +70,7 @@ function AbstractMCMC.bundle_samples(
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
     sampler::AdvancedHMC.AbstractHMCSampler,
     state,
-    chain_type::Type{Chains};
+    chain_type::Type{MCMCChains.Chains};
     discard_initial=0,
     thinning=1,
     kwargs...,

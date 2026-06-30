@@ -339,10 +339,16 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
             discard_initial=100,
         )
         @test chain isa VNChain
-        # only the continuous parameters survive; discrete z is marginalized out
-        @test Set(FlexiChains.parameters(chain)) == Set([
+        # the continuous parameters, plus the marginalized discrete latents which are
+        # recovered from their conditional posterior p(z | θ, y) during chain
+        # reconstruction (matching the MCMCChains output)
+        chain_params = FlexiChains.parameters(chain)
+        @test Set([
             @varname(mu[1]), @varname(mu[2]), @varname(sigma[1]), @varname(sigma[2])
-        ])
-        @test !any(p -> AbstractPPL.getsym(p) == :z, FlexiChains.parameters(chain))
+        ]) ⊆ Set(chain_params)
+        recovered_z = filter(p -> AbstractPPL.getsym(p) == :z, chain_params)
+        # only the unobserved (missing) z[i] are recovered; observed z stay out of the chain
+        @test length(recovered_z) == count(ismissing, z_obs)
+        @test all(vn -> all(v -> v in (1, 2), vec(chain[vn])), recovered_z)
     end
 end

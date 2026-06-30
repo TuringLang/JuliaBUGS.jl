@@ -2,7 +2,7 @@ module JuliaBUGSAdvancedHMCFlexiChainsExt
 
 using AbstractMCMC
 using AdvancedHMC
-using FlexiChains: FlexiChain, VNChain
+using FlexiChains: FlexiChains
 using JuliaBUGS
 using JuliaBUGS: BUGSModelWithGradient
 using JuliaBUGS.AbstractPPL: VarName
@@ -12,7 +12,7 @@ function AbstractMCMC.bundle_samples(
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
     sampler::AdvancedHMC.AbstractHMCSampler,
     state,
-    chain_type::Type{VNChain};
+    chain_type::Type{FlexiChains.VNChain};
     discard_initial=0,
     thinning=1,
     kwargs...,

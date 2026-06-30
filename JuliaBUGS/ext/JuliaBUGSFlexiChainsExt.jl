@@ -1,22 +1,16 @@
 module JuliaBUGSFlexiChainsExt
 
 using AbstractMCMC
-using FlexiChains: FlexiChains, FlexiChain, VNChain, Parameter, Extra
+using FlexiChains: FlexiChains, Parameter, Extra
 using JuliaBUGS
-using JuliaBUGS:
-    BUGSModel,
-    BUGSModelWithGradient,
-    find_generated_quantities_variables,
-    evaluate!!,
-    getparams,
-    OrderedDict
-using JuliaBUGS.Model: UseAutoMarginalization
+using JuliaBUGS: BUGSModel, BUGSModelWithGradient, OrderedDict
+using JuliaBUGS.Model: reconstruct_chain_values, param_samples_from_environments
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.AbstractPPL: VarName
-using JuliaBUGS.Accessors
+using Random: default_rng
 
 function JuliaBUGS.gen_chains(
-    chain_type::Type{<:FlexiChain{<:VarName}},
+    chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}},
     model::AbstractMCMC.LogDensityModel{<:BUGSModel},
     samples,
     stats_names,
@@ -30,7 +24,7 @@ function JuliaBUGS.gen_chains(
 end
 
 function JuliaBUGS.gen_chains(
-    chain_type::Type{<:FlexiChain{<:VarName}},
+    chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}},
     model::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
     samples,
     stats_names,
@@ -45,67 +39,51 @@ function JuliaBUGS.gen_chains(
     )
 end
 
-# Values are stored per VarName without flattening, so arrays coming from the
-# evaluation environment must be copied before the next evaluation reuses them.
-_maybe_copy(x::AbstractArray) = copy(x)
-_maybe_copy(x) = x
-
 """
     gen_chains(
-        chain_type::Type{<:FlexiChain{<:VarName}}, model::BUGSModel,
+        chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}}, model::BUGSModel,
         samples, stats_names, stats_values;
-        discard_initial=0, thinning=1, kwargs...
+        rng=default_rng(), discard_initial=0, thinning=1, kwargs...
     )
 
 Convert parameter samples to a `FlexiChains.FlexiChain{VarName}` (`VNChain`).
 
 This function:
-1. Evaluates the model for each sample to get generated quantities
+1. Reconstructs each draw's full evaluation environment via the shared
+   [`reconstruct_chain_values`](@ref) helper (model parameters set from the draw,
+   marginalized discrete latents recovered, generated quantities forward-sampled)
 2. Stores parameters and generated quantities keyed by their `VarName` (array-valued
    variables are kept whole instead of being flattened into scalar columns)
 3. Stores sampler statistics as `FlexiChains.Extra` entries
 """
 function JuliaBUGS.gen_chains(
-    ::Type{<:FlexiChain{<:VarName}},
+    ::Type{<:FlexiChains.FlexiChain{<:VarName}},
     model::BUGSModel,
     samples,
     stats_names,
     stats_values;
+    rng=default_rng(),
     discard_initial=0,
     thinning=1,
     kwargs...,
 )
-    gd = model.graph_evaluation_data
-    # Filter parameters based on evaluation mode - only include continuous parameters
-    # when auto-marginalization is active (discrete parameters are marginalized out)
-    param_vars = if model.evaluation_mode isa UseAutoMarginalization
-        mc = model.marginalization_cache
-        filter(gd.sorted_parameters) do vn
-            idx = findfirst(==(vn), gd.sorted_nodes)
-            idx !== nothing && mc.node_types[idx] == :continuous
-        end
-    else
-        gd.sorted_parameters
-    end
-
-    # Find and order generated quantities
-    # Exclude parameters to avoid double counting forward-sampled variables
-    generated_vars = find_generated_quantities_variables(model.g)
-    param_set = Set(param_vars)
-    generated_vars = [v for v in gd.sorted_nodes if v in generated_vars && v ∉ param_set]
+    # Reconstruct the per-draw values (model parameters plus forward-sampled generated
+    # quantities, with marginalized discrete latents recovered) via the shared helper used
+    # by both chain-output extensions. `reconstruct_chain_values` already copies array
+    # values, so they can be stored directly.
+    param_vars, generated_vars, param_vals, generated_vals = reconstruct_chain_values(
+        rng, model, samples
+    )
 
     niters = length(samples)
     dicts = Vector{OrderedDict{FlexiChains.ParameterOrExtra{<:VarName},Any}}(undef, niters)
-    for (i, sample) in enumerate(samples)
-        # Set parameters and evaluate the model
-        evaluation_env = first(evaluate!!(model, sample))
-
+    for i in 1:niters
         d = OrderedDict{FlexiChains.ParameterOrExtra{<:VarName},Any}()
-        for vn in param_vars
-            d[Parameter(vn)] = _maybe_copy(AbstractPPL.getvalue(evaluation_env, vn))
+        for (j, vn) in enumerate(param_vars)
+            d[Parameter(vn)] = param_vals[i][j]
         end
-        for vn in generated_vars
-            d[Parameter(vn)] = _maybe_copy(AbstractPPL.getvalue(evaluation_env, vn))
+        for (j, vn) in enumerate(generated_vars)
+            d[Parameter(vn)] = generated_vals[i][j]
         end
         if !isempty(stats_values)
             for (j, name) in enumerate(stats_names)
@@ -115,7 +93,7 @@ function JuliaBUGS.gen_chains(
         dicts[i] = d
     end
 
-    return FlexiChain{VarName}(
+    return FlexiChains.FlexiChain{VarName}(
         niters,
         1,
         dicts;
@@ -128,18 +106,11 @@ function AbstractMCMC.bundle_samples(
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::JuliaBUGS.Gibbs,
     states,
-    chain_type::Type{VNChain};
+    chain_type::Type{FlexiChains.VNChain};
     discard_initial=0,
     kwargs...,
 )
-    model = logdensitymodel.logdensity
-
-    # Convert evaluation environments to parameter vectors
-    param_samples = Vector{Vector{Float64}}()
-    for env in samples
-        model_with_env = Accessors.@set model.evaluation_env = env
-        push!(param_samples, getparams(model_with_env))
-    end
+    param_samples = param_samples_from_environments(logdensitymodel.logdensity, samples)
 
     # No statistics for Gibbs sampler itself
     return JuliaBUGS.gen_chains(
@@ -158,17 +129,10 @@ function AbstractMCMC.bundle_samples(
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::JuliaBUGS.IndependentMH,
     state,  # Final state only (AbstractMCMC interface)
-    chain_type::Type{VNChain};
+    chain_type::Type{FlexiChains.VNChain};
     kwargs...,
 )
-    model = logdensitymodel.logdensity
-
-    # Convert evaluation environments to parameter vectors
-    param_samples = Vector{Vector{Float64}}()
-    for env in samples
-        model_with_env = Accessors.@set model.evaluation_env = env
-        push!(param_samples, getparams(model_with_env))
-    end
+    param_samples = param_samples_from_environments(logdensitymodel.logdensity, samples)
 
     # No per-sample log probabilities available since AbstractMCMC only passes final state
     return JuliaBUGS.gen_chains(
