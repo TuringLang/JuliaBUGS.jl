@@ -40,17 +40,22 @@ Classification of each node in the model graph.
 - `TransformedParameter`: a deterministic node that needs to be computed during each iteration of sampling
 - `GeneratedQuantity`: a stochastic or deterministic node outside the log-density target
   closure (computed after getting samples)
+- `FixedParameter`: a stochastic node fixed by intervention; descendants see its value,
+  but its distribution is not scored
 """
-@enum VariableType Observation ModelParameter TransformedParameter GeneratedQuantity
+@enum VariableType Observation ModelParameter TransformedParameter GeneratedQuantity FixedParameter
 
 @inline function _classify_variable_type(
     vn::VarName,
     is_stochastic::Bool,
     is_observed::Bool,
     generated_quantity_vars::Set{<:VarName},
+    fixed_parameter_vars::Set{<:VarName},
 )
     return if is_stochastic && is_observed
         Observation
+    elseif vn in fixed_parameter_vars
+        FixedParameter
     elseif vn in generated_quantity_vars
         # Outside the log-density target closure.
         GeneratedQuantity
@@ -64,14 +69,24 @@ Classification of each node in the model graph.
 end
 
 function _can_reach_stochastic(
-    g::BUGSGraph, vn::VarName, can_reach_stochastic::Dict{VarName,Bool}
+    g::BUGSGraph,
+    vn::VarName,
+    can_reach_stochastic::Dict{VarName,Bool},
+    fixed_parameter_vars::Set{<:VarName}=Set{VarName}(),
 )
     if haskey(can_reach_stochastic, vn)
         return can_reach_stochastic[vn]
     end
 
+    if vn in fixed_parameter_vars
+        can_reach_stochastic[vn] = false
+        return false
+    end
+
     for child in MetaGraphsNext.outneighbor_labels(g, vn)
-        if g[child].is_stochastic || _can_reach_stochastic(g, child, can_reach_stochastic)
+        child_is_free_stochastic = g[child].is_stochastic && child ∉ fixed_parameter_vars
+        if child_is_free_stochastic ||
+            _can_reach_stochastic(g, child, can_reach_stochastic, fixed_parameter_vars)
             can_reach_stochastic[vn] = true
             return true
         end
@@ -92,6 +107,7 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 - `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
 - `model_parameters::Vector{<:VarName}`: Unobserved stochastic variables that influence observations
 - `generated_quantities::Vector{<:VarName}`: Variables (stochastic or deterministic) outside the log-density target closure
+- `fixed_parameters::Vector{<:VarName}`: Stochastic variables fixed by intervention
 - `variable_types::Vector{VariableType}`: Classification of each node
 - `is_model_parameter_vals::Vector{Bool}`: Whether each node is part of the MCMC parameter vector (true exactly for `model_parameters`)
 - `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable
@@ -104,6 +120,7 @@ struct GraphEvaluationData{TNF,TV}
     sorted_parameters::Vector{<:VarName}
     model_parameters::Vector{<:VarName}
     generated_quantities::Vector{<:VarName}
+    fixed_parameters::Vector{<:VarName}
     variable_types::Vector{VariableType}
     is_model_parameter_vals::Vector{Bool}
     is_stochastic_vals::Vector{Bool}
@@ -113,7 +130,7 @@ struct GraphEvaluationData{TNF,TV}
 end
 
 """
-    GraphEvaluationData(g::BUGSGraph, [sorted_nodes], [active_parameters]; [generated_quantities])
+    GraphEvaluationData(g::BUGSGraph, [sorted_nodes], [active_parameters]; [generated_quantities], [fixed_parameters])
 
 Create a `GraphEvaluationData` from a `BUGSGraph`, extracting and caching node information
 for efficient evaluation.
@@ -128,6 +145,11 @@ stochastic variables outside the filter are also left out of `model_parameters`.
 is useful when rebuilding graph evaluation data after conditioning or source generation,
 where the caller needs the cached classification to match the classification used by the
 existing model.
+
+`fixed_parameters` supplies stochastic variables whose values are intervened on. They
+are removed from parameter lists and target-density scoring. Target-closure discovery
+treats them as barriers, so ancestors needed only to explain fixed variables can become
+generated quantities.
 """
 function GraphEvaluationData(
     g::BUGSGraph,
@@ -136,6 +158,7 @@ function GraphEvaluationData(
     ],
     active_parameters::Union{Nothing,Vector{<:VarName}}=nothing;
     generated_quantities::Union{Nothing,Set{<:VarName}}=nothing,
+    fixed_parameters::Set{<:VarName}=Set{VarName}(),
 )
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
@@ -144,13 +167,17 @@ function GraphEvaluationData(
     sorted_parameters = VarName[]
     model_parameters = VarName[]
     generated_quantity_nodes = VarName[]
+    fixed_parameter_nodes = VarName[]
     variable_types = Vector{VariableType}(undef, length(sorted_nodes))
     is_model_parameter_vals = fill(false, length(sorted_nodes))
+    fixed_parameter_vars = Set{VarName}(fixed_parameters)
 
     if generated_quantities !== nothing
         generated_quantity_vars = generated_quantities
     else
-        generated_quantity_vars = find_generated_quantities_variables(g)
+        generated_quantity_vars = find_generated_quantities_variables(
+            g; fixed_parameters=fixed_parameter_vars
+        )
         has_observations = any(g[vn].is_observed for vn in labels(g) if g[vn].is_stochastic)
         if !has_observations
             # Without observations every stochastic node trivially lacks observed
@@ -164,7 +191,9 @@ function GraphEvaluationData(
             generated_quantity_vars = filter(
                 vn ->
                     !g[vn].is_stochastic &&
-                    !_can_reach_stochastic(g, vn, can_reach_stochastic),
+                    !_can_reach_stochastic(
+                        g, vn, can_reach_stochastic, fixed_parameter_vars
+                    ),
                 generated_quantity_vars,
             )
         end
@@ -179,10 +208,12 @@ function GraphEvaluationData(
 
         # Classify each node
         variable_types[i] = _classify_variable_type(
-            vn, is_stochastic, is_observed, generated_quantity_vars
+            vn, is_stochastic, is_observed, generated_quantity_vars, fixed_parameter_vars
         )
 
-        if variable_types[i] == GeneratedQuantity
+        if variable_types[i] == FixedParameter
+            push!(fixed_parameter_nodes, vn)
+        elseif variable_types[i] == GeneratedQuantity
             # Both stochastic and deterministic nodes go here
             push!(generated_quantity_nodes, vn)
             if is_stochastic && !is_observed
@@ -204,6 +235,7 @@ function GraphEvaluationData(
         sorted_parameters,
         model_parameters,
         generated_quantity_nodes,
+        fixed_parameter_nodes,
         variable_types,
         is_model_parameter_vals,
         is_stochastic_vals,
@@ -468,6 +500,13 @@ closure. These can be computed after getting samples.
 generated_quantities(model::BUGSModel) = model.graph_evaluation_data.generated_quantities
 
 """
+    fixed_parameters(model::BUGSModel)
+
+Return a vector of `VarName` containing stochastic variables fixed by intervention.
+"""
+fixed_parameters(model::BUGSModel) = model.graph_evaluation_data.fixed_parameters
+
+"""
     variable_type(model::BUGSModel, vn::VarName)
 
 Return the `VariableType` classification for variable `vn` in the model.
@@ -503,11 +542,14 @@ function initialize!(
         is_observed = model.graph_evaluation_data.is_observed_vals[i]
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
+        variable_type = model.graph_evaluation_data.variable_types[i]
         if !is_stochastic
             value = Base.invokelatest(node_function, model.evaluation_env, loop_vars)
             BangBang.@set!! model.evaluation_env = setindex!!(
                 model.evaluation_env, value, vn
             )
+        elseif variable_type == FixedParameter
+            continue
         elseif !is_observed
             initialization = try
                 AbstractPPL.getvalue(initial_params, vn)
@@ -707,6 +749,7 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 model.g,
                 model.evaluation_env;
                 generated_quantities=Set(model.graph_evaluation_data.generated_quantities),
+                fixed_parameters=Set(model.graph_evaluation_data.fixed_parameters),
             )
             if isnothing(lowered_model_def)
                 @warn(
@@ -745,6 +788,7 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     generated_quantities=Set(
                         model.graph_evaluation_data.generated_quantities
                     ),
+                    fixed_parameters=Set(model.graph_evaluation_data.fixed_parameters),
                 )
 
                 model = BangBang.setproperty!!(model, :graph_evaluation_data, new_gd)
@@ -807,7 +851,10 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     end
                 end
 
-                n_discrete_finite = count(==(:discrete_finite), node_types)
+                n_discrete_finite = count(eachindex(node_types)) do i
+                    node_types[i] == :discrete_finite &&
+                        gd.variable_types[i] == ModelParameter
+                end
 
                 cache = MarginalizationCache(
                     keys,

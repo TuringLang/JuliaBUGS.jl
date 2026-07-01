@@ -3,21 +3,26 @@ using JuliaBUGS
 using JuliaBUGS.Model:
     condition,
     decondition,
+    fixed_parameters,
     generated_quantities,
     model_parameters,
     parameters,
     set_evaluation_mode,
     set_observed_values!,
     variable_type,
+    FixedParameter,
+    GeneratedQuantity,
     ModelParameter,
     Observation,
     regenerate_log_density_function,
+    UseAutoMarginalization,
     UseGeneratedLogDensityFunction,
     UseGraph
 using LogDensityProblems
-using AbstractPPL: @varname
+using AbstractPPL: @varname, fix, unfix
+using Distributions: Bernoulli, Gamma, Normal, logpdf
 
-JuliaBUGS.@bugs_primitive Normal Gamma
+JuliaBUGS.@bugs_primitive Normal Gamma Bernoulli
 
 @testset "AbstractPPL interface" begin
     @testset "condition" begin
@@ -365,6 +370,167 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             @test_throws ArgumentError(
                 "Cannot decondition y: it was observed in the original data"
             ) decondition(model_cond, [@varname(y)])
+        end
+    end
+
+    @testset "fix" begin
+        @testset "fix is an intervention, not conditioning" begin
+            model_def = @bugs begin
+                theta ~ Normal(0, 1)
+                x ~ Normal(theta, 1)
+                y ~ Normal(x, 1)
+            end
+
+            model = compile(model_def, (; y=2.0))
+            fixed_model = fix(model; x=1.0)
+
+            @test variable_type(fixed_model, @varname(x)) == FixedParameter
+            @test fixed_parameters(fixed_model) == [@varname(x)]
+            @test @varname(x) ∉ parameters(fixed_model)
+            @test isempty(model_parameters(fixed_model))
+            @test @varname(theta) in generated_quantities(fixed_model)
+            @test LogDensityProblems.dimension(fixed_model) == 0
+
+            expected_fixed_logp = logpdf(Normal(1, 1), 2.0)
+            graph_logp = Base.invokelatest(
+                LogDensityProblems.logdensity, fixed_model, Float64[]
+            )
+            @test graph_logp ≈ expected_fixed_logp
+
+            generated_model = set_evaluation_mode(
+                fixed_model, UseGeneratedLogDensityFunction()
+            )
+            generated_logp = Base.invokelatest(
+                LogDensityProblems.logdensity, generated_model, Float64[]
+            )
+            @test generated_logp ≈ graph_logp
+
+            conditioned_model = condition(model; x=1.0)
+            conditioned_logp = Base.invokelatest(
+                LogDensityProblems.logdensity, conditioned_model, [0.0]
+            )
+            expected_conditioned_logp =
+                logpdf(Normal(0, 1), 0.0) + logpdf(Normal(0, 1), 1.0) + expected_fixed_logp
+            @test conditioned_logp ≈ expected_conditioned_logp
+            @test conditioned_logp != graph_logp
+        end
+
+        @testset "unfix restores target classification" begin
+            model_def = @bugs begin
+                theta ~ Normal(0, 1)
+                x ~ Normal(theta, 1)
+                y ~ Normal(x, 1)
+            end
+
+            model = compile(model_def, (; y=2.0))
+            fixed_model = fix(model; x=1.0)
+            unfixed_model = unfix(fixed_model, @varname(x))
+
+            @test isempty(fixed_parameters(unfixed_model))
+            @test variable_type(unfixed_model, @varname(theta)) == ModelParameter
+            @test variable_type(unfixed_model, @varname(x)) == ModelParameter
+            @test Set(model_parameters(unfixed_model)) ==
+                Set([@varname(theta), @varname(x)])
+            @test LogDensityProblems.dimension(unfixed_model) == 2
+        end
+
+        @testset "fix-induced generated quantities survive later graph surgery" begin
+            model_def = @bugs begin
+                theta ~ Normal(0, 1)
+                x ~ Normal(theta, 1)
+                y ~ Normal(x, 1)
+                w ~ Normal(0, 1)
+            end
+
+            m0 = compile(model_def, (;))
+            m1 = condition(m0; y=2.0, w=0.0)
+            m2 = fix(m1; x=1.0)
+
+            @test variable_type(m2, @varname(theta)) == GeneratedQuantity
+            @test @varname(theta) ∉ model_parameters(m2)
+
+            m3 = decondition(m2, [@varname(w)])
+
+            @test variable_type(m3, @varname(theta)) == GeneratedQuantity
+            @test @varname(theta) ∉ model_parameters(m3)
+            @test variable_type(m3, @varname(w)) == ModelParameter
+            @test model_parameters(m3) == [@varname(w)]
+        end
+
+        @testset "fixing with subsumption" begin
+            model_def = @bugs begin
+                for i in 1:3
+                    x[i] ~ Normal(0, 1)
+                end
+                y ~ Normal(sum(x[:]), 1)
+            end
+
+            model = compile(model_def, (; y=6.0))
+            fixed_model = @test_logs(
+                (
+                    :warn,
+                    "Variable x does not exist in the model. Fixing subsumed variables instead: x[1], x[2], x[3]",
+                ),
+                fix(model, Dict(@varname(x) => [1.0, 2.0, 3.0]))
+            )
+
+            @test Set(fixed_parameters(fixed_model)) ==
+                Set([@varname(x[1]), @varname(x[2]), @varname(x[3])])
+            @test isempty(model_parameters(fixed_model))
+            @test LogDensityProblems.dimension(fixed_model) == 0
+
+            graph_logp = Base.invokelatest(
+                LogDensityProblems.logdensity, fixed_model, Float64[]
+            )
+            generated_logp = Base.invokelatest(
+                LogDensityProblems.logdensity,
+                set_evaluation_mode(fixed_model, UseGeneratedLogDensityFunction()),
+                Float64[],
+            )
+            @test generated_logp ≈ graph_logp
+        end
+
+        @testset "fix validation" begin
+            model_def = @bugs begin
+                x ~ Normal(0, 1)
+                y = x^2
+                z ~ Normal(y, 1)
+            end
+
+            model = compile(model_def, (; z=1.0))
+
+            @test_throws ArgumentError fix(model; y=1.0)
+            @test_throws ArgumentError fix(model; z=1.0)
+        end
+
+        @testset "no-observation prior behavior is preserved" begin
+            model_def = @bugs begin
+                theta ~ Normal(0, 1)
+                x ~ Normal(theta, 1)
+            end
+
+            model = compile(model_def, (;))
+            fixed_model = fix(model; x=1.0)
+
+            @test variable_type(fixed_model, @varname(x)) == FixedParameter
+            @test variable_type(fixed_model, @varname(theta)) == ModelParameter
+            @test model_parameters(fixed_model) == [@varname(theta)]
+            @test LogDensityProblems.dimension(fixed_model) == 1
+        end
+
+        @testset "fixed discrete variables are constants under auto-marginalization" begin
+            model_def = @bugs begin
+                z ~ Bernoulli(0.25)
+                y ~ Bernoulli(0.2 + 0.6 * z)
+            end
+
+            model = compile(model_def, (; y=1))
+            fixed_model = fix(model; z=1)
+            auto_model = set_evaluation_mode(fixed_model, UseAutoMarginalization())
+
+            @test LogDensityProblems.dimension(auto_model) == 0
+            @test Base.invokelatest(LogDensityProblems.logdensity, auto_model, Float64[]) ≈
+                logpdf(Bernoulli(0.8), 1)
         end
     end
 
