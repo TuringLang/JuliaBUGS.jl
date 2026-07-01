@@ -110,93 +110,76 @@ html.db-dark-mode {
   --shadow-floating: 0 10px 30px -4px rgba(0, 0, 0, 0.6);
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  background-color: var(--theme-bg-canvas);
-  color: var(--theme-text-primary);
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-sm);
-  -webkit-font-smoothing: antialiased;
-}
 
-#app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-}
 
 /* Utility classes */
-.flex {
+.db-flex {
   display: flex;
 }
 
-.flex-col {
+.db-flex-col {
   flex-direction: column;
 }
 
-.items-center {
+.db-items-center {
   align-items: center;
 }
 
-.justify-center {
+.db-justify-center {
   justify-content: center;
 }
 
-.justify-between {
+.db-justify-between {
   justify-content: space-between;
 }
 
-.gap-1 {
+.db-gap-1 {
   gap: 4px;
 }
 
-.gap-2 {
+.db-gap-2 {
   gap: 8px;
 }
 
-.gap-3 {
+.db-gap-3 {
   gap: 12px;
 }
 
-.p-2 {
+.db-p-2 {
   padding: 8px;
 }
 
-.text-xs {
+.db-text-xs {
   font-size: var(--font-size-xs);
 }
 
-.text-sm {
+.db-text-sm {
   font-size: var(--font-size-sm);
 }
 
-.text-md {
+.db-text-md {
   font-size: var(--font-size-md);
 }
 
-.font-bold {
+.db-font-bold {
   font-weight: 600;
 }
 
-.w-full {
+.db-w-full {
   width: 100%;
 }
 
-.h-full {
+.db-h-full {
   height: 100%;
 }
 
 /* Custom Base Modal Responsive Width */
-.base-modal-responsive {
+.db-base-modal-responsive {
   width: 50vw;
 }
 
 @media (max-width: 768px) {
-  .base-modal-responsive {
+  .db-base-modal-responsive {
     width: 95vw !important;
   }
 }
@@ -252,7 +235,7 @@ html.db-dark-mode .cytoscape-container {
 }
 
 /* Glassmorphism Utility */
-.glass-panel {
+.db-glass-panel {
   background: var(--theme-bg-panel-transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -280,4 +263,17 @@ html.db-dark-mode .cytoscape-container {
 
 .log-type.type-log {
   color: var(--theme-primary) !important;
+}
+
+/* Base styles for the DoodleWidget container */
+.db-widget-root {
+  background-color: var(--theme-bg-canvas);
+  color: var(--theme-text-primary);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-sm);
+  -webkit-font-smoothing: antialiased;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }

@@ -31,7 +31,7 @@ const emit = defineEmits(['update:modelValue', 'change'])
     class="w-auto db-select-field"
   >
     <template #value="slotProps">
-      <div v-if="slotProps.value" class="flex items-center">
+      <div v-if="slotProps.value" class="db-flex db-items-center">
         <slot name="value" :value="slotProps.value" :placeholder="slotProps.placeholder">
           {{
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
