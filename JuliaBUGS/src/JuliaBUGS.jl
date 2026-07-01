@@ -58,14 +58,16 @@ struct BUGSModelDef
     model_def::Expr
 end
 
-function Base.show(io::IO, m::BUGSModelDef)
-    print(io, "BUGSModelDef:\n")
+Base.show(io::IO, ::BUGSModelDef) = print(io, "BUGSModelDef(…)")
+
+function Base.show(io::IO, ::MIME"text/plain", m::BUGSModelDef)
+    println(io, "BUGSModelDef:")
     return print(io, m.model_def)
 end
 
 """
     @bugs(program::Expr)
-    @bugs(program::String; replace_period::Bool=true, no_enclosure::Bool=false)
+    @bugs(program::String, replace_period::Bool=true, no_enclosure::Bool=false)
 
 Construct a [`BUGSModelDef`](@ref) from a BUGS model given as a Julia `begin ... end` block
 or as a string of BUGS source. The result is *callable*: passing a data `NamedTuple`
@@ -296,7 +298,7 @@ end
 Compile a BUGS model. Returns `BUGSModel`, or `BUGSModelWithGradient` if `adtype` is provided.
 
 # Arguments
-- `model_def::Expr`: Model definition from `@bugs` macro
+- `model_def`: Model definition — a [`BUGSModelDef`](@ref) from [`@bugs`](@ref), or the underlying `Expr`
 - `data::NamedTuple`: Observed data
 - `initial_params::NamedTuple`: Initial parameter values (optional, defaults to prior samples)
 - `adtype`: AD backend from ADTypes.jl (e.g., `AutoMooncake()`, `AutoReverseDiff()`, `AutoForwardDiff()`)

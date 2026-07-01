@@ -34,7 +34,7 @@ chain_def = @bugs begin
     x ~ Normal(theta, 1)
     y ~ Normal(x, 1)
 end
-chain = compile(chain_def, (; y = 2.0))
+chain = chain_def((; y = 2.0))
 ```
 
 ## Why `fix` differs from `condition`
@@ -74,7 +74,7 @@ scm_def = @bugs begin
     y ~ Normal(2 * x + z, 1)      # observed outcome
     y_rep ~ Normal(2 * x + z, 1)  # generated outcome under the same structural equation
 end
-scm = compile(scm_def, (; y = 3.0))
+scm = scm_def((; y = 3.0))
 ```
 
 Here `z` opens a backdoor path between `x` and `y` (``x \leftarrow z \rightarrow y``):
@@ -145,7 +145,7 @@ arr_def = @bugs begin
     end
     y ~ Normal(sum(x[:]), 1)
 end
-arr = compile(arr_def, (; y = 6.0))
+arr = arr_def((; y = 6.0))
 
 arr_fixed = fix(arr, Dict(@varname(x) => [1.0, 2.0, 3.0]))
 sort(JuliaBUGS.fixed_parameters(arr_fixed); by = string)

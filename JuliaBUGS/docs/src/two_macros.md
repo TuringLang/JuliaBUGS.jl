@@ -1,8 +1,8 @@
 # Two Macros: @bugs and @model
 
-JuliaBUGS provides two macros for defining probabilistic models. Both return a *callable
-model definition*: call it with a data `NamedTuple` to construct a `BUGSModel`. They differ
-only in their function-access policy.
+JuliaBUGS provides two macros for defining probabilistic models. With both, you go from a model
+definition to a `BUGSModel` by *calling* the definition with your data. They differ in the input
+syntax they accept, in how the definition is called, and in their function-access policy.
 
 ## @bugs
 
@@ -34,7 +34,10 @@ end
 
 ## @model
 
-The `@model` macro creates model-generating functions with full Julia scope:
+The `@model` macro defines a model-generating *function* with full Julia scope. Instead of a
+`BUGSModelDef`, it introduces a named function; call that function with the observations/parameters
+(a `NamedTuple`) plus any constants to construct a `BUGSModel`.
+
 - Has access to all imports and functions in the calling module
 - Requires explicit imports of BUGS primitives
 - More flexible for Julia integration
@@ -48,4 +51,6 @@ my_transform(x) = x^2 + 1
     theta ~ dnorm(0, 1)
     y = my_transform(theta)  # Works - has access to user functions
 end
+
+model = my_model((; theta = 0.5))  # construct a BUGSModel
 ```
