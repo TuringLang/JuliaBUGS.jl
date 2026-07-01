@@ -1,15 +1,5 @@
 # JuliaBUGS Changelog
 
-## Unreleased
-
-### Highlights
-
-- **Unified model construction (#383).** `@bugs` and `@bugs"..."` now return a callable `BUGSModelDef` instead of a bare `Expr`. Calling it with a data `NamedTuple` compiles the model, mirroring `@model`: `model = (@bugs begin … end)(data)` is equivalent to `compile(model_def, data)`. This makes `compile` an implementation detail rather than a required step.
-
-### Breaking Changes
-
-- `@bugs` / `@bugs"..."` now return a `BUGSModelDef` rather than an `Expr`. The underlying AST stays accessible via the `model_def` field, and `compile` still accepts the wrapper (and raw `Expr`s), so existing `compile(@bugs(...), data)` code — and serialization/source generation — is unaffected. Code that introspected the macro result *as* an `Expr` (e.g. `(@bugs ...).args`) should use `(@bugs ...).model_def`.
-
 ## 0.15.0
 
 ### Highlights
@@ -22,11 +12,16 @@
 
 - **FlexiChains support** (#483): Sampling can now collect results into a [`FlexiChains.FlexiChain{VarName}`](https://github.com/penelopeysm/FlexiChains.jl) by passing `chain_type=VNChain` (after `using FlexiChains`). Chains are keyed by `VarName`, so array-valued variables are stored whole instead of being flattened into scalar columns, and sampler statistics are stored as `FlexiChains.Extra` entries. This is the chain format the rest of the TuringLang ecosystem is moving to (Turing 0.45 uses it by default); the docs now use it in examples. `MCMCChains` remains fully supported via `chain_type=MCMCChains.Chains`, and a `FlexiChain` can be converted with `MCMCChains.Chains(chain)`.
 
+- **Slice sampling** ([SliceSampling.jl](https://github.com/TuringLang/SliceSampling.jl)): slice samplers can now sample `BUGSModel`s once `using SliceSampling`. They work standalone — pass a sampler such as `SliceSteppingOut` directly to `AbstractMCMC.sample` — and as component samplers inside `JuliaBUGS.Gibbs` (in the `sampler_map`), where each single-site conditional is univariate. Being derivative-free, they need no AD backend. Both `MCMCChains` (`chain_type=Chains`) and `FlexiChains` (`chain_type=VNChain`) outputs are supported, with sampler statistics (`lp`, `num_proposals`) recorded. Shipped as three package extensions mirroring the existing HMC/MH split. See the *Slice Sampling* page in the docs.
+
+- **Callable `@bugs` (#383).** `@bugs` and `@bugs"..."` now return a callable `BUGSModelDef` instead of a bare `Expr`, so a model builds in one step — `model = (@bugs begin … end)(data)` — mirroring `@model`. This is primarily a **syntax/ergonomics change**: `compile` still accepts the wrapper (and raw `Expr`s), so existing `compile(@bugs(...), data)` code, serialization, and source generation keep working unchanged, and the underlying AST stays available via the `.model_def` field. It makes `compile` an implementation detail rather than a required step.
+
 ### Breaking Changes
 
 - Unobserved stochastic nodes with **no observed descendants** (e.g. posterior-predictive draws, or priors unused by any likelihood) are now generated quantities: excluded from `model_parameters`, the parameter vector, and `LogDensityProblems.dimension`, and forward-sampled in post-processing instead of sampled by MCMC/Gibbs. The joint distribution is unchanged.
 - `parameters(model)` (all unobserved stochastic nodes) and `model_parameters(model)` (the MCMC target) can now differ, and `dimension` follows `model_parameters`. Use `LogDensityProblems.dimension(model)` (or `length(model_parameters(model))`) where you previously relied on `length(parameters(model))` as the parameter-vector length.
 - `Gibbs` sampler maps that reference a reclassified variable now error, since it is no longer in `model_parameters`.
+- The return type of `@bugs` / `@bugs"..."` changed from `Expr` to `BUGSModelDef` (#383). This is a low-impact, largely syntactic change (see the *Callable `@bugs`* highlight): the usual `compile(@bugs(...), data)` path, serialization, and source generation are unaffected. Only code that introspected the macro result *as* an `Expr` (e.g. `(@bugs ...).args`) must switch to the `.model_def` field.
 
 ## 0.14.1
 
