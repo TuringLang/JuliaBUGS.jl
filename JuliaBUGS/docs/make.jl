@@ -23,6 +23,7 @@ makedocs(;
             "Auto-Marginalization" => "inference/auto_marginalization.md",
             "Generated Quantities" => "inference/generated_quantities.md",
             "Fixing Variables (`fix` / `unfix`)" => "inference/fixing.md",
+            "Slice Sampling" => "inference/slice_sampling.md",
             "Parallel & Distributed Sampling" => "inference/parallel.md",
         ],
         "API Reference" => [
