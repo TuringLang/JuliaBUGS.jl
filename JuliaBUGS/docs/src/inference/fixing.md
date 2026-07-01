@@ -69,9 +69,10 @@ classic *fork*):
 
 ```@example fixing
 scm_def = @bugs begin
-    z ~ Normal(0, 1)          # confounder, drives both treatment and outcome
-    x ~ Normal(z, 1)          # treatment assignment depends on z
-    y ~ Normal(2 * x + z, 1)  # outcome depends on the treatment and the confounder
+    z ~ Normal(0, 1)              # confounder, drives both treatment and outcome
+    x ~ Normal(z, 1)              # treatment assignment depends on z
+    y ~ Normal(2 * x + z, 1)      # observed outcome
+    y_rep ~ Normal(2 * x + z, 1)  # generated outcome under the same structural equation
 end
 scm = compile(scm_def, (; y = 3.0))
 ```
@@ -82,9 +83,9 @@ Here `z` opens a backdoor path between `x` and `y` (``x \leftarrow z \rightarrow
   causes `x`. That shift in `z` then changes what we expect for `y` — part of the apparent
   effect of `x` on `y` flows through the confounder, not through the causal arrow `x → y`.
 - **Intervening** `x = 1` (`fix(scm; x = 1.0)`) deletes the assignment `x ~ Normal(z, 1)`.
-  Now `x` is set by us, not by `z`, so it carries no information about `z`. The interventional
-  distribution ``p(y \mid \mathrm{do}(x = 1))`` reflects only the direct causal path, with `z`
-  averaged over its own (un-updated) distribution.
+  Now `x` is set by us, not by `z`, so it carries no information about `z`. The observed `y`
+  still contributes an interventional likelihood, while `y_rep` is left unobserved for
+  posterior predictive draws under the intervention.
 
 ```@example fixing
 intervened = fix(scm; x = 1.0)
@@ -92,14 +93,15 @@ intervened = fix(scm; x = 1.0)
 (x_type     = JuliaBUGS.variable_type(intervened, @varname(x)),
  fixed_vars = JuliaBUGS.fixed_parameters(intervened),
  x_is_free  = @varname(x) in JuliaBUGS.parameters(intervened),       # false — x is set, not free
- z_sampled  = @varname(z) in JuliaBUGS.model_parameters(intervened)) # true — z is still latent
+ z_sampled  = @varname(z) in JuliaBUGS.model_parameters(intervened), # true — z is still latent
+ y_rep_type = JuliaBUGS.variable_type(intervened, @varname(y_rep)))
 ```
 
-Sampling `intervened` and reading off `y` (with [`gen_chains`](generated_quantities.md), `y` is
-forward-sampled as a generated quantity) yields draws from ``p(y \mid \mathrm{do}(x = 1))``.
-Comparing the same query across a grid of fixed values — `fix(scm; x = 0.0)`,
-`fix(scm; x = 1.0)`, … — traces out the causal effect of the treatment, free of the
-confounding that `condition` would leave in.
+Sampling `intervened` and reading off `y_rep` with [`gen_chains`](generated_quantities.md)
+yields posterior predictive draws from
+``p(y_{\mathrm{rep}} \mid y = 3, \mathrm{do}(x = 1))``. Comparing the same query across a grid
+of fixed values — `fix(scm; x = 0.0)`, `fix(scm; x = 1.0)`, … — traces out the causal effect of
+the treatment, free of the confounding that `condition` would leave in.
 
 ## What fixing changes
 

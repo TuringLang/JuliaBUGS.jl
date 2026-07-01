@@ -11,6 +11,7 @@ using JuliaBUGS.Model:
     set_observed_values!,
     variable_type,
     FixedParameter,
+    GeneratedQuantity,
     ModelParameter,
     Observation,
     regenerate_log_density_function,
@@ -431,6 +432,29 @@ JuliaBUGS.@bugs_primitive Normal Gamma Bernoulli
             @test Set(model_parameters(unfixed_model)) ==
                 Set([@varname(theta), @varname(x)])
             @test LogDensityProblems.dimension(unfixed_model) == 2
+        end
+
+        @testset "fix-induced generated quantities survive later graph surgery" begin
+            model_def = @bugs begin
+                theta ~ Normal(0, 1)
+                x ~ Normal(theta, 1)
+                y ~ Normal(x, 1)
+                w ~ Normal(0, 1)
+            end
+
+            m0 = compile(model_def, (;))
+            m1 = condition(m0; y=2.0, w=0.0)
+            m2 = fix(m1; x=1.0)
+
+            @test variable_type(m2, @varname(theta)) == GeneratedQuantity
+            @test @varname(theta) ∉ model_parameters(m2)
+
+            m3 = decondition(m2, [@varname(w)])
+
+            @test variable_type(m3, @varname(theta)) == GeneratedQuantity
+            @test @varname(theta) ∉ model_parameters(m3)
+            @test variable_type(m3, @varname(w)) == ModelParameter
+            @test model_parameters(m3) == [@varname(w)]
         end
 
         @testset "fixing with subsumption" begin

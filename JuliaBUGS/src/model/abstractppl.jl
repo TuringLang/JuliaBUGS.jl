@@ -747,14 +747,19 @@ function _create_modified_model(
     ),
     preserve_generated_quantities::Bool=true,
 )
-    # Preserve the base model's generated-quantity policy, but only for variables
-    # that still have no observed descendants in the modified graph. Conditioning a
-    # former generated quantity makes it an observation, so its ancestors may need
-    # to move back into the model-parameter partition.
+    # Preserve the generated-quantity policy, but only for variables that still
+    # have no observed descendants in the modified graph. Conditioning a former
+    # generated quantity makes it an observation, so its ancestors may need to
+    # move back into the model-parameter partition.
     fixed_parameter_set = Set{VarName}(fixed_parameters)
     generated_quantity_set = if preserve_generated_quantities
+        generated_quantity_policy_model = if isempty(fixed_parameter_set)
+            isnothing(model.base_model) ? model : model.base_model
+        else
+            model
+        end
         base_generated_quantities = Set(
-            generated_quantities(isnothing(model.base_model) ? model : model.base_model)
+            generated_quantities(generated_quantity_policy_model)
         )
         surviving_generated_quantities = find_generated_quantities_variables(
             new_graph; fixed_parameters=fixed_parameter_set
