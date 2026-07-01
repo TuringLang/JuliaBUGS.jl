@@ -43,6 +43,7 @@ using MCMCChains
 using ReverseDiff
 using ForwardDiff
 using Mooncake
+using SliceSampling
 
 JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Exponential Gamma InverseGamma Normal Uniform LogNormal Poisson
 JuliaBUGS.@bugs_primitive Diagonal Dirichlet LKJ MvNormal
@@ -74,11 +75,6 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("of_model_integration.jl")
     end,
     "graphs" => () -> include("graphs.jl"),
-    "compilation" => () -> begin
-        include("model/utils.jl")
-        include("model/bugsmodel.jl")
-        include("source_gen.jl")
-    end,
     "compilation_model" => () -> begin
         include("model/utils.jl")
         include("model/bugsmodel.jl")
@@ -95,23 +91,17 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("ad_compatibility.jl")
         include("model/to_distribution.jl")
     end,
-    "inference" => () -> begin
-        include("independent_mh.jl")
-        include("ext/JuliaBUGSAdvancedHMCExt.jl")
-        include("ext/JuliaBUGSMCMCChainsExt.jl")
-        include("ext/JuliaBUGSFlexiChainsExt.jl")
-        include("model/auto_marginalization_sampling.jl")
-    end,
     "callbacks" => () -> include("model/abstractmcmc.jl"),
     "inference_hmc" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
     "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
     "inference_flexichains" => () -> include("ext/JuliaBUGSFlexiChainsExt.jl"),
     "inference_mh" => () -> include("independent_mh.jl"),
+    "inference_slice_sampling" => () -> include("ext/JuliaBUGSSliceSamplingExt.jl"),
     "inference_marginalization" => () -> include("model/auto_marginalization_sampling.jl"),
     "gibbs" => () -> include("gibbs.jl"),
     "parallel_sampling" => () -> include("parallel_sampling.jl"),
     "distributed_sampling" => () -> include("distributed_sampling.jl"),
-    "ad_compatibility" => () -> include("ad_compatibility.jl"),
+    "serialization" => () -> include("serialization.jl"),
 )
 
 function print_test_usage()

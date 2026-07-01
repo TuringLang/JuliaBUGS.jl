@@ -44,10 +44,12 @@ jobs:
           - "inference_hmc"
           - "inference_chains"
           - "inference_flexichains"
+          - "inference_slice_sampling"
           - "inference_marginalization"
           - "gibbs"
           - "parallel_sampling"
           - "distributed_sampling"
+          - "serialization"
 
     steps:
       - uses: actions/checkout@v7

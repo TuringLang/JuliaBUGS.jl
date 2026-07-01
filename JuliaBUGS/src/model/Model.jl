@@ -27,10 +27,11 @@ include("to_distribution.jl")
 # Public user-facing API
 export parameters, variables, initialize!, getparams, settrans, to_distribution
 export set_evaluation_mode, set_observed_values!
-export model_parameters, generated_quantities, variable_type
+export model_parameters, generated_quantities, fixed_parameters, variable_type
 
 # Variable classification
 export VariableType, Observation, ModelParameter, TransformedParameter, GeneratedQuantity
+export FixedParameter
 
 # Evaluation mode types
 export UseGraph, UseGeneratedLogDensityFunction, UseAutoMarginalization

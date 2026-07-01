@@ -26,12 +26,15 @@ generated quantities.
 ## Classification
 
 Every node is assigned a [`VariableType`](@ref JuliaBUGS.VariableType): `Observation`, `ModelParameter`,
-`TransformedParameter`, or `GeneratedQuantity`. The partition that matters for inference is:
+`TransformedParameter`, `GeneratedQuantity`, or `FixedParameter`. The partition that matters for
+inference is:
 
 - **Model parameters** — unobserved stochastic nodes in the target. These are what MCMC
   samples; they make up the parameter vector and the dimension.
 - **Transformed parameters** — deterministic nodes needed to evaluate the target density.
 - **Generated quantities** — unobserved nodes outside the target dependency closure.
+- **Fixed parameters** — stochastic nodes fixed to constants; see
+  [Fixing Variables](fixing.md).
 
 The two sets are disjoint, and no model parameter or observation ever has a generated
 quantity as an ancestor.
