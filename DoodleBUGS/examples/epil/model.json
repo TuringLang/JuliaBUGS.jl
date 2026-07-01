@@ -1,0 +1,319 @@
+{
+  "name": "Epilepsy: Repeated Measures on Poisson Counts",
+  "elements": [
+    {
+      "id": "node_a0",
+      "name": "a0",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 60, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "1.0E-4"
+    },
+    {
+      "id": "node_alpha.Base",
+      "name": "alpha.Base",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 180, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "1.0E-4"
+    },
+    {
+      "id": "node_alpha.Trt",
+      "name": "alpha.Trt",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 300, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "1.0E-4"
+    },
+    {
+      "id": "node_alpha.BT",
+      "name": "alpha.BT",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 420, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "1.0E-4"
+    },
+    {
+      "id": "node_alpha.Age",
+      "name": "alpha.Age",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 540, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "1.0E-4"
+    },
+    {
+      "id": "node_alpha.V4",
+      "name": "alpha.V4",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 660, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "1.0E-4"
+    },
+    {
+      "id": "node_tau.b1",
+      "name": "tau.b1",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 800, "y": 41 },
+      "distribution": "dgamma",
+      "param1": "1.0E-3",
+      "param2": "1.0E-3"
+    },
+    {
+      "id": "node_tau.b",
+      "name": "tau.b",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 800, "y": 280 },
+      "distribution": "dgamma",
+      "param1": "1.0E-3",
+      "param2": "1.0E-3"
+    },
+    {
+      "id": "node_sigma.b1",
+      "name": "sigma.b1",
+      "type": "node",
+      "nodeType": "deterministic",
+      "position": { "x": 920, "y": 41 },
+      "equation": "1.0 / sqrt(tau.b1)"
+    },
+    {
+      "id": "node_sigma.b",
+      "name": "sigma.b",
+      "type": "node",
+      "nodeType": "deterministic",
+      "position": { "x": 920, "y": 280 },
+      "equation": "1.0 / sqrt(tau.b)"
+    },
+    {
+      "id": "node_alpha0",
+      "name": "alpha0",
+      "type": "node",
+      "nodeType": "deterministic",
+      "position": { "x": 60, "y": 530 },
+      "equation": "a0 - alpha.Base * log.Base4.bar - alpha.Trt * Trt.bar - alpha.BT * BT.bar - alpha.Age * log.Age.bar - alpha.V4 * V4.bar"
+    },
+    {
+      "id": "plate_j",
+      "name": "Plate.j",
+      "type": "node",
+      "nodeType": "plate",
+      "position": { "x": 400, "y": 470 },
+      "loopVariable": "j",
+      "loopRange": "1:N"
+    },
+    {
+      "id": "plate_k",
+      "name": "Plate.k",
+      "type": "node",
+      "nodeType": "plate",
+      "position": { "x": 400, "y": 430 },
+      "parent": "plate_j",
+      "loopVariable": "k",
+      "loopRange": "1:T"
+    },
+    {
+      "id": "node_b1",
+      "name": "b1",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 620, "y": 200 },
+      "parent": "plate_j",
+      "distribution": "dnorm",
+      "indices": "j",
+      "param1": "0.0",
+      "param2": "tau.b1"
+    },
+    {
+      "id": "node_b",
+      "name": "b",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 620, "y": 340 },
+      "parent": "plate_k",
+      "distribution": "dnorm",
+      "indices": "j,k",
+      "param1": "0.0",
+      "param2": "tau.b"
+    },
+    {
+      "id": "node_mu",
+      "name": "mu",
+      "type": "node",
+      "nodeType": "deterministic",
+      "position": { "x": 400, "y": 340 },
+      "parent": "plate_k",
+      "indices": "j,k",
+      "equation": "exp(a0 + alpha.Base * (log(Base[j] / 4) - log.Base4.bar) + alpha.Trt * (Trt[j] - Trt.bar) + alpha.BT * (Trt[j] * log(Base[j] / 4) - BT.bar) + alpha.Age * (log(Age[j]) - log.Age.bar) + alpha.V4 * (V4[k] - V4.bar) + b1[j] + b[j, k])"
+    },
+    {
+      "id": "node_y",
+      "name": "y",
+      "type": "node",
+      "nodeType": "observed",
+      "position": { "x": 400, "y": 430 },
+      "parent": "plate_k",
+      "distribution": "dpois",
+      "indices": "j,k",
+      "observed": true,
+      "param1": "mu[j, k]"
+    },
+    {
+      "id": "edge_a0_mu",
+      "type": "edge",
+      "source": "node_a0",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_alphaBase_mu",
+      "type": "edge",
+      "source": "node_alpha.Base",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_alphaTrt_mu",
+      "type": "edge",
+      "source": "node_alpha.Trt",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_alphaBT_mu",
+      "type": "edge",
+      "source": "node_alpha.BT",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_alphaAge_mu",
+      "type": "edge",
+      "source": "node_alpha.Age",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_alphaV4_mu",
+      "type": "edge",
+      "source": "node_alpha.V4",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_b1_mu",
+      "type": "edge",
+      "source": "node_b1",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_b_mu",
+      "type": "edge",
+      "source": "node_b",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_mu_y",
+      "type": "edge",
+      "source": "node_mu",
+      "target": "node_y",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_taub1_b1",
+      "type": "edge",
+      "source": "node_tau.b1",
+      "target": "node_b1",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_taub_b",
+      "type": "edge",
+      "source": "node_tau.b",
+      "target": "node_b",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_taub1_sigmab1",
+      "type": "edge",
+      "source": "node_tau.b1",
+      "target": "node_sigma.b1",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_taub_sigmab",
+      "type": "edge",
+      "source": "node_tau.b",
+      "target": "node_sigma.b",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_a0_alpha0",
+      "type": "edge",
+      "source": "node_a0",
+      "target": "node_alpha0",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_alphaBase_alpha0",
+      "type": "edge",
+      "source": "node_alpha.Base",
+      "target": "node_alpha0",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_alphaTrt_alpha0",
+      "type": "edge",
+      "source": "node_alpha.Trt",
+      "target": "node_alpha0",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_alphaBT_alpha0",
+      "type": "edge",
+      "source": "node_alpha.BT",
+      "target": "node_alpha0",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_alphaAge_alpha0",
+      "type": "edge",
+      "source": "node_alpha.Age",
+      "target": "node_alpha0",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_alphaV4_alpha0",
+      "type": "edge",
+      "source": "node_alpha.V4",
+      "target": "node_alpha0",
+      "relationshipType": "deterministic"
+    }
+  ],
+  "dataContent": "{\n  \"data\": {\n    \"N\": 59,\n    \"T\": 4,\n    \"y\": [\n      [5, 3, 3, 3], [3, 5, 3, 3], [2, 4, 0, 5], [4, 4, 1, 4], [7, 18, 9, 21],\n      [5, 2, 8, 7], [6, 4, 0, 2], [40, 20, 21, 12], [5, 6, 6, 5], [14, 13, 6, 0],\n      [26, 12, 6, 22], [12, 6, 8, 4], [4, 4, 6, 2], [7, 9, 12, 14], [16, 24, 10, 9],\n      [11, 0, 0, 5], [0, 0, 3, 3], [37, 29, 28, 29], [3, 5, 2, 5], [3, 0, 6, 7],\n      [3, 4, 3, 4], [3, 4, 3, 4], [2, 3, 3, 5], [8, 12, 2, 8], [18, 24, 76, 25],\n      [2, 1, 2, 1], [3, 1, 4, 2], [13, 15, 13, 12], [11, 14, 9, 8], [8, 7, 9, 4],\n      [0, 4, 3, 0], [3, 6, 1, 3], [2, 6, 7, 4], [4, 3, 1, 3], [22, 17, 19, 16],\n      [5, 4, 7, 4], [2, 4, 0, 4], [3, 7, 7, 7], [4, 18, 2, 5], [2, 1, 1, 0],\n      [0, 2, 4, 0], [5, 4, 0, 3], [11, 14, 25, 15], [10, 5, 3, 8], [19, 7, 6, 7],\n      [1, 1, 2, 3], [6, 10, 8, 8], [2, 1, 0, 0], [102, 65, 72, 63], [4, 3, 2, 4],\n      [8, 6, 5, 7], [1, 3, 1, 5], [18, 11, 28, 13], [6, 3, 4, 0], [3, 5, 4, 3],\n      [1, 23, 19, 8], [2, 3, 0, 1], [0, 0, 0, 0], [1, 4, 3, 2]\n    ],\n    \"Trt\": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],\n    \"Base\": [11, 11, 6, 8, 66, 27, 12, 52, 23, 10, 52, 33, 18, 42, 87, 50, 18, 111, 18, 20, 12, 9, 17, 28, 55, 9, 10, 47, 76, 38, 19, 10, 19, 24, 31, 14, 11, 67, 41, 7, 22, 13, 46, 36, 38, 7, 36, 11, 151, 22, 41, 32, 56, 24, 16, 22, 25, 13, 12],\n    \"Age\": [31, 30, 25, 36, 22, 29, 31, 42, 37, 28, 36, 24, 23, 36, 26, 26, 28, 31, 32, 21, 29, 21, 32, 25, 30, 40, 19, 22, 18, 32, 20, 30, 18, 24, 30, 35, 27, 20, 22, 28, 23, 40, 33, 21, 35, 25, 26, 25, 22, 32, 25, 35, 21, 41, 32, 26, 21, 36, 37],\n    \"V4\": [0, 0, 0, 1],\n    \"log.Base4.bar\": 1.76795470,\n    \"log.Age.bar\": 3.31978351,\n    \"Trt.bar\": 0.52542373,\n    \"BT.bar\": 0.94837775,\n    \"V4.bar\": 0.25\n  },\n  \"inits\": {\n    \"a0\": 1,\n    \"alpha.Base\": 0,\n    \"alpha.Trt\": 0,\n    \"alpha.BT\": 0,\n    \"alpha.Age\": 0,\n    \"alpha.V4\": 0,\n    \"tau.b1\": 1,\n    \"tau.b\": 1\n  }\n}",
+  "version": 1,
+  "layout": {
+    "showCodePanel": false,
+    "codePanelWidth": 400,
+    "codePanelHeight": 300,
+    "showDataPanel": false,
+    "dataPanelX": 40,
+    "dataPanelY": 90,
+    "dataPanelWidth": 400,
+    "dataPanelHeight": 300
+  }
+}
