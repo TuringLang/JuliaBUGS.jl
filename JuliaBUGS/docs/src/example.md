@@ -13,7 +13,7 @@ data = (
     N = 21,
 )
 
-model_def = @bugs begin
+seeds = @bugs begin
     for i in 1:N
         r[i] ~ dbin(p[i], n[i])
         b[i] ~ dnorm(0.0, tau)
@@ -98,7 +98,7 @@ Language Syntax:
 We provide a [macro](https://docs.julialang.org/en/v1/manual/metaprogramming/#man-macros) which allows users to write down model definitions using Julia:
 
 ```julia
-model_def = @bugs begin
+seeds = @bugs begin
     for i in 1:N
         r[i] ~ dbin(p[i], n[i])
         b[i] ~ dnorm(0.0, tau)
@@ -123,7 +123,7 @@ Instead, user can call the inverse function of the link functions on the RHS exp
 The `@bugs` macro also works with original (R-like) BUGS syntax:
 
 ```julia
-model_def = @bugs("""
+seeds = @bugs("""
 model{
     for( i in 1 : N ) {
         r[i] ~ dbin(p[i],n[i])
@@ -149,40 +149,22 @@ We still encourage users to write new programs using the Julia-native syntax, be
 
 ### Compilation
 
-Model definition and data are the two necessary inputs for compilation, with optional initializations. The compile function creates a BUGSModel that implements the [LogDensityProblems.jl](https://github.com/tpapp/LogDensityProblems.jl) interface.
-
-```julia
-compile(model_def::Expr, data::NamedTuple)
-```
-
-And with initializations:
-
-```julia
-compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
-```
-
-Using the model definition and data we defined earlier, we can compile the model:
+The model definition returned by `@bugs` is *callable*: call it with the data (a `NamedTuple`) to construct a `BUGSModel`, which implements the [LogDensityProblems.jl](https://github.com/tpapp/LogDensityProblems.jl) interface.
 
 ```@example abc
-model = compile(model_def, data)
+model = seeds(data)
 show(model) # hide
 ```
 
 Parameter values will be sampled from the prior distributions in the original space.
 
-We can provide initializations:
+!!! note "`compile` is now mostly internal"
+    Calling the model definition is the supported way to construct a `BUGSModel`. It wraps `compile`, which is kept for backward compatibility (`compile(seeds, data)` does the same thing) but is now mostly an internal function — you shouldn't need to call it directly.
 
-```julia
+We can provide initial parameter values after construction with `initialize!`:
+
+```@example abc
 initializations = (alpha = 1, beta = 1)
-```
-
-```@example abc
-compile(model_def, data, initializations)
-```
-
-We can also initialize parameters after compilation:
-
-```@example abc
 initialize!(model, initializations)
 ```
 
@@ -194,11 +176,11 @@ initialize!(model, rand(26))
 
 ### Inference
 
-For gradient-based inference, compile your model with an AD backend using the `adtype` parameter (see [Automatic Differentiation](inference/ad.md) for details). We use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl):
+For gradient-based inference, construct your model with an AD backend using the `adtype` keyword (see [Automatic Differentiation](inference/ad.md) for details). We use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl):
 
 ```@example abc
-# Compile with gradient support
-model = compile(model_def, data; adtype=AutoMooncake(; config=nothing))
+# Construct with gradient support
+model = seeds(data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 

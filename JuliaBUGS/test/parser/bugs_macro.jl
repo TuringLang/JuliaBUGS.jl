@@ -5,7 +5,7 @@ using JuliaBUGS.BUGSPrimitives: dgamma
     @testset "Single index with empty brackets" begin
         @test (@bugs begin
             a ~ f(x[])
-        end) == MacroTools.@q begin
+        end).model_def == MacroTools.@q begin
             a ~ f(x[:])
         end
     end
@@ -71,7 +71,7 @@ using JuliaBUGS.BUGSPrimitives: dgamma
 
     @testset "Multiple statements on the same line" begin
         ex = @bugs (x[1]=1; y[1] ~ dnorm(0, 1))
-        @test ex == MacroTools.@q begin
+        @test ex.model_def == MacroTools.@q begin
             x[1] = 1
             y[1] ~ dnorm(0, 1)
         end
@@ -260,4 +260,29 @@ end
             @test occursin("Base.exp", e.msg)
         end
     end
+end
+
+@testset "BUGSModelDef: @bugs returns a callable model definition (issue #383)" begin
+    model_def = @bugs begin
+        x ~ dnorm(0, 1)
+        y ~ dnorm(x, 1)
+    end
+
+    # `@bugs` / `@bugs"..."` return a callable wrapper, not a bare `Expr`
+    @test model_def isa JuliaBUGS.BUGSModelDef
+    @test model_def.model_def isa Expr
+
+    # calling it compiles: `model_def(data)` is equivalent to `compile(model_def, data)`
+    @test model_def((; y=1.0)) isa JuliaBUGS.BUGSModel
+    @test compile(model_def, (; y=1.0)) isa JuliaBUGS.BUGSModel  # back-compat
+    @test model_def() isa JuliaBUGS.BUGSModel                     # no data: all latent
+
+    # string form behaves identically
+    model_str = @bugs("""
+        model {
+            x ~ dnorm(0, 1)
+        }
+    """)
+    @test model_str isa JuliaBUGS.BUGSModelDef
+    @test model_str((;)) isa JuliaBUGS.BUGSModel
 end

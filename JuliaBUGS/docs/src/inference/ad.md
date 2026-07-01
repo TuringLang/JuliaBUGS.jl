@@ -7,7 +7,7 @@ using JuliaBUGS
 using ADTypes, Mooncake
 using DifferentiationInterface, ForwardDiff, ReverseDiff
 
-model_def = @bugs begin
+normal_model = @bugs begin
     mu ~ dnorm(0, 1)
     for i in 1:N
         y[i] ~ dnorm(mu, 1)
@@ -21,19 +21,19 @@ For distributed sampling, load the same packages on every worker before sending 
 
 ## Specifying an AD Backend
 
-To compile a model with gradient support, pass the `adtype` parameter to `compile`:
+To construct a model with gradient support, pass the `adtype` keyword when calling the model definition:
 
 ```@example ad
-# Compile with gradient support using ADTypes from ADTypes.jl
+# Construct with gradient support using ADTypes from ADTypes.jl
 using ADTypes, Mooncake
-model = compile(model_def, data; adtype=AutoMooncake(; config=nothing))
+model = normal_model(data; adtype=AutoMooncake(; config=nothing))
 nothing # hide
 ```
 
 Alternatively, if you already have a compiled `BUGSModel`, you can wrap it with `BUGSModelWithGradient` without recompiling:
 
 ```@example ad
-base_model = compile(model_def, data)
+base_model = normal_model(data)
 model = JuliaBUGS.BUGSModelWithGradient(base_model, AutoMooncake(; config=nothing))
 nothing # hide
 ```
@@ -57,18 +57,18 @@ Use reverse-mode [Mooncake.jl](https://github.com/chalk-lab/Mooncake.jl), [Rever
 ```@example ad
 # Mooncake reverse mode works with UseGraph().
 using ADTypes, Mooncake
-model = compile(model_def, data; adtype=AutoMooncake(; config=nothing))
+model = normal_model(data; adtype=AutoMooncake(; config=nothing))
 
 using DifferentiationInterface, ForwardDiff, ReverseDiff
 
 # ReverseDiff with tape compilation.
-model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
+model = normal_model(data; adtype=AutoReverseDiff(compile=true))
 
 # ForwardDiff (efficient for small models with < 20 parameters)
-model = compile(model_def, data; adtype=AutoForwardDiff())
+model = normal_model(data; adtype=AutoForwardDiff())
 
 # ReverseDiff without compilation (supports control flow)
-model = compile(model_def, data; adtype=AutoReverseDiff(compile=false))
+model = normal_model(data; adtype=AutoReverseDiff(compile=false))
 nothing # hide
 ```
 
@@ -82,7 +82,7 @@ Use Mooncake or another mutation-supporting AD backend with the generated log de
 ```@example ad
 using ADTypes, Mooncake
 
-base_model = compile(model_def, data)
+base_model = normal_model(data)
 base_model = JuliaBUGS.set_evaluation_mode(
     base_model, JuliaBUGS.UseGeneratedLogDensityFunction()
 )

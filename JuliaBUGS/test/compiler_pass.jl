@@ -1,32 +1,41 @@
 using JuliaBUGS: CollectVariables, DataTransformation, CheckRepeatedAssignments
 using JuliaBUGS: is_resolved
 using JuliaBUGS: is_specified_by_data, is_partially_specified_as_data
+using JuliaBUGS.Parser: bugs_top
 
 @testset "CollectVariables Error Cases" begin
     # assign to data
-    model_def = @bugs begin
-        b = a
-    end
+    model_def = bugs_top(:(
+        begin
+            b = a
+        end
+    ))
     data = (b=[1, 2],)
     @test_throws ErrorException JuliaBUGS.determine_array_sizes(model_def, data)
 
-    model_def = @bugs begin
-        x[1:3] = y[1:3]
-    end
+    model_def = bugs_top(:(
+        begin
+            x[1:3] = y[1:3]
+        end
+    ))
     data = (x=[1, missing, missing], y=[1, 2, 3])
     @test_throws ErrorException JuliaBUGS.determine_array_sizes(model_def, data)
 
     # partially specified as data
-    model_def = @bugs begin
-        x[1:3] ~ dmnorm(y[1:3], E[:, :])
-    end
+    model_def = bugs_top(:(
+        begin
+            x[1:3] ~ dmnorm(y[1:3], E[:, :])
+        end
+    ))
     data = (x=[1, missing, missing], y=[1, 2, 3], E=[1 0 0; 0 1 0; 0 0 1])
     @test_throws ErrorException JuliaBUGS.determine_array_sizes(model_def, data)
 
     # check access data array out-of-bound
-    model_def = @bugs begin
-        x[4] = 2
-    end
+    model_def = bugs_top(:(
+        begin
+            x[4] = 2
+        end
+    ))
     data = (x=[1, 2, 3],)
     @test_throws BoundsError JuliaBUGS.determine_array_sizes(model_def, data)
 end
@@ -56,11 +65,13 @@ end
 end
 
 @testset "Constant propagation" begin
-    model_def = @bugs begin
-        a = b + 1
-        c = d[1] + e[2]
-        d[1] = a * 2
-    end
+    model_def = bugs_top(:(
+        begin
+            a = b + 1
+            c = d[1] + e[2]
+            d[1] = a * 2
+        end
+    ))
     data = (b=1, e=[1, 2])
 
     non_data_scalars, non_data_array_sizes = JuliaBUGS.determine_array_sizes(
@@ -107,39 +118,32 @@ end
         data = (;)
 
         @testset "repeated scalar logical assignment" begin
-            model_def = @bugs begin
-                a = 1
-                a = 2
-            end
+            model_def = bugs_top(:(
+                begin
+                    a = 1
+                    a = 2
+                end
+            ))
             @test_throws ErrorException JuliaBUGS.determine_array_sizes(model_def, data)
         end
 
         @testset "repeated scalar stochastic assignment" begin
-            model_def = @bugs begin
-                a ~ Normal(0, 1)
-                a ~ Normal(0, 2)
-            end
+            model_def = bugs_top(:(
+                begin
+                    a ~ Normal(0, 1)
+                    a ~ Normal(0, 2)
+                end
+            ))
             @test_throws ErrorException JuliaBUGS.determine_array_sizes(model_def, data)
         end
 
         @testset "repeated array element assignment" begin
-            model_def = @bugs begin
-                x[1] = 1
-                x[1] = 2
-            end
-            scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
-            @test_throws ErrorException JuliaBUGS.check_repeated_assignments(
-                model_def, data, array_sizes
-            )
-        end
-
-        @testset "repeated array assignment with range" begin
-            model_def = @bugs begin
-                x[1] = 1
-                for i in 1:2
-                    x[i:(i + 1)] = i
+            model_def = bugs_top(:(
+                begin
+                    x[1] = 1
+                    x[1] = 2
                 end
-            end
+            ))
             scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
             @test_throws ErrorException JuliaBUGS.check_repeated_assignments(
                 model_def, data, array_sizes
@@ -147,10 +151,27 @@ end
         end
 
         @testset "repeated array assignment with range" begin
-            model_def = @bugs begin
-                x[1] ~ Normal(0, 1)
-                x[1:2] ~ MvNormal(a[:], b[:, :])
-            end
+            model_def = bugs_top(:(
+                begin
+                    x[1] = 1
+                    for i in 1:2
+                        x[i:(i + 1)] = i
+                    end
+                end
+            ))
+            scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
+            @test_throws ErrorException JuliaBUGS.check_repeated_assignments(
+                model_def, data, array_sizes
+            )
+        end
+
+        @testset "repeated array assignment with range" begin
+            model_def = bugs_top(:(
+                begin
+                    x[1] ~ Normal(0, 1)
+                    x[1:2] ~ MvNormal(a[:], b[:, :])
+                end
+            ))
             data = (a=[1, 2], b=[1 0; 0 1])
             scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
             @test_throws ErrorException JuliaBUGS.check_repeated_assignments(

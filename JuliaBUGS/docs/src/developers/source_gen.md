@@ -521,6 +521,8 @@ We made a simple change to the program to prepare for lowering: we need to disti
 BUGS supports mixing observations and model parameters for different elements of the same array variable.
 To support this, we introduce a guard to use conditional logic to decide what computation to do for different iteration of the same statement.
 
+The `@bugs` macro returns a [`BUGSModelDef`](@ref JuliaBUGS.BUGSModelDef); the snippet below shows the underlying model-definition `Expr` (its `model_def` field), which is what the lowering operates on.
+
 ```julia
 @bugs begin
     for i in 1:2

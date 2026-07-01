@@ -4,6 +4,7 @@
 
 ```@docs
 @bugs
+JuliaBUGS.BUGSModelDef
 @model
 compile
 JuliaBUGS.BUGSModel

@@ -199,9 +199,9 @@ Extract all the array variable names and number of dimensions. Inconsistent numb
 will raise an error.
 
 # Example:
-```jldoctest; setup = :(using JuliaBUGS: @bugs; using JuliaBUGS.Parser.CompilerUtils: extract_variable_names_and_numdims)
+```jldoctest; setup = :(using JuliaBUGS.Parser: bugs_top; using JuliaBUGS.Parser.CompilerUtils: extract_variable_names_and_numdims)
 extract_variable_names_and_numdims(
-    @bugs begin
+    bugs_top(:(begin
         for i in 1:N
             for j in 1:T
                 Y[i, j] = _step((var"obs.t"[i] - t[j]) + eps)
@@ -224,7 +224,7 @@ extract_variable_names_and_numdims(
             var"dL0.star"[j] = r * (t[j + 1] - t[j])
         end
         beta ~ dnorm(0.0, 1.0e-6)
-    end
+    end))
 )
 
 # output
@@ -289,9 +289,9 @@ end
 Extract all the variable names used in the bounds and indices of the arrays in the program.
 
 # Example:
-```jldoctest; setup = :(using JuliaBUGS: @bugs; using JuliaBUGS.Parser.CompilerUtils: extract_variables_in_bounds_and_lhs_indices)
+```jldoctest; setup = :(using JuliaBUGS.Parser: bugs_top; using JuliaBUGS.Parser.CompilerUtils: extract_variables_in_bounds_and_lhs_indices)
 extract_variables_in_bounds_and_lhs_indices(
-    @bugs begin
+    bugs_top(:(begin
         for i in 1:N
             for j in 1:T
                 Y[i, j] = _step((var"obs.t"[i] - t[j]) + eps)
@@ -314,7 +314,7 @@ extract_variables_in_bounds_and_lhs_indices(
             var"dL0.star"[j] = r * (t[j + 1] - t[j])
         end
         beta ~ dnorm(0.0, 1.0e-6)
-    end
+    end))
 )
 
 # output
@@ -393,9 +393,9 @@ The first tuple contains the logical scalar variables, the second tuple contains
 the third tuple contains the logical array variables, and the fourth tuple contains the stochastic array variables.
 
 # Example:
-```jldoctest; setup = :(using JuliaBUGS: @bugs; using JuliaBUGS.Parser.CompilerUtils: extract_variables_assigned_to)
+```jldoctest; setup = :(using JuliaBUGS.Parser: bugs_top; using JuliaBUGS.Parser.CompilerUtils: extract_variables_assigned_to)
 extract_variables_assigned_to(
-    @bugs begin
+    bugs_top(:(begin
         for i in 1:N
             for j in 1:T
                 Y[i, j] = _step((var"obs.t"[i] - t[j]) + eps)
@@ -418,7 +418,7 @@ extract_variables_assigned_to(
             var"dL0.star"[j] = r * (t[j + 1] - t[j])
         end
         beta ~ dnorm(0.0, 1.0e-6)
-    end
+    end))
 )
 
 # output

@@ -11,13 +11,13 @@ Typical generated quantities are posterior-predictive draws, derived summaries, 
 states you want to report but not sample directly:
 
 ```julia
-model_def = @bugs begin
+predictive_model = @bugs begin
     mu ~ Normal(0, 1)
     y ~ Normal(mu, 1)        # observed
     y_pred ~ Normal(mu, 1)   # generated quantity (no observed descendant)
     excess = y_pred - mu     # deterministic generated quantity
 end
-model = compile(model_def, (; y = 0.5))
+model = predictive_model((; y = 0.5))
 ```
 
 Here `mu` is a model parameter, `y` is an observation, and `y_pred` and `excess` are
@@ -107,12 +107,12 @@ For example, in this prior-only model `h` is **not** a generated quantity becaus
 factor for `y` depends on it:
 
 ```julia
-model_def = @bugs begin
+prior_model = @bugs begin
     x ~ Normal(0, 1)
     h = x + 1
     y ~ Normal(h, 1)
 end
-model = compile(model_def, (;))
+model = prior_model((;))
 JuliaBUGS.variable_type(model, @varname(h))  # TransformedParameter
 ```
 

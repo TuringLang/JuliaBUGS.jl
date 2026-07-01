@@ -5,7 +5,7 @@
 When providing observations for the parameters of a model, the dependencies may become disrupted. Consider the following example written in Julia:
 
 ```julia
-model_def = @bugs begin
+abc_model = @bugs begin
     a ~ Normal(0, 1)
     b ~ Normal(0, 1)
     c ~ Normal(a, b)
