@@ -35,9 +35,6 @@ jobs:
       - name: Install dependencies
         run: npm install --prefix DoodleBUGS
 
-      - name: Build widget library
-        run: npm run build:lib --prefix DoodleBUGS
-
       - name: Build application for preview
         run: npm run build --prefix DoodleBUGS
         env:

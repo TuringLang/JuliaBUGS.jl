@@ -13,6 +13,11 @@ This project is in active development. You can track the development progress an
 
 We welcome contributions! Feel free to explore the code, report [issues](https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md), or suggest new features. Your involvement is highly encouraged and valued.
 
+## Architecture
+
+The editor itself lives in the [`doodleppl`](https://www.npmjs.com/package/doodleppl) npm package (developed in the [mcmcjs](https://github.com/mcmcjs/mcmcjs) monorepo), with its graph-to-code generation in [`@mcmcjs/doodleppl`](https://www.npmjs.com/package/@mcmcjs/doodleppl).
+This directory is the deployed site: a thin shell that mounts the editor full-page, plus the DoodleWidget demo article and the bundled example graphs.
+
 ## Project Setup
 
 ```sh
@@ -37,31 +42,13 @@ npm run build
 npm run preview
 ```
 
-### Linting and Formatting
-
-````sh
-# Run ESLint check
-npm run lint
-``
+### Formatting and Validation
 
 ```sh
-# Run ESLint with auto-fix
-npm run lint:fix
-````
-
-```sh
-# Format all files with Prettier
-npm run format
-```
-
-```sh
-# Check formatting (without modifying)
-npm run format:check
-```
-
-```sh
-# Run type checking
-npm run type-check
+npm run format       # format with Prettier
+npm run format:check # check formatting
+npm run typecheck    # type checking
+npm run validate     # typecheck + format check
 ```
 
 For more information, questions, or to get involved, please contact [@shravanngoswamii](https://github.com/shravanngoswamii) (Ping me on [Julia Slack](https://julialang.slack.com/archives/CCYDC34A0)).
@@ -119,22 +106,29 @@ DoodleBUGS can be embedded as a standalone web component in any HTML page or web
 
 ### Usage
 
-Add the following to your HTML page (in the `<head>` section):
+From a script tag, one self-contained file:
 
 ```html
-<link rel="stylesheet" href="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.css" />
-<script
-  type="module"
-  src="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.js"
-></script>
+<script src="https://unpkg.com/doodleppl/dist/doodleppl.global.js" defer></script>
+
+<doodle-ppl width="100%" height="600px" model="rats"></doodle-ppl>
 ```
 
-Then use the custom element in your page body:
+Or as an npm package with a typed mount class (lazy-loads the editor chunk):
 
-```html
-<body>
-  <doodle-bugs width="100%" height="600px" model="rats"></doodle-bugs>
-</body>
+```sh
+npm install doodleppl
+```
+
+```js
+import { DoodlePPL } from 'doodleppl'
+
+const editor = new DoodlePPL({
+  element: '#editor',
+  example: 'rats',
+  onBugsCode: (code) => console.log(code),
+  onStanCode: (code) => console.log(code),
+})
 ```
 
 ### Props
@@ -165,7 +159,7 @@ Both `bugs-code-update` and `stan-code-update` fire whenever the model changes, 
 ### Saving to Backend
 
 ```javascript
-const widget = document.querySelector('doodle-bugs');
+const widget = document.querySelector('doodle-ppl');
 
 // Listen for changes
 widget.addEventListener('state-update', (e) => {
