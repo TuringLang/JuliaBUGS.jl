@@ -56,7 +56,7 @@ jobs:
             <!-- preview-url-comment -->
             A preview of this pull request has been deployed.
             **[https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/pr-previews/${{ github.event.pull_request.number }}](https://turinglang.github.io/JuliaBUGS.jl/DoodleBUGS/pr-previews/${{ github.event.pull_request.number }})**
-          comment_tag: preview-url-comment
+          comment-tag: preview-url-comment
 
   cleanup-preview:
     if: github.event.action == 'closed'
