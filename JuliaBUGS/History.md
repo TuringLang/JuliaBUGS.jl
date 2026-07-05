@@ -5,6 +5,7 @@
 ### Highlights
 
 - **Unified model construction (#383).** `@bugs` and `@bugs"..."` now return a callable `BUGSModelDef` instead of a bare `Expr`. Calling it with a data `NamedTuple` compiles the model, mirroring `@model`: `model = (@bugs begin … end)(data)` is equivalent to `compile(model_def, data)`. This makes `compile` an implementation detail rather than a required step.
+  - The callable now also accepts an optional second positional argument of initial parameter values, `model_def(data, inits)` (mirroring `compile(model_def, data, initial_params)`), so the full construction workflow — including supplying starting values when random draws from vague priors would be out of support — is expressible without reaching for `compile`.
 
 ### Breaking Changes
 
