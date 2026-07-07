@@ -1,5 +1,8 @@
 # Example: Logistic Regression with Random Effects
 
+!!! tip "New to JuliaBUGS?"
+    Start with the shorter [Getting Started](getting_started.md) tutorial; this page is the in-depth version of the same workflow.
+
 ```@setup abc
 using JuliaBUGS
 using AdvancedHMC, AbstractMCMC, LogDensityProblems, FlexiChains
