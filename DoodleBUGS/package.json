@@ -13,7 +13,7 @@
     "validate": "npm run typecheck && npm run format:check"
   },
   "dependencies": {
-    "doodleppl": "^0.4.4"
+    "doodleppl": "^0.5.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
