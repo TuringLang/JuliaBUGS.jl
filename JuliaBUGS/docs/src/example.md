@@ -206,6 +206,12 @@ This is consistent with the result in the [OpenBUGS seeds example](https://chjac
 
 Here `chain_type = VNChain` collects the samples into a [`FlexiChains.FlexiChain`](https://github.com/penelopeysm/FlexiChains.jl) keyed by variable name. `MCMCChains` is also still supported: load it and pass `chain_type = MCMCChains.Chains` instead (or convert an existing chain with `MCMCChains.Chains(samples_and_stats)`).
 
+Without an explicit `chain_type`, `AbstractMCMC.sample` returns raw
+`AbstractMCMC.ParamsWithStats` draws whose parameter container is an
+`AbstractPPL.VarNamedTuple`. A prior draw from `rand(model)` is a `VarNamedTuple` directly.
+Passing `chain_type=VNChain` uses the same JuliaBUGS structured-sample reconstruction path
+to produce FlexiChains output.
+
 ## Next Steps
 
 - [Automatic Differentiation](inference/ad.md) - AD backends and configuration

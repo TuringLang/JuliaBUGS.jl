@@ -25,6 +25,22 @@
 
         @test samples_and_stats.name_map.parameters ==
             [Symbol("x[3]"), Symbol("x[1:2][1]"), Symbol("x[1:2][2]"), :y]
+
+        raw_samples = Base.invokelatest(
+            AbstractMCMC.sample,
+            StableRNG(4321),
+            ad_model,
+            NUTS(0.8),
+            4;
+            progress=false,
+            chain_type=Any,
+            n_adapts=0,
+            init_params=initial_θ,
+        )
+        @test all(sample -> sample isa AbstractMCMC.ParamsWithStats, raw_samples)
+        @test all(sample -> sample.params isa AbstractPPL.VarNamedTuple, raw_samples)
+        @test all(sample -> haskey(sample.params, @varname(y)), raw_samples)
+        @test all(sample -> haskey(sample.stats, :lp), raw_samples)
     end
 
     @testset "Inference results on examples: $example" for example in

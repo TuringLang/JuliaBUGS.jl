@@ -22,6 +22,8 @@ SliceSampling = "43f4d3e8-9711-4a8c-bd1b-03ac73a255cf"
 JuliaBUGS = {path = ".."}
 
 [compat]
+AbstractMCMC = "5.16"
+AbstractPPL = "0.15.4"
 Distributions = "0.25"
 Documenter = "1.14"
 FlexiChains = "0.6.14"

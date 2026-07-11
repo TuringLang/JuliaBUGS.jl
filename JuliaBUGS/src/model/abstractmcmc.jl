@@ -18,16 +18,7 @@ function AbstractMCMC.ParamsWithStats(
         model_parameters(bugs_model)
     end
 
-    p = if params
-        d = OrderedDict{String,Any}()
-        for vn in param_vars
-            value = AbstractPPL.getvalue(transition_env, vn)
-            d[string(vn)] = value
-        end
-        [k => v for (k, v) in d]
-    else
-        nothing
-    end
+    p = params ? _varnamedtuple_from_env(transition_env, param_vars) : nothing
 
     s = if stats
         log_densities = if bugs_model.evaluation_mode isa UseAutoMarginalization
@@ -61,10 +52,9 @@ function AbstractMCMC.ParamsWithStats(
     return AbstractMCMC.ParamsWithStats(base_model, sampler, transition, state; kwargs...)
 end
 
-# Chain outputs store one value per draw, so array-valued variables must be copied before the
-# next evaluation reuses the environment's buffers.
-_maybe_copy_chain_value(x::AbstractArray) = copy(x)
-_maybe_copy_chain_value(x) = x
+Base.rand(rng::Random.AbstractRNG, model::BUGSModelWithGradient) =
+    rand(rng, model.base_model)
+Base.rand(model::BUGSModelWithGradient) = rand(Random.default_rng(), model)
 
 """
     reconstruct_chain_values(rng, model, samples)
@@ -107,6 +97,80 @@ function reconstruct_chain_values(rng::Random.AbstractRNG, model::BUGSModel, sam
         ]
     end
     return param_vars, generated_vars, param_vals, generated_vals
+end
+
+"""
+    _transition_params_and_stats(model, sampler, transition)
+
+Extract a flat parameter sample and sampler statistics from one native sampler transition.
+Sampler integrations extend this internal hook; reconstruction into the shared structured
+sample representation remains in JuliaBUGS core.
+"""
+function _transition_params_and_stats end
+
+function _transition_params_and_stats(
+    model::BUGSModel, ::AbstractMCMC.AbstractSampler, transition_env::NamedTuple
+)
+    model_with_env = BangBang.setproperty!!(model, :evaluation_env, transition_env)
+    return getparams(model_with_env), NamedTuple()
+end
+
+function _parameter_samples_to_params_with_stats(
+    rng::Random.AbstractRNG, model::BUGSModel, parameter_samples, sampler_stats
+)
+    length(parameter_samples) == length(sampler_stats) || throw(
+        DimensionMismatch(
+            "parameter samples and sampler statistics must have equal length"
+        ),
+    )
+    all(stats -> stats isa NamedTuple, sampler_stats) ||
+        throw(ArgumentError("sampler statistics must be NamedTuples"))
+
+    param_vars, generated_vars, param_vals, generated_vals = reconstruct_chain_values(
+        rng, model, parameter_samples
+    )
+    all_vars = vcat(param_vars, generated_vars)
+    return map(eachindex(parameter_samples)) do i
+        all_values = vcat(param_vals[i], generated_vals[i])
+        vnt = _varnamedtuple_from_values(model.evaluation_env, all_vars, all_values)
+        AbstractMCMC.ParamsWithStats(vnt, sampler_stats[i])
+    end
+end
+
+_base_bugs_model(model::BUGSModel) = model
+_base_bugs_model(model::BUGSModelWithGradient) = model.base_model
+
+function _transitions_to_params_with_stats(
+    rng::Random.AbstractRNG,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:Union{BUGSModel,BUGSModelWithGradient}},
+    sampler::AbstractMCMC.AbstractSampler,
+    transitions::AbstractVector,
+)
+    model = _base_bugs_model(logdensitymodel.logdensity)
+    params_and_stats = map(transitions) do transition
+        _transition_params_and_stats(model, sampler, transition)
+    end
+    parameter_samples = map(first, params_and_stats)
+    sampler_stats = map(last, params_and_stats)
+    return _parameter_samples_to_params_with_stats(
+        rng, model, parameter_samples, sampler_stats
+    )
+end
+
+function AbstractMCMC.bundle_samples(
+    transitions::AbstractVector,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:Union{BUGSModel,BUGSModelWithGradient}},
+    sampler::AbstractMCMC.AbstractSampler,
+    state,
+    ::Type{Any};
+    kwargs...,
+)
+    # AbstractMCMC does not pass its positional sampling RNG to the bundle boundary. Keep
+    # the existing gen_chains behavior for forward-sampled generated quantities until that
+    # upstream interface can carry the RNG through.
+    return _transitions_to_params_with_stats(
+        Random.default_rng(), logdensitymodel, sampler, transitions
+    )
 end
 
 """

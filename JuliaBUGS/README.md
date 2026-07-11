@@ -37,8 +37,12 @@ model {
 posterior = normal_model((; N = 10, y = randn(10)))
 rng, sampler = Random.MersenneTwister(123), JuliaBUGS.IndependentMH()
 
-chain = AbstractMCMC.sample(rng, posterior, sampler, 1000)
+samples = AbstractMCMC.sample(rng, posterior, sampler, 1000)
+# Each raw draw is ParamsWithStats whose parameters are an AbstractPPL.VarNamedTuple.
 ```
+
+Load FlexiChains and pass `chain_type=VNChain` when you want a chain object instead of the
+shared raw sample representation.
 
 For a complete walkthrough, see the [example](https://turinglang.org/JuliaBUGS.jl/stable/example).
 

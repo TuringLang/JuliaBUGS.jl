@@ -5,7 +5,7 @@ using Random
 using Test
 
 @testset "AbstractMCMC Callbacks" begin
-    model_def = @bugs begin
+    callback_model_def = @bugs begin
         mu ~ dnorm(0, 0.01)
         tau ~ dgamma(0.01, 0.01)
         for i in 1:N
@@ -14,7 +14,7 @@ using Test
     end
 
     data = (N=5, y=[1.2, 0.8, 1.5, 1.1, 0.9])
-    model = compile(model_def, data)
+    model = compile(callback_model_def, data)
     logdensitymodel = AbstractMCMC.LogDensityModel(model)
 
     rng = Random.MersenneTwister(42)
@@ -25,8 +25,9 @@ using Test
         pws = AbstractMCMC.ParamsWithStats(
             logdensitymodel, sampler, transition, state; params=true, stats=false
         )
-        @test haskey(pws.params, :mu)
-        @test haskey(pws.params, :tau)
+        @test pws.params isa AbstractPPL.VarNamedTuple
+        @test haskey(pws.params, @varname(mu))
+        @test haskey(pws.params, @varname(tau))
         @test pws.stats == NamedTuple()
     end
 
@@ -34,7 +35,7 @@ using Test
         pws = AbstractMCMC.ParamsWithStats(
             logdensitymodel, sampler, transition, state; params=true, stats=true
         )
-        @test haskey(pws.params, :mu)
+        @test haskey(pws.params, @varname(mu))
         @test haskey(pws.stats, :lp)
         @test pws.stats.lp isa Real
     end
@@ -59,8 +60,8 @@ using Test
         chain = sample(rng, model, sampler, 3; callback=callback, progress=false)
 
         @test length(collected) == 3
-        @test all(c -> haskey(c.params, :mu), collected)
-        @test all(c -> haskey(c.params, :tau), collected)
+        @test all(c -> haskey(c.params, @varname(mu)), collected)
+        @test all(c -> haskey(c.params, @varname(tau)), collected)
         @test all(c -> c.lp isa Real, collected)
     end
 
@@ -73,7 +74,7 @@ using Test
             pws = AbstractMCMC.ParamsWithStats(
                 model, sampler, transition, state; params=true, stats=true
             )
-            push!(collected, (iter=iteration, mu=pws.params.mu))
+            push!(collected, (iter=iteration, mu=pws.params[@varname(mu)]))
         end
 
         chain = sample(rng, model, sampler, 3; callback=cb, progress=false)
@@ -105,8 +106,22 @@ using Test
             stats=true,
         )
 
-        @test haskey(pws.params, :mu)
-        @test !haskey(pws.params, :z)
+        @test haskey(pws.params, @varname(mu))
+        @test !haskey(pws.params, @varname(z))
         @test pws.stats.lp ≈ log_densities.tempered_logjoint
+    end
+
+    @testset "chain_type=Any returns canonical structured samples" begin
+        raw_model = compile(callback_model_def, data)
+        samples = sample(
+            MersenneTwister(123), raw_model, sampler, 4; chain_type=Any, progress=false
+        )
+
+        @test length(samples) == 4
+        @test all(sample -> sample isa AbstractMCMC.ParamsWithStats, samples)
+        @test all(sample -> sample.params isa AbstractPPL.VarNamedTuple, samples)
+        @test all(sample -> haskey(sample.params, @varname(mu)), samples)
+        @test all(sample -> haskey(sample.params, @varname(tau)), samples)
+        @test all(sample -> isempty(sample.extras), samples)
     end
 end

@@ -29,7 +29,7 @@ using Statistics
         chain = sample(rng, model, IndependentMH(), 100000; progress=false)
 
         # Extract samples
-        p_samples = vec([nt.p for nt in chain[50000:end]])  # Extract first parameter (p)
+        p_samples = [sample.params[@varname(p)] for sample in chain[50000:end]]
 
         # Check posterior mean
         posterior_mean = mean(p_samples)
@@ -73,7 +73,7 @@ using Statistics
         chain = sample(rng, model, IndependentMH(), 5000; progress=false)
 
         # Check that k=3 is most frequent
-        k_samples = vec([nt.k for nt in chain])  # Extract k parameter
+        k_samples = [sample.params[@varname(k)] for sample in chain]
         k_counts = [count(==(i), k_samples) for i in 1:3]
         @test argmax(k_counts) == 3
 
@@ -99,7 +99,7 @@ using Statistics
         )
 
         # Should converge to near y=2.0 despite starting at 5.0
-        theta_samples = vec([nt.theta for nt in chain[500:end]])  # Extract theta parameter
+        theta_samples = [sample.params[@varname(theta)] for sample in chain[500:end]]
         @test isapprox(mean(theta_samples), 2.0, atol=0.1)
     end
 

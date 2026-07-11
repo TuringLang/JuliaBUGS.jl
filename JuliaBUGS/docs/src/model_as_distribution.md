@@ -57,6 +57,11 @@ pdf(d, nt), loglikelihood(d, nt) == logpdf(d, nt)
 unique parameter symbol; `logpdf(d, nt)` accepts the same shape and returns the
 log joint density in the model's original (constrained) parameter space.
 
+This deliberately differs from `rand(model)`: drawing the `BUGSModel` itself returns an
+`AbstractPPL.VarNamedTuple` keyed by precise `VarName`s for use by AbstractMCMC and
+FlexiChains, while drawing its distribution view keeps the `NamedTuple` variate promised by
+the Distributions.jl interface.
+
 ## Interface Reference
 
 ### The variate type

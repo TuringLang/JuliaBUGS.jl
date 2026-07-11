@@ -114,7 +114,19 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
     @test mh_means[@varname(sigma)] ≈ 0.9 atol = 0.3
     @test mh_means[@varname(gen_quant)] ≈ 4.2 atol = 0.3
 
-    # array-valued parameters are stored whole, keyed by their VarName
+    raw_mh_samples = AbstractMCMC.sample(
+        model,
+        RWMH(MvNormal(zeros(D), I)),
+        4;
+        progress=false,
+        chain_type=Any,
+        init_params=initial_θ,
+    )
+    @test all(sample -> sample isa AbstractMCMC.ParamsWithStats, raw_mh_samples)
+    @test all(sample -> sample.params isa AbstractPPL.VarNamedTuple, raw_mh_samples)
+    @test all(sample -> haskey(sample.stats, :lp), raw_mh_samples)
+
+    # Indexed array-valued sites follow VarNamedTuple's lossless leaf representation.
     model_def = @bugs begin
         A[1, 1:3] ~ Dirichlet(ones(3))
         A[2, 1:3] ~ Dirichlet(ones(3))
@@ -129,16 +141,13 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
     hmc_chain = AbstractMCMC.sample(
         ad_model, NUTS(0.8), 10; progress=false, chain_type=VNChain
     )
-    @test Set(FlexiChains.parameters(hmc_chain)) == Set([
-        @varname(A[1, 1:3]),
-        @varname(A[2, 1:3]),
-        @varname(A[3, 1:3]),
-        @varname(mu[1:3]),
-        @varname(sigma[1]),
-        @varname(sigma[2]),
-        @varname(sigma[3]),
+    expected_parameters = Set([
+        [@varname(A[i, j]) for i in 1:3 for j in 1:3]...,
+        [@varname(mu[i]) for i in 1:3]...,
+        [@varname(sigma[i]) for i in 1:3]...,
     ])
-    mu_draws = hmc_chain[@varname(mu[1:3]), stack = false]
+    @test Set(FlexiChains.parameters(hmc_chain)) == expected_parameters
+    mu_draws = [[hmc_chain[@varname(mu[j])][i, 1] for j in 1:3] for i in 1:10]
     @test length(mu_draws) == 10
     @test all(v -> v isa AbstractVector && length(v) == 3, mu_draws)
     # each iteration stores its own array copy, not a single reused buffer

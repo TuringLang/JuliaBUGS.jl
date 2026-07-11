@@ -806,10 +806,10 @@ using JuliaBUGS.Model:
         @test length(samps) == 50
 
         # Verify samples are in reasonable range (not diverged to infinity)
-        for t in samps
-            θ = t.z.θ
-            @test all(isfinite, θ)
-            @test all(abs.(θ) .< 20)  # Samples shouldn't explode
+        for sample in samps, value in values(sample.params)
+            values_to_check = value isa AbstractArray ? value : (value,)
+            @test all(isfinite, values_to_check)
+            @test all(x -> abs(x) < 20, values_to_check)  # Samples shouldn't explode
         end
     end
 

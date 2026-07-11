@@ -243,3 +243,51 @@
         @test_logs (:warn,) match_mode = :any to_distribution(gen)
     end
 end
+
+@testset "BUGSModel prior draws" begin
+    model_def = @bugs begin
+        p ~ Beta(2, 3)
+        y ~ Bernoulli(p)
+        predictive ~ Exponential(1)
+        doubled = 2 * p
+    end
+    model = compile(model_def, (; y=1))
+
+    original_env = deepcopy(model.evaluation_env)
+    draw = rand(MersenneTwister(42), model)
+
+    @test draw isa AbstractPPL.VarNamedTuple
+    @test Set(keys(draw)) == Set(JuliaBUGS.parameters(model))
+    @test length(draw) == length(JuliaBUGS.parameters(model))
+    @test haskey(draw, @varname(p))
+    @test haskey(draw, @varname(predictive))
+    @test !haskey(draw, @varname(y))
+    @test !haskey(draw, @varname(doubled))
+    @test draw == rand(MersenneTwister(42), model)
+    @test model.evaluation_env == original_env
+
+    transformed_model = JuliaBUGS.settrans(model, true)
+    transformed_draw = rand(MersenneTwister(7), transformed_model)
+    @test 0 < transformed_draw[@varname(p)] < 1
+    @test transformed_draw[@varname(predictive)] > 0
+
+    partial_model = compile(
+        @bugs(
+            begin
+                beta[1:2] ~ MvNormal(zeros(2), Diagonal(ones(2)))
+                for i in 1:3
+                    x[i] ~ Normal(0, 1)
+                end
+                y ~ Normal(beta[1] + x[1], 1)
+                pred = sum(beta[1:2]) + sum(x[1:3])
+            end
+        ),
+        (; x=Union{Missing,Float64}[missing, 2.0, missing], y=0.0),
+    )
+    partial_draw = rand(MersenneTwister(9), partial_model)
+    @test Set(keys(partial_draw)) ==
+        Set([@varname(beta[1]), @varname(beta[2]), @varname(x[1]), @varname(x[3])])
+    @test length(partial_draw[@varname(beta[1:2])]) == 2
+    @test !haskey(partial_draw, @varname(x[2]))
+    @test !haskey(partial_draw, @varname(pred))
+end

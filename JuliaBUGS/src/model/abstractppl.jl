@@ -950,6 +950,43 @@ function evaluate!!(
     return evaluation_env, log_densities.tempered_logjoint
 end
 
+# Structured outputs store one value per draw, so arrays must be copied before a later
+# evaluation reuses the environment's buffers.
+_maybe_copy_chain_value(x::AbstractArray) = copy(x)
+_maybe_copy_chain_value(x) = x
+
+function _varnamedtuple_from_values(template_env, varnames, values)
+    vnt = AbstractPPL.VarNamedTuple()
+    for (vn, value) in zip(varnames, values)
+        top_symbol = AbstractPPL.getsym(vn)
+        template = getproperty(template_env, top_symbol)
+        vnt = AbstractPPL.templated_setindex!!(
+            vnt, _maybe_copy_chain_value(value), vn, template
+        )
+    end
+    return vnt
+end
+
+function _varnamedtuple_from_env(evaluation_env, varnames)
+    values = (AbstractPPL.getvalue(evaluation_env, vn) for vn in varnames)
+    return _varnamedtuple_from_values(evaluation_env, varnames, values)
+end
+
+"""
+    rand([rng=Random.default_rng()], model::BUGSModel)
+
+Draw the unobserved stochastic variables of `model` from their prior and return them as an
+`AbstractPPL.VarNamedTuple`. The result contains exactly [`parameters(model)`](@ref),
+including stochastic generated quantities but excluding observations, fixed variables, and
+deterministic nodes. Values are always returned in the original constrained space.
+"""
+function Base.rand(rng::Random.AbstractRNG, model::BUGSModel)
+    evaluation_env, _ = evaluate_with_rng!!(rng, model; transformed=false)
+    return _varnamedtuple_from_env(evaluation_env, parameters(model))
+end
+
+Base.rand(model::BUGSModel) = rand(Random.default_rng(), model)
+
 """
     AbstractPPL.evaluate!!(model::BUGSModel; temperature=1.0, transformed=model.transformed)
 

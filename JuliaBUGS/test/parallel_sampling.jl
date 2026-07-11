@@ -72,6 +72,15 @@
         # due to thread scheduling, so we just verify chains are valid
         @test chains2 isa AbstractVector
         @test length(chains2) == n_chains
+        @test all(
+            chain -> all(
+                sample ->
+                    sample isa AbstractMCMC.ParamsWithStats &&
+                    sample.params isa AbstractPPL.VarNamedTuple,
+                chain,
+            ),
+            chains2,
+        )
 
         # Test different seeds produce different results
         chains3 = sample(
@@ -87,7 +96,7 @@
         )
 
         # Results should be different with different seeds
-        @test !all(chains[1][1] == chains3[1][1])
+        @test !isequal(chains[1][1].params, chains3[1][1].params)
     end
 
     @testset "Chain statistics" begin

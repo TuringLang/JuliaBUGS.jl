@@ -38,8 +38,8 @@ JuliaBUGS = {path = ".."}
 
 [compat]
 ADTypes = "1.18.0"
-AbstractMCMC = "5"
-AbstractPPL = "0.15"
+AbstractMCMC = "5.16"
+AbstractPPL = "0.15.4"
 AdvancedHMC = "0.6, 0.7, 0.8"
 AdvancedMH = "0.8"
 BangBang = "0.4.1"

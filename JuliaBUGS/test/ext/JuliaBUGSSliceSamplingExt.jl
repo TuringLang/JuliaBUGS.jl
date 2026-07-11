@@ -8,6 +8,23 @@ using JuliaBUGS: Gibbs
     end
     model = compile(model_def, (; y=0.25), (; θ=0.0))
 
+    @testset "canonical raw output" begin
+        samples = Base.invokelatest(
+            AbstractMCMC.sample,
+            StableRNG(246),
+            model,
+            SliceSampling.SliceSteppingOut(1.0),
+            4;
+            progress=false,
+            chain_type=Any,
+        )
+        @test all(sample -> sample isa AbstractMCMC.ParamsWithStats, samples)
+        @test all(sample -> sample.params isa AbstractPPL.VarNamedTuple, samples)
+        @test all(sample -> haskey(sample.params, @varname(doubled)), samples)
+        @test all(sample -> haskey(sample.stats, :lp), samples)
+        @test all(sample -> haskey(sample.stats, :num_proposals), samples)
+    end
+
     @testset "MCMCChains output and default initialization" begin
         chain = Base.invokelatest(
             AbstractMCMC.sample,
