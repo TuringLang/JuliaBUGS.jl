@@ -6,15 +6,20 @@
 
 - `rand(model)` now returns an `AbstractPPL.VarNamedTuple` containing the model's
   unobserved stochastic variables in constrained space.
-- Raw `AbstractMCMC.sample(...; chain_type=Any)` output now uses the ecosystem's canonical
+- Raw `AbstractMCMC.sample(...; chain_type=Any)` output now adopts the shared
   `AbstractMCMC.ParamsWithStats` wrapper with `AbstractPPL.VarNamedTuple` parameters.
 - FlexiChains output now shares one structured-sample reconstruction path across all
-  JuliaBUGS samplers instead of using sampler-specific FlexiChains extensions.
+  JuliaBUGS samplers instead of using sampler-specific FlexiChains extensions. Chains
+  remain keyed by the model's whole variables (e.g. `mu[1:3]` stays one array-valued
+  parameter), as in 0.15.
 
 ### Breaking Changes
 
-- The default raw sampling output changed from sampler-native transitions to
-  `AbstractMCMC.ParamsWithStats`. Code that needs a different output format should pass an
+- The default raw sampling output for JuliaBUGS-integrated samplers (`Gibbs`,
+  `IndependentMH`, and the AdvancedHMC, AdvancedMH, and SliceSampling integrations)
+  changed from sampler-native transitions to `AbstractMCMC.ParamsWithStats`. Samplers
+  without a JuliaBUGS integration keep AbstractMCMC's default behavior and still return
+  their native transitions. Code that needs a different output format should pass an
   explicit `chain_type`.
 - JuliaBUGS now requires AbstractMCMC 5.16 and AbstractPPL 0.16.
 

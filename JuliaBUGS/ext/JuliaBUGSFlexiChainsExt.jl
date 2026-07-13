@@ -24,6 +24,20 @@ function AbstractMCMC.bundle_samples(
     params_with_stats = JuliaBUGS.Model._transitions_to_params_with_stats(
         default_rng(), logdensitymodel, sampler, transitions
     )
+    params_with_stats === nothing && throw(
+        ArgumentError(
+            "cannot build a FlexiChain from $(typeof(sampler)) transitions of type " *
+            "$(eltype(transitions)); integrate the sampler by extending " *
+            "`JuliaBUGS.Model._transition_params_and_stats`",
+        ),
+    )
+
+    # Key the chain by the model's whole variables (as declared in the BUGS graph), not by
+    # the VarNamedTuple's scalar leaves, so array-valued variables stay whole.
+    model = JuliaBUGS.Model._base_bugs_model(logdensitymodel.logdensity)
+    all_vars = vcat(
+        JuliaBUGS.Model.model_parameters(model), JuliaBUGS.Model.generated_quantities(model)
+    )
 
     niters = length(params_with_stats)
     dicts = map(params_with_stats) do sample
@@ -34,7 +48,7 @@ function AbstractMCMC.bundle_samples(
             ),
         )
         dict = OrderedDict{FlexiChains.ParameterOrExtra{<:VarName},Any}(
-            Parameter(vn) => value for (vn, value) in pairs(sample.params)
+            Parameter(vn) => sample.params[vn] for vn in all_vars
         )
         for (name, value) in pairs(sample.stats)
             dict[Extra(name)] = value
