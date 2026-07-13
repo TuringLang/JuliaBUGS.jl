@@ -52,7 +52,7 @@ JuliaBUGSSliceSamplingMCMCChainsExt = ["SliceSampling", "MCMCChains"]
 [compat]
 ADTypes = "1.18.0"
 AbstractMCMC = "5.16"
-AbstractPPL = "0.15.4"
+AbstractPPL = "0.16"
 Accessors = "0.1"
 AdvancedHMC = "0.6, 0.7, 0.8"
 AdvancedMH = "0.8"

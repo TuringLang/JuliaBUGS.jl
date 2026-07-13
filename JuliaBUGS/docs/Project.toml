@@ -23,7 +23,7 @@ JuliaBUGS = {path = ".."}
 
 [compat]
 AbstractMCMC = "5.16"
-AbstractPPL = "0.15.4"
+AbstractPPL = "0.16"
 Distributions = "0.25"
 Documenter = "1.14"
 FlexiChains = "0.6.14"
