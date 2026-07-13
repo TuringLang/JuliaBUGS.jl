@@ -4,6 +4,13 @@ using AbstractMCMC
 using Random
 using Test
 
+# Used by the "chain_type=Any passes unintegrated sampler transitions through" testset;
+# type definitions are not allowed inside a @testset's local scope.
+struct _UnintegratedTransition
+    x::Float64
+end
+struct _UnintegratedSampler <: AbstractMCMC.AbstractSampler end
+
 @testset "AbstractMCMC Callbacks" begin
     callback_model_def = @bugs begin
         mu ~ dnorm(0, 0.01)
@@ -123,5 +130,16 @@ using Test
         @test all(sample -> haskey(sample.params, @varname(mu)), samples)
         @test all(sample -> haskey(sample.params, @varname(tau)), samples)
         @test all(sample -> isempty(sample.extras), samples)
+    end
+
+    @testset "chain_type=Any passes unintegrated sampler transitions through" begin
+        # A sampler without a `_transition_params_and_stats` integration must keep
+        # AbstractMCMC's default behavior of returning native transitions unchanged,
+        # not error at bundle time.
+        transitions = [_UnintegratedTransition(1.0), _UnintegratedTransition(2.0)]
+        bundled = AbstractMCMC.bundle_samples(
+            transitions, logdensitymodel, _UnintegratedSampler(), nothing, Any
+        )
+        @test bundled === transitions
     end
 end

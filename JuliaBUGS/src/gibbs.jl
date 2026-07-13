@@ -463,3 +463,10 @@ function AbstractMCMC.step(
     return evaluation_env,
     GibbsState(evaluation_env, state.cached_conditioned_models, state.sub_states)
 end
+
+# Gibbs transitions are full evaluation environments.
+function Model._transition_params_and_stats(
+    model::BUGSModel, ::Gibbs, transition_env::NamedTuple
+)
+    return Model._env_transition_params_and_stats(model, transition_env)
+end

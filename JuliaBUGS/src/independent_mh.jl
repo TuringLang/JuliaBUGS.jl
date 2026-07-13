@@ -105,6 +105,13 @@ function AbstractMCMC.step(
     end
 end
 
+# IndependentMH transitions are full evaluation environments.
+function Model._transition_params_and_stats(
+    model::BUGSModel, ::IndependentMH, transition_env::NamedTuple
+)
+    return Model._env_transition_params_and_stats(model, transition_env)
+end
+
 # For use within Gibbs sampling
 """
     gibbs_internal(rng, cond_model, ::IndependentMH, state)

@@ -104,13 +104,20 @@ end
 
 Extract a flat parameter sample and sampler statistics from one native sampler transition.
 Sampler integrations extend this internal hook; reconstruction into the shared structured
-sample representation remains in JuliaBUGS core.
+sample representation remains in JuliaBUGS core. Samplers without a method here keep
+AbstractMCMC's default `chain_type=Any` behavior: their native transitions are returned
+unconverted.
 """
 function _transition_params_and_stats end
 
-function _transition_params_and_stats(
-    model::BUGSModel, ::AbstractMCMC.AbstractSampler, transition_env::NamedTuple
-)
+"""
+    _env_transition_params_and_stats(model, transition_env)
+
+`_transition_params_and_stats` implementation shared by the samplers whose transitions are
+full evaluation environments (`Gibbs`, `IndependentMH`). Their hook methods are defined
+next to the sampler types, which are only available after this module is loaded.
+"""
+function _env_transition_params_and_stats(model::BUGSModel, transition_env::NamedTuple)
     model_with_env = BangBang.setproperty!!(model, :evaluation_env, transition_env)
     return getparams(model_with_env), NamedTuple()
 end
@@ -147,6 +154,10 @@ function _transitions_to_params_with_stats(
     transitions::AbstractVector,
 )
     model = _base_bugs_model(logdensitymodel.logdensity)
+    if !isempty(transitions) &&
+        !applicable(_transition_params_and_stats, model, sampler, first(transitions))
+        return nothing
+    end
     params_and_stats = map(transitions) do transition
         _transition_params_and_stats(model, sampler, transition)
     end
@@ -168,9 +179,12 @@ function AbstractMCMC.bundle_samples(
     # AbstractMCMC does not pass its positional sampling RNG to the bundle boundary. Keep
     # the existing gen_chains behavior for forward-sampled generated quantities until that
     # upstream interface can carry the RNG through.
-    return _transitions_to_params_with_stats(
+    converted = _transitions_to_params_with_stats(
         Random.default_rng(), logdensitymodel, sampler, transitions
     )
+    # Samplers without a `_transition_params_and_stats` integration keep AbstractMCMC's
+    # default behavior: return the native transitions unconverted.
+    return converted === nothing ? transitions : converted
 end
 
 """
