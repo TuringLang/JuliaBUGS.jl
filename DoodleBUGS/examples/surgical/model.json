@@ -1,0 +1,76 @@
+{
+  "name": "Surgical: Institutional Ranking",
+  "elements": [
+    {
+      "id": "plate_i",
+      "name": "Plate.i",
+      "type": "node",
+      "nodeType": "plate",
+      "position": {
+        "x": 190,
+        "y": 330
+      },
+      "loopVariable": "i",
+      "loopRange": "1:N"
+    },
+    {
+      "id": "node_p",
+      "name": "p",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": {
+        "x": 124,
+        "y": 198
+      },
+      "parent": "plate_i",
+      "distribution": "dbeta",
+      "indices": "i",
+      "param1": "1.0",
+      "param2": "1.0"
+    },
+    {
+      "id": "node_n",
+      "name": "n",
+      "type": "node",
+      "nodeType": "constant",
+      "position": {
+        "x": 256,
+        "y": 198
+      },
+      "parent": "plate_i",
+      "indices": "i"
+    },
+    {
+      "id": "node_r",
+      "name": "r",
+      "type": "node",
+      "nodeType": "observed",
+      "position": {
+        "x": 190,
+        "y": 380
+      },
+      "parent": "plate_i",
+      "distribution": "dbin",
+      "indices": "i",
+      "observed": true,
+      "param1": "p[i]",
+      "param2": "n[i]"
+    },
+    {
+      "id": "edge_p_r",
+      "type": "edge",
+      "source": "node_p",
+      "target": "node_r",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_n_r",
+      "type": "edge",
+      "source": "node_n",
+      "target": "node_r",
+      "relationshipType": "stochastic"
+    }
+  ],
+  "dataContent": "{\n  \"data\": {\n    \"n\": [47, 148, 119, 810, 211, 196, 148, 215, 207, 97, 256, 360],\n    \"r\": [0, 18, 8, 46, 8, 13, 9, 31, 14, 8, 29, 24],\n    \"N\": 12\n  },\n  \"inits\": {\n    \"p\": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]\n  }\n}",
+  "version": 1
+}

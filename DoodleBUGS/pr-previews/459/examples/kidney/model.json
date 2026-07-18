@@ -1,0 +1,262 @@
+{
+  "name": "Kidney: Weibull Regression with Random Effects",
+  "elements": [
+    {
+      "id": "node_alpha",
+      "name": "alpha",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 58, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "0.0001"
+    },
+    {
+      "id": "node_beta.age",
+      "name": "beta.age",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 200, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "0.0001"
+    },
+    {
+      "id": "node_beta.sex",
+      "name": "beta.sex",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 340, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "0.0001"
+    },
+    {
+      "id": "node_tau",
+      "name": "tau",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 600, "y": 41 },
+      "distribution": "dgamma",
+      "param1": "1.0E-3",
+      "param2": "1.0E-3"
+    },
+    {
+      "id": "node_r",
+      "name": "r",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 740, "y": 41 },
+      "distribution": "dgamma",
+      "param1": "1.0",
+      "param2": "1.0E-3"
+    },
+    {
+      "id": "node_sigma",
+      "name": "sigma",
+      "type": "node",
+      "nodeType": "deterministic",
+      "position": { "x": 600, "y": 530 },
+      "equation": "1 / sqrt(tau)"
+    },
+    {
+      "id": "plate_i",
+      "name": "Plate.i",
+      "type": "node",
+      "nodeType": "plate",
+      "position": { "x": 380, "y": 470 },
+      "loopVariable": "i",
+      "loopRange": "1:N"
+    },
+    {
+      "id": "plate_j",
+      "name": "Plate.j",
+      "type": "node",
+      "nodeType": "plate",
+      "position": { "x": 380, "y": 440 },
+      "parent": "plate_i",
+      "loopVariable": "j",
+      "loopRange": "1:M"
+    },
+    {
+      "id": "node_sex",
+      "name": "sex",
+      "type": "node",
+      "nodeType": "constant",
+      "position": { "x": 120, "y": 200 },
+      "parent": "plate_i",
+      "indices": "i"
+    },
+    {
+      "id": "node_disease",
+      "name": "disease",
+      "type": "node",
+      "nodeType": "constant",
+      "position": { "x": 250, "y": 200 },
+      "parent": "plate_i",
+      "indices": "i"
+    },
+    {
+      "id": "node_b",
+      "name": "b",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 500, "y": 200 },
+      "parent": "plate_i",
+      "distribution": "dnorm",
+      "indices": "i",
+      "param1": "0.0",
+      "param2": "tau"
+    },
+    {
+      "id": "node_age",
+      "name": "age",
+      "type": "node",
+      "nodeType": "constant",
+      "position": { "x": 200, "y": 310 },
+      "parent": "plate_j",
+      "indices": "i,j"
+    },
+    {
+      "id": "node_mu",
+      "name": "mu",
+      "type": "node",
+      "nodeType": "deterministic",
+      "position": { "x": 380, "y": 340 },
+      "parent": "plate_j",
+      "indices": "i,j",
+      "equation": "exp(alpha + beta.age * age[i, j] + beta.sex * sex[i] + beta.dis[disease[i]] + b[i])"
+    },
+    {
+      "id": "node_t",
+      "name": "t",
+      "type": "node",
+      "nodeType": "observed",
+      "position": { "x": 380, "y": 440 },
+      "parent": "plate_j",
+      "distribution": "dweib",
+      "indices": "i,j",
+      "observed": true,
+      "param1": "r",
+      "param2": "mu[i, j]",
+      "censorLower": "t.cen[i, j]"
+    },
+    {
+      "id": "plate_k",
+      "name": "Plate.k",
+      "type": "node",
+      "nodeType": "plate",
+      "position": { "x": 480, "y": 120 },
+      "loopVariable": "k",
+      "loopRange": "2:4"
+    },
+    {
+      "id": "node_beta.dis",
+      "name": "beta.dis",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 480, "y": 120 },
+      "parent": "plate_k",
+      "distribution": "dnorm",
+      "indices": "k",
+      "param1": "0.0",
+      "param2": "0.0001"
+    },
+    {
+      "id": "edge_alpha_mu",
+      "type": "edge",
+      "source": "node_alpha",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_betaage_mu",
+      "type": "edge",
+      "source": "node_beta.age",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_betasex_mu",
+      "type": "edge",
+      "source": "node_beta.sex",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_betadis_mu",
+      "type": "edge",
+      "source": "node_beta.dis",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_age_mu",
+      "type": "edge",
+      "source": "node_age",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_sex_mu",
+      "type": "edge",
+      "source": "node_sex",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_disease_mu",
+      "type": "edge",
+      "source": "node_disease",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_b_mu",
+      "type": "edge",
+      "source": "node_b",
+      "target": "node_mu",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_mu_t",
+      "type": "edge",
+      "source": "node_mu",
+      "target": "node_t",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_r_t",
+      "type": "edge",
+      "source": "node_r",
+      "target": "node_t",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_tau_b",
+      "type": "edge",
+      "source": "node_tau",
+      "target": "node_b",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_tau_sigma",
+      "type": "edge",
+      "source": "node_tau",
+      "target": "node_sigma",
+      "relationshipType": "deterministic"
+    }
+  ],
+  "dataContent": "{\n  \"data\": {\n    \"N\": 38,\n    \"M\": 2,\n    \"t\": [\n      [8, 16], [23, null], [22, 28], [447, 318], [30, 12], [24, 245], [7, 9], [511, 30],\n      [53, 196], [15, 154], [7, 333], [141, null], [96, 38], [null, null], [536, null], [17, null],\n      [185, 177], [292, 114], [null, null], [15, null], [152, 562], [402, null], [13, 66], [39, null],\n      [12, 40], [null, 201], [132, 156], [34, 30], [2, 25], [130, 26], [27, 58], [null, 43],\n      [152, 30], [190, null], [119, 8], [null, null], [null, 78], [63, null]\n    ],\n    \"t.cen\": [\n      [0, 0], [0, 13], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0],\n      [0, 0], [0, 0], [0, 0], [0, 8], [0, 0], [149, 70], [0, 25], [0, 4],\n      [0, 0], [0, 0], [22, 159], [0, 108], [0, 0], [0, 24], [0, 0], [0, 46],\n      [0, 0], [113, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [5, 0],\n      [0, 0], [0, 5], [0, 0], [54, 16], [6, 0], [0, 8]\n    ],\n    \"sex\": [0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0],\n    \"disease\": [1, 2, 1, 1, 1, 1, 2, 2, 3, 2, 3, 1, 3, 3, 1, 3, 1, 1, 2, 1, 4, 1, 3, 3, 3, 3, 2, 3, 2, 2, 3, 3, 4, 2, 1, 1, 4, 4],\n    \"age\": [\n      [28, 28], [48, 48], [32, 32], [31, 32], [10, 10], [16, 17], [51, 51], [55, 56],\n      [69, 69], [51, 52], [44, 44], [34, 34], [35, 35], [42, 42], [17, 17], [60, 60],\n      [60, 60], [43, 44], [53, 53], [44, 44], [46, 47], [30, 30], [62, 63], [42, 43],\n      [43, 43], [57, 58], [10, 10], [52, 52], [53, 53], [54, 54], [56, 56], [50, 51],\n      [57, 57], [44, 45], [22, 22], [42, 42], [52, 52], [60, 60]\n    ],\n    \"beta.dis\": [0, null, null, null]\n  },\n  \"inits\": {\n    \"beta.age\": 0,\n    \"beta.sex\": 0,\n    \"beta.dis\": [null, 0, 0, 0],\n    \"alpha\": 0,\n    \"r\": 1,\n    \"tau\": 0.3\n  }\n}",
+  "version": 1,
+  "layout": {
+    "showCodePanel": false,
+    "codePanelWidth": 400,
+    "codePanelHeight": 300,
+    "showDataPanel": false,
+    "dataPanelX": 40,
+    "dataPanelY": 90,
+    "dataPanelWidth": 400,
+    "dataPanelHeight": 300
+  }
+}

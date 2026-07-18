@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>LSAT · JuliaBUGS.jl</title><meta name="title" content="LSAT · JuliaBUGS.jl"/><meta property="og:title" content="LSAT · JuliaBUGS.jl"/><meta property="twitter:title" content="LSAT · JuliaBUGS.jl"/><meta name="description" content="Documentation for JuliaBUGS.jl."/><meta property="og:description" content="Documentation for JuliaBUGS.jl."/><meta property="twitter:description" content="Documentation for JuliaBUGS.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body>
+<!-- NAVBAR START -->
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
+
+    /* Documenter.jl CSS Overrides */
+    html {
+        scroll-padding-top: calc(var(--navbar-height) + 1rem);
+    }
+    .docs-sidebar, #documenter {
+        margin-top: var(--navbar-height);
+    }
+    .docs-version-selector {
+        margin-bottom: 60px !important;
+    }
+    @media screen and (max-width: 1056px) {
+        .docs-version-selector {
+            margin-bottom: 60px !important;
+        }
+        .docs-sidebar {
+            margin-top: 0 !important;
+        }
+    }
+    /* End of Documenter.jl Tweaks */
+
+    /* DocumenterVitepress integration:
+       Vitepress's default theme already exposes `--vp-layout-top-height` as
+       the hook for adding banner-style chrome above its own nav. Every
+       layout-sensitive component (`.VPNav` `top`, `.VPContent` `margin`,
+       `.VPSidebar` `top`, `.VPLocalNav` `padding-top`, `.VPDocAside` `top`
+       and TOC `padding-top`) is already authored to add this variable to
+       its own offset, so binding it to the TuringLang navbar height makes
+       Vitepress reflow itself correctly with zero further intervention.
+       (`:has(.VPNavBar)` scopes this to Vitepress builds; Documenter HTML
+       sites are untouched.) */
+    html:has(.VPNavBar) {
+        --vp-layout-top-height: var(--navbar-height);
+    }
+
+    /* When the rendered site is Vitepress (detected by .VPNavBar being in the
+       DOM), adopt Vitepress's design tokens so the TuringLang navbar tracks
+       the active theme (light/dark, brand colour, body font) and reads as one
+       piece of chrome with the Vitepress nav below it — rather than a stacked
+       second header with its own colour and typography. */
+    html:has(.VPNavBar) {
+        --primary-bg: var(--vp-c-bg);
+        --heading-color: var(--vp-c-text-1);
+        --item-color: var(--vp-c-text-2);
+        --icon-color: var(--vp-c-text-1);
+        --hover-color: var(--vp-c-brand-1);
+        --shadow-color: var(--vp-c-divider);
+        --dropdown-hover-bg: var(--vp-c-default-soft);
+        --font-family: var(--vp-font-family-base);
+    }
+    html:has(.VPNavBar) .ext-navigation {
+        box-shadow: none;
+        border-bottom: 1px solid var(--vp-c-divider);
+    }
+    /* End of DocumenterVitepress Tweaks */
+
+    /* Color and Font Variables */
+    :root {
+        --heading-color: #6c757d;
+        --item-color: rgb(165, 165, 165);
+        --primary-bg: white;
+        --hover-color: #8faad2;
+        --deprecated-bg: #ff4d4d;
+        --deprecated-text: white;
+        --icon-color: #6c757d;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+        --dropdown-hover-bg: #e9ecef;
+        
+        /* Typography */
+        --font-family: "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+        --nav-link-font-size: 1.0625rem;
+        --turing-title-font-size: 21.25px;
+        --icon-font-size: 1.25rem;
+        --dropdown-arrow-font-size: 0.6875rem;
+        --badge-font-size: 0.75rem;
+
+        /* Sizing and Spacing */
+        --navbar-height: 3.75rem;
+        --logo-height: 31px;
+        --logo-width: auto;
+        --logo-padding-top: 7px;
+        --logo-margin-left: 0.8rem;
+        --title-margin-left: 0.4px;
+        --title-nav-spacing: 1.1rem;
+        --nav-item-margin-left: 1.3rem;
+        --icon-margin-left: 1rem;
+        --dropdown-padding: 1.875rem;
+        --dropdown-item-width: 12.5rem;
+        --dropdown-subitem-width: 15.625rem;
+        --dropdown-subitem-padding: 0.125rem 0.625rem;
+    }
+
+    /* Dark Theme Variable Overrides */
+    html.theme--documenter-dark {
+        --heading-color: #e0e0e0;
+        --item-color: #bdbdbd;
+        --primary-bg: #1f2424;
+        --hover-color: #ffffff;
+        --icon-color: #e0e0e0;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #424242;
+    }
+
+    /* Catppuccin Theme Overrides */
+    html.theme--catppuccin-latte {
+        --heading-color: #4c4f69;
+        --primary-bg: #eff1f5;
+        --icon-color: #4c4f69;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+        --dropdown-hover-bg: #e6e9ef;
+    }
+    html.theme--catppuccin-frappe {
+        --heading-color: #c6d0f5;
+        --primary-bg: #303446;
+        --icon-color: #c6d0f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #51576d;
+    }
+    html.theme--catppuccin-macchiato {
+        --heading-color: #cad3f5;
+        --primary-bg: #24273a;
+        --icon-color: #cad3f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #494d64;
+    }
+    html.theme--catppuccin-mocha {
+        --heading-color: #cad3f5;
+        --primary-bg: #1e1e2e;
+        --icon-color: #cad3f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #45475a;
+    }
+
+
+    /* Main Navigation Bar */
+    .ext-navigation {
+        font-family: var(--font-family);
+        position: fixed;
+        height: var(--navbar-height);
+        top: 0;
+        width: 100%;
+        background-color: var(--primary-bg);
+        z-index: 1000;
+        box-shadow: 0 2px 4px var(--shadow-color);
+        display: flex;
+        align-items: center;
+        padding: 0 1.0625rem;
+        transition: transform 0.3s, background-color 0.3s;
+    }
+
+    nav.ext-navigation .ext-navbar-logo {
+        margin-left: var(--logo-margin-left);
+        height: auto;
+        max-height: var(--logo-height);
+        width: auto;
+        padding-top: var(--logo-padding-top);
+    }
+    
+    /* Theme-aware logo text color */
+    .ext-navbar-logo .logo-text {
+        fill: var(--heading-color);
+    }
+    
+    .ext-navbar-title {
+        color: var(--heading-color) !important;
+        font-size: var(--turing-title-font-size) !important;
+        margin-left: var(--title-margin-left);
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+    
+    .ext-navbar-title:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-nav-links {
+        display: flex;
+        align-items: center;
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        flex-grow: 1;
+        margin-left: var(--title-nav-spacing);
+    }
+
+    .ext-nav-links li:first-child {
+        margin-left: 0 !important;
+    }
+
+    .ext-nav-links li {
+        margin-left: var(--nav-item-margin-left) !important;
+    }
+
+    .ext-nav-link {
+        color: var(--heading-color) !important;
+        text-decoration: none;
+        font-size: var(--nav-link-font-size) !important;
+        transition: color 0.2s ease;
+        cursor: pointer;
+    }
+
+    .ext-nav-link:hover,
+    .ext-navbar-item-single a:hover,
+    .ext-navbar-icons a:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-navbar-item-single a {
+        color: var(--heading-color) !important;
+    }
+    
+    .ext-navbar-icons {
+        display: flex;
+        align-items: center;
+    }
+
+    .ext-navbar-icons a {
+        color: var(--icon-color) !important;
+        font-size: var(--icon-font-size) !important;
+        transition: color 0.2s ease;
+        margin-left: var(--icon-margin-left);
+    }
+
+    .ext-menu-toggle {
+        display: none;
+        font-size: 1.5rem;
+        color: var(--heading-color);
+        cursor: pointer;
+    }
+
+    .ext-dropdown {
+        display: none;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        padding: var(--dropdown-padding);
+        position: absolute;
+        top: var(--navbar-height);
+        width: 100%;
+        left: 0;
+        background-color: var(--primary-bg);
+        line-height: 1.875rem;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out, background-color 0.3s;
+        transform: translateY(-0.625rem);
+        box-shadow: 0 4px 6px var(--shadow-color);
+    }
+
+    #library-handler::after {
+        content: "▼";
+        font-size: var(--dropdown-arrow-font-size);
+        margin-left: 0.3125rem;
+        transition: transform 0.3s ease-in-out;
+    }
+
+    #library-handler.open::after {
+        content: "▲";
+    }
+
+    .ext-dropdown.show {
+        display: grid;
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .ext-dropdown ul {
+        width: var(--dropdown-item-width);
+        margin-bottom: 1.25rem;
+    }
+
+    .ext-dropdown ul li {
+        text-align: left;
+        display: flex;
+        align-items: center;
+    }
+
+    .ext-dropdown ul a li {
+        color: var(--item-color);
+        width: var(--dropdown-subitem-width);
+        border-radius: 3px;
+        padding: var(--dropdown-subitem-padding);
+        transition: background-color 0.2s ease;
+    }
+
+    .ext-dropdown ul a li:hover {
+        background-color: var(--dropdown-hover-bg);
+    }
+
+    .ext-dropdown-item-heading {
+        color: var(--heading-color);
+        text-align: center;
+    }
+
+    .deprecated-badge {
+        background-color: var(--deprecated-bg);
+        color: var(--deprecated-text);
+        font-size: var(--badge-font-size);
+        padding: .1rem;
+        border-radius: 3px;
+        margin-left: 0.5rem;
+        line-height: 1;
+    }
+
+    @media (max-width: 966px) {
+        .ext-dropdown {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .ext-nav-links {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            background-color: var(--primary-bg);
+            position: absolute;
+            top: var(--navbar-height);
+            left: 0;
+            padding: 0.625rem 0;
+            height: auto;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px var(--shadow-color);
+            margin-left: 0;
+        }
+
+        .ext-nav-links.show {
+            display: flex;
+        }
+
+        .ext-nav-links li {
+            margin: 0.625rem 0 !important;
+            text-align: center;
+        }
+        
+        .ext-menu-toggle {
+            display: block;
+            margin-left: auto;
+        }
+
+        .ext-navigation.hide {
+            transform: translateY(calc(-1 * var(--navbar-height)));
+        }
+
+        .ext-dropdown {
+            position: static;
+            display: block;
+            opacity: 1;
+            transform: none;
+            box-shadow: none;
+            grid-template-columns: 1fr;
+            padding: 0.625rem;
+            text-align: center;
+        }
+
+        .ext-dropdown ul {
+            width: auto;
+            display: inline-block;
+            margin: 0 auto 0.3125rem;
+            text-align: left;
+        }
+    }
+</style>
+<nav class="ext-navigation">
+    <a title="TuringLang" href="https://turinglang.org/">
+        <svg width="4333" height="1145" viewBox="0 0 4333 1145" fill="none" xmlns="http://www.w3.org/2000/svg" class="ext-navbar-logo">
+            <path class="logo-text" d="M0.44603 193.181V66.9868H663.471V193.181H406.62V898H257.297V193.181H0.44603ZM1097.24 635.874V274.74H1244.13V898H1101.7V787.225H1095.21C1081.14 822.121 1058.01 850.66 1025.82 872.842C993.902 895.024 954.542 906.115 907.744 906.115C866.896 906.115 830.783 897.053 799.403 878.929C768.295 860.534 743.948 833.889 726.365 798.993C708.782 763.826 699.99 721.356 699.99 671.581V274.74H846.878V648.858C846.878 688.353 857.699 719.733 879.34 742.997C900.981 766.261 929.385 777.893 964.551 777.893C986.192 777.893 1007.16 772.618 1027.45 762.068C1047.73 751.518 1064.37 735.828 1077.35 714.999C1090.61 693.899 1097.24 667.524 1097.24 635.874ZM1395.17 898V274.74H1537.6V378.617H1544.09C1555.45 342.639 1574.93 314.911 1602.52 295.434C1630.38 275.687 1662.17 265.813 1697.88 265.813C1705.99 265.813 1715.05 266.219 1725.06 267.031C1735.34 267.572 1743.86 268.518 1750.63 269.871V404.992C1744.4 402.828 1734.53 400.934 1721 399.311C1707.75 397.417 1694.9 396.471 1682.46 396.471C1655.68 396.471 1631.6 402.287 1610.23 413.919C1589.13 425.28 1572.49 441.105 1560.32 461.393C1548.15 481.682 1542.06 505.081 1542.06 531.591V898H1395.17ZM1848.21 898V274.74H1995.1V898H1848.21ZM1922.06 186.283C1898.8 186.283 1878.78 178.573 1862.01 163.154C1845.24 147.464 1836.85 128.664 1836.85 106.752C1836.85 84.5701 1845.24 65.7695 1862.01 50.3503C1878.78 34.6606 1898.8 26.8158 1922.06 26.8158C1945.6 26.8158 1965.61 34.6606 1982.12 50.3503C1998.89 65.7695 2007.27 84.5701 2007.27 106.752C2007.27 128.664 1998.89 147.464 1982.12 163.154C1965.61 178.573 1945.6 186.283 1922.06 186.283ZM2293.04 532.809V898H2146.15V274.74H2286.54V380.646H2293.85C2308.18 345.75 2331.04 318.022 2362.42 297.463C2394.07 276.904 2433.16 266.625 2479.69 266.625C2522.7 266.625 2560.17 275.822 2592.09 294.217C2624.28 312.612 2649.17 339.257 2666.75 374.153C2684.6 409.049 2693.39 451.385 2693.12 501.159V898H2546.24V523.882C2546.24 482.223 2535.41 449.626 2513.77 426.092C2492.4 402.557 2462.78 390.79 2424.91 390.79C2399.21 390.79 2376.35 396.471 2356.34 407.832C2336.59 418.923 2321.03 435.019 2309.67 456.119C2298.58 477.218 2293.04 502.782 2293.04 532.809ZM3113.5 1144.71C3060.75 1144.71 3015.44 1137.54 2977.57 1123.2C2939.7 1109.13 2909.26 1090.2 2886.27 1066.39C2863.28 1042.59 2847.32 1016.21 2838.39 987.269L2970.67 955.213C2976.62 967.386 2985.28 979.424 2996.64 991.327C3008 1003.5 3023.28 1013.51 3042.49 1021.35C3061.97 1029.47 3086.45 1033.53 3115.93 1033.53C3157.59 1033.53 3192.08 1023.38 3219.4 1003.09C3246.73 983.076 3260.39 950.074 3260.39 904.087V786.008H3253.08C3245.51 801.157 3234.42 816.711 3219.81 832.671C3205.47 848.632 3186.4 862.022 3162.6 872.842C3139.06 883.663 3109.44 889.073 3073.73 889.073C3025.85 889.073 2982.44 877.847 2943.48 855.394C2904.8 832.671 2873.96 798.857 2850.97 753.952C2828.24 708.777 2816.88 652.24 2816.88 584.341C2816.88 515.902 2828.24 458.147 2850.97 411.078C2873.96 363.739 2904.93 327.896 2943.89 303.55C2982.84 278.933 3026.26 266.625 3074.14 266.625C3110.66 266.625 3140.69 272.847 3164.22 285.29C3188.03 297.463 3206.96 312.206 3221.03 329.519C3235.09 346.561 3245.78 362.657 3253.08 377.805H3261.2V274.74H3406.06V908.144C3406.06 961.435 3393.34 1005.53 3367.92 1040.42C3342.49 1075.32 3307.73 1101.43 3263.63 1118.74C3219.54 1136.05 3169.5 1144.71 3113.5 1144.71ZM3114.72 773.835C3145.83 773.835 3172.34 766.261 3194.25 751.112C3216.16 735.963 3232.79 714.187 3244.16 685.783C3255.52 657.379 3261.2 623.295 3261.2 583.53C3261.2 544.305 3255.52 509.95 3244.16 480.465C3233.07 450.979 3216.56 428.12 3194.65 411.89C3173.01 395.389 3146.37 387.138 3114.72 387.138C3081.98 387.138 3054.66 395.659 3032.75 412.701C3010.84 429.744 2994.34 453.143 2983.25 482.899C2972.16 512.385 2966.61 545.929 2966.61 583.53C2966.61 621.672 2972.16 655.08 2983.25 683.754C2994.61 712.158 3011.25 734.34 3033.16 750.3C3055.34 765.99 3082.53 773.835 3114.72 773.835ZM3647.08 906.927C3622.47 906.927 3601.37 898.271 3583.78 880.958C3566.2 863.645 3557.54 842.545 3557.82 817.658C3557.54 793.312 3566.2 772.482 3583.78 755.17C3601.37 737.857 3622.47 729.2 3647.08 729.2C3670.89 729.2 3691.58 737.857 3709.17 755.17C3727.02 772.482 3736.08 793.312 3736.35 817.658C3736.08 834.159 3731.75 849.173 3723.37 862.698C3715.25 876.224 3704.43 887.044 3690.91 895.16C3677.65 903.004 3663.04 906.927 3647.08 906.927ZM3888.01 274.74H4034.9V933.708C4034.9 978.613 4026.38 1015.67 4009.33 1044.89C3992.29 1074.1 3967.67 1095.88 3935.48 1110.22C3903.29 1124.55 3864.2 1131.72 3818.22 1131.72C3812.81 1131.72 3807.8 1131.59 3803.2 1131.32C3798.6 1131.32 3793.6 1131.18 3788.19 1130.91V1011.21C3792.25 1011.48 3795.9 1011.62 3799.15 1011.62C3802.39 1011.89 3805.77 1012.02 3809.29 1012.02C3837.42 1012.02 3857.58 1005.12 3869.75 991.327C3881.92 977.801 3888.01 957.918 3888.01 931.679V274.74ZM3961.05 186.283C3937.51 186.283 3917.36 178.573 3900.59 163.154C3884.09 147.464 3875.84 128.664 3875.84 106.752C3875.84 84.5701 3884.09 65.7695 3900.59 50.3503C3917.36 34.6606 3937.51 26.8158 3961.05 26.8158C3984.31 26.8158 4004.19 34.6606 4020.7 50.3503C4037.47 65.7695 4045.85 84.5701 4045.85 106.752C4045.85 128.664 4037.47 147.464 4020.7 163.154C4004.19 178.573 3984.31 186.283 3961.05 186.283ZM4332.83 66.9868V898H4185.94V66.9868H4332.83Z" fill="currentColor"/>
+            <path d="M4076 108.5C4076 168.424 4027.42 217 3967.5 217C3907.58 217 3859 168.424 3859 108.5C3859 48.5762 3907.58 0 3967.5 0C4027.42 0 4076 48.5762 4076 108.5Z" fill="#389725"/>
+            <path d="M3755 814.5C3755 874.424 3706.42 923 3646.5 923C3586.58 923 3538 874.424 3538 814.5C3538 754.576 3586.58 706 3646.5 706C3706.42 706 3755 754.576 3755 814.5Z" fill="#9457B1"/>
+            <path d="M2030 108.5C2030 168.424 1981.42 217 1921.5 217C1861.58 217 1813 168.424 1813 108.5C1813 48.5762 1861.58 0 1921.5 0C1981.42 0 2030 48.5762 2030 108.5Z" fill="#CA3B33"/>
+        </svg>
+    </a>
+    <!-- <a class="ext-navbar-title" href="https://turinglang.org/">Turing.jl</a> -->
+    
+    <ul class="ext-nav-links">
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/getting-started/">Get Started</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/tutorials/">Tutorials</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/faq/">FAQ</a></li>
+        <li>
+            <p class="ext-nav-link" id="library-handler">Libraries</p>
+            <div class="ext-dropdown" id="ext-dropdown-items">
+                <ul>
+                    <li class="ext-dropdown-item-heading">Modelling Languages</li>
+                    <a href="https://turinglang.org/DynamicPPL.jl/"><li>DynamicPPL</li></a>
+                    <a href="https://turinglang.org/JuliaBUGS.jl/"><li>JuliaBUGS</li></a>
+                    <a href="https://turinglang.org/TuringGLM.jl/"><li>TuringGLM</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">MCMC</li>
+                    <a href="https://turinglang.org/AdvancedHMC.jl/"><li>AdvancedHMC</li></a>
+                    <a href="https://turinglang.org/AbstractMCMC.jl/"><li>AbstractMCMC</li></a>
+                    <a href="https://github.com/theogf/ThermodynamicIntegration.jl"><li>ThermodynamicIntegration</li></a>
+                    <a href="https://turinglang.org/AdvancedPS.jl/"><li>AdvancedPS</li></a>
+                    <a href="https://turinglang.org/SliceSampling.jl/"><li>SliceSampling</li></a>
+                    <a href="https://turinglang.org/EllipticalSliceSampling.jl/"><li>EllipticalSliceSampling</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Diagnostics</li>
+                    <a href="https://turinglang.org/MCMCChains.jl/"><li>MCMCChains</li></a>
+                    <a href="https://turinglang.org/MCMCDiagnosticTools.jl/"><li>MCMCDiagnosticTools</li></a>
+                    <a href="https://chalk-lab.github.io/ParetoSmooth.jl/"><li>ParetoSmooth</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Gaussian Processes</li>
+                    <a href="https://juliagaussianprocesses.github.io/AbstractGPs.jl/"><li>AbstractGPs</li></a>
+                    <a href="https://juliagaussianprocesses.github.io/KernelFunctions.jl/"><li>KernelFunctions</li></a>
+                    <a href="https://juliagaussianprocesses.github.io/ApproximateGPs.jl/"><li>ApproximateGPs</li></a>
+                </ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/Bijectors.jl/">Bijectors</a></li></ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/TuringCallbacks.jl/">TuringCallbacks</a></li></ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/Deprecated/TuringBenchmarking/">TuringBenchmarking</a><span class="deprecated-badge">Deprecated</span></li></ul>
+            </div>
+        </li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/news/">News</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/team/">Team</a></li>
+    </ul>
+
+    <div class="ext-navbar-icons">
+        <a href="https://x.com/TuringLang" aria-label="Turing on X"><i class="fa-brands fa-x-twitter"></i></a>
+        <a href="https://discourse.julialang.org/c/domain/probprog/48" aria-label="Turing on Discourse"><i class="fa-brands fa-discourse"></i></a>
+        <a href="https://julialang.slack.com/archives/CCYDC34A0" aria-label="Turing on Slack"><i class="fa-brands fa-slack"></i></a>
+        <a href="https://github.com/TuringLang/" aria-label="Turing.jl on GitHub"><i class="fa-brands fa-github"></i></a>
+    </div>
+
+    <span class="ext-menu-toggle"><i class="fa-solid fa-bars"></i></span>
+</nav>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const menuToggle = document.querySelector(".ext-menu-toggle");
+        const navLinks = document.querySelector(".ext-nav-links");
+        const nav = document.querySelector(".ext-navigation");
+        const libraryHandler = document.getElementById("library-handler");
+        const dropdownContainer = document.getElementById("ext-dropdown-items");
+        let lastScrollY = window.scrollY;
+
+        function closeDropdown() {
+            if (dropdownContainer.classList.contains("show")) {
+                libraryHandler.classList.remove("open");
+                dropdownContainer.classList.remove("show");
+                setTimeout(() => {
+                    if (!dropdownContainer.classList.contains("show")) {
+                        dropdownContainer.style.display = "none";
+                    }
+                }, 300);
+            }
+        }
+
+        function openDropdown() {
+            dropdownContainer.style.display = "grid";
+            libraryHandler.classList.add("open");
+            setTimeout(() => {
+                dropdownContainer.classList.add("show");
+            }, 10);
+        }
+
+        function setAppropriateHeight() {
+            if (window.innerWidth <= 768) {
+                const viewportHeight = window.innerHeight;
+                const navHeight = nav.offsetHeight;
+                navLinks.style.maxHeight = `${viewportHeight - navHeight}px`;
+                navLinks.style.overflowY = "auto";
+            } else {
+                navLinks.style.maxHeight = "";
+                navLinks.style.overflowY = "";
+            }
+        }
+
+        menuToggle.addEventListener("click", (event) => {
+            event.stopPropagation();
+            navLinks.classList.toggle("show");
+            if (navLinks.classList.contains("show")) {
+                setAppropriateHeight();
+                closeDropdown();
+                dropdownContainer.style.display = "none";
+            }
+        });
+
+        libraryHandler.addEventListener("click", (event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            if (dropdownContainer.classList.contains("show")) {
+                closeDropdown();
+            } else {
+                openDropdown();
+            }
+            setAppropriateHeight();
+        });
+
+        // Close all menus if a click is registered outside the navigation bar.
+        document.addEventListener("click", (event) => {
+            if (!nav.contains(event.target)) {
+                navLinks.classList.remove("show");
+                closeDropdown();
+            }
+        });
+
+        // Hide navigation bar on scroll down in mobile view.
+        window.addEventListener("scroll", () => {
+            if (window.innerWidth <= 768) {
+                if (window.scrollY > lastScrollY && window.scrollY > nav.offsetHeight){
+                    nav.classList.add("hide");
+                } else {
+                    nav.classList.remove("hide");
+                }
+                lastScrollY = window.scrollY;
+            }
+        });
+
+        window.addEventListener("resize", setAppropriateHeight);
+    });
+</script>
+<!-- NAVBAR END -->
+
+
+
+<div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">JuliaBUGS.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><a class="tocitem" href="../../example/">In Depth: Seeds</a></li></ul></li><li><span class="tocitem">Example Gallery</span><ul><li><a class="tocitem" href="../">Overview</a></li><li><a class="tocitem" href="../rats/">Rats</a></li><li><a class="tocitem" href="../pumps/">Pumps</a></li><li><a class="tocitem" href="../dogs/">Dogs</a></li><li><a class="tocitem" href="../seeds/">Seeds</a></li><li><a class="tocitem" href="../surgical/">Surgical</a></li><li><a class="tocitem" href="../magnesium/">Magnesium</a></li><li><a class="tocitem" href="../salm/">Salm</a></li><li><a class="tocitem" href="../equiv/">Equiv</a></li><li><a class="tocitem" href="../dyes/">Dyes</a></li><li><a class="tocitem" href="../stacks/">Stacks</a></li><li><a class="tocitem" href="../epil/">Epil</a></li><li><a class="tocitem" href="../blockers/">Blockers</a></li><li><a class="tocitem" href="../oxford/">Oxford</a></li><li class="is-active"><a class="tocitem" href>LSAT</a><ul class="internal"><li><a class="tocitem" href="#Model"><span>Model</span></a></li><li><a class="tocitem" href="#Data"><span>Data</span></a></li><li><a class="tocitem" href="#Sampling"><span>Sampling</span></a></li><li><a class="tocitem" href="#Results"><span>Results</span></a></li></ul></li><li><a class="tocitem" href="../bones/">Bones</a></li><li><a class="tocitem" href="../mice/">Mice</a></li><li><a class="tocitem" href="../kidney/">Kidney</a></li><li><a class="tocitem" href="../leuk/">Leuk</a></li><li><a class="tocitem" href="../leukfr/">LeukFr</a></li></ul></li><li><span class="tocitem">Coming from...</span><ul><li><a class="tocitem" href="../../guides/differences/">WinBUGS, OpenBUGS, JAGS</a></li><li><a class="tocitem" href="../../migration/from_turing/">Turing.jl</a></li><li><a class="tocitem" href="../../R_interface/">R</a></li></ul></li><li><span class="tocitem">Modeling</span><ul><li><a class="tocitem" href="../../two_macros/">Two Macros: <code>@bugs</code> &amp; <code>@model</code></a></li><li><a class="tocitem" href="../../model_macro/"><code>@model</code> Macro</a></li><li><a class="tocitem" href="../../model_as_distribution/">Model as a Distribution</a></li></ul></li><li><span class="tocitem">Inference</span><ul><li><a class="tocitem" href="../../inference/ad/">Automatic Differentiation</a></li><li><a class="tocitem" href="../../inference/evaluation_modes/">Evaluation Modes</a></li><li><a class="tocitem" href="../../inference/auto_marginalization/">Auto-Marginalization</a></li><li><a class="tocitem" href="../../inference/generated_quantities/">Generated Quantities</a></li><li><a class="tocitem" href="../../inference/fixing/">Fixing Variables (<code>fix</code> / <code>unfix</code>)</a></li><li><a class="tocitem" href="../../inference/slice_sampling/">Slice Sampling</a></li><li><a class="tocitem" href="../../inference/parallel/">Parallel &amp; Distributed Sampling</a></li></ul></li><li><span class="tocitem">Guides</span><ul><li><a class="tocitem" href="../../guides/pitfalls/">Pitfalls</a></li><li><a class="tocitem" href="../../guides/tricks/">Implementation Tricks</a></li></ul></li><li><a class="tocitem" href="../../graph_plotting/">Plotting</a></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../../api/api/">General</a></li><li><a class="tocitem" href="../../api/functions/">Functions</a></li><li><a class="tocitem" href="../../api/distributions/">Distributions</a></li></ul></li><li><span class="tocitem">Design &amp; Internals</span><ul><li><a class="tocitem" href="../../of_design_doc/"><code>of</code> Type System</a></li><li><a class="tocitem" href="../../developers/parser/">Parser</a></li><li><a class="tocitem" href="../../developers/source_gen/">Source Code Generation</a></li><li><a class="tocitem" href="../../developers/BUGS_notes/">Notes on BUGS Implementations</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Example Gallery</a></li><li class="is-active"><a href>LSAT</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>LSAT</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/TuringLang/JuliaBUGS.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/TuringLang/JuliaBUGS.jl/blob/main/JuliaBUGS/docs/src/examples/lsat.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="LSAT:-Item-Response"><a class="docs-heading-anchor" href="#LSAT:-Item-Response">LSAT: Item Response</a><a id="LSAT:-Item-Response-1"></a><a class="docs-heading-anchor-permalink" href="#LSAT:-Item-Response" title="Permalink"></a></h1><p>This is the classic <em>LSAT</em> example from <a href="https://www.multibugs.org/examples/latest/VolumeI.html">Volume 1 of the BUGS examples</a> (see also the <a href="https://chjackson.github.io/openbugsdoc/Examples/Lsat.html">OpenBUGS write-up</a>). Section 6 of the Law School Aptitude Test (LSAT) is a 5-item multiple choice test; students score 1 on each item for a correct answer and 0 otherwise, giving 32 possible response patterns. Bock and Lieberman (1970) present data on this test for 1000 students, recorded as the frequency of each of the <code>R = 32</code> response patterns.</p><p>The question is how to separate the difficulty of each test item from the ability of each student. The data are analysed with the one-parameter <strong>Rasch model</strong>, a foundational item response model: the probability that student <code>j</code> answers item <code>k</code> correctly follows a logistic function of an item difficulty parameter <code>alpha[k]</code> and a latent ability <code>theta[j]</code>, with abilities assumed normally distributed in the student population. The scale parameter <code>beta</code> (constrained to be positive) governs the spread of the ability distribution. Because the location of the difficulties is only identified relative to the mean ability (fixed at zero), the model also computes centred difficulties <code>a[k] = alpha[k] - mean(alpha)</code>, which can be compared with the marginal maximum likelihood estimates of Bock and Aitkin (1981).</p><h2 id="Model"><a class="docs-heading-anchor" href="#Model">Model</a><a id="Model-1"></a><a class="docs-heading-anchor-permalink" href="#Model" title="Permalink"></a></h2><p>Writing <span>$p_{jk}$</span> for the probability that student <span>$j$</span> answers item <span>$k$</span> correctly, the model is</p><p class="math-container">\[\begin{aligned}
+r_{jk} &amp;\sim \text{Bernoulli}(p_{jk}) \\
+\operatorname{logit}(p_{jk}) &amp;= \beta\,\theta_j - \alpha_k, \qquad j = 1,\dots,1000;\ k = 1,\dots,5 \\
+\theta_j &amp;\sim \text{Normal}(0, 1)
+\end{aligned}\]</p><p>with vague normal priors on the item difficulties <span>$\alpha_k$</span> and a flat prior on <span>$(0, 1000)$</span> for <span>$\beta$</span>.</p><p>The data arrive as 32 aggregated response patterns rather than individual answers, so the first part of the program expands them: using the cumulative pattern counts <code>culm</code>, it assigns each of the 1000 students the binary response vector of their pattern. This deterministic data transformation is carried over directly from the original BUGS program. As in BUGS generally, the link-function form <code>logit(p[j, k]) &lt;- ...</code> is written in Julia by applying the inverse link (<code>logistic</code>) on the right-hand side.</p><pre><code class="language-julia hljs">using JuliaBUGS
+
+lsat = @bugs begin
+    # Calculate individual (binary) responses to each test from Multinomial data
+    for j in 1:culm[1]
+        for k in 1:T
+            r[j, k] = response[1, k]
+        end
+    end
+
+    for i in 2:R
+        for j in (culm[i - 1] + 1):culm[i]
+            for k in 1:T
+                r[j, k] = response[i, k]
+            end
+        end
+    end
+
+    # Rasch model
+    for j in 1:N
+        for k in 1:T
+            p[j, k] = logistic(beta * theta[j] - alpha[k])
+            r[j, k] ~ dbern(p[j, k])
+        end
+        theta[j] ~ dnorm(0, 1)
+    end
+
+    # Priors
+    for k in 1:T
+        alpha[k] ~ dnorm(0, 0.0001)
+        a[k] = alpha[k] - mean(alpha[:])
+    end
+    beta ~ dunif(0, 1000)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">BUGSModelDef:
+begin
+    for j = 1:culm[1]
+        for k = 1:T
+            r[j, k] = response[1, k]
+        end
+    end
+    for i = 2:R
+        for j = culm[i - 1] + 1:culm[i]
+            for k = 1:T
+                r[j, k] = response[i, k]
+            end
+        end
+    end
+    for j = 1:N
+        for k = 1:T
+            p[j, k] = logistic(beta * theta[j] - alpha[k])
+            r[j, k] ~ dbern(p[j, k])
+        end
+        theta[j] ~ dnorm(0, 1)
+    end
+    for k = 1:T
+        alpha[k] ~ dnorm(0, 0.0001)
+        a[k] = alpha[k] - mean(alpha[:])
+    end
+    beta ~ dunif(0, 1000)
+end</code></pre><h2 id="Data"><a class="docs-heading-anchor" href="#Data">Data</a><a id="Data-1"></a><a class="docs-heading-anchor-permalink" href="#Data" title="Permalink"></a></h2><p>The data are supplied as a <code>NamedTuple</code>. <code>N = 1000</code> is the number of students, <code>T = 5</code> the number of test items, and <code>R = 32</code> the number of distinct response patterns. Each row of <code>response</code> is one pattern of five 0/1 answers, and <code>culm</code> gives the cumulative number of students whose answers match patterns up to and including that row.</p><pre><code class="language-julia hljs">data = (
+    N = 1000,
+    R = 32,
+    T = 5,
+    culm = [3, 9, 11, 22, 23, 24, 27, 31, 32, 40, 40, 56, 56, 59, 61, 76, 86, 115,
+        129, 210, 213, 241, 256, 336, 352, 408, 429, 602, 613, 674, 702, 1000],
+    response = [0 0 0 0 0
+                0 0 0 0 1
+                0 0 0 1 0
+                0 0 0 1 1
+                0 0 1 0 0
+                0 0 1 0 1
+                0 0 1 1 0
+                0 0 1 1 1
+                0 1 0 0 0
+                0 1 0 0 1
+                0 1 0 1 0
+                0 1 0 1 1
+                0 1 1 0 0
+                0 1 1 0 1
+                0 1 1 1 0
+                0 1 1 1 1
+                1 0 0 0 0
+                1 0 0 0 1
+                1 0 0 1 0
+                1 0 0 1 1
+                1 0 1 0 0
+                1 0 1 0 1
+                1 0 1 1 0
+                1 0 1 1 1
+                1 1 0 0 0
+                1 1 0 0 1
+                1 1 0 1 0
+                1 1 0 1 1
+                1 1 1 0 0
+                1 1 1 0 1
+                1 1 1 1 0
+                1 1 1 1 1]
+)
+
+model = lsat(data)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr34"><span class="sgr1">BUGSModel</span></span> (parameters are in transformed (unconstrained) space, with dimension 1006):
+
+<span class="sgr33"><span class="sgr1">  Model parameters:</span></span>
+    <span class="sgr36">alpha[5], alpha[4], alpha[3], alpha[2], alpha[1]</span>
+    <span class="sgr36">beta</span>
+    <span class="sgr36">theta[1000], theta[999], theta[998], theta[997], theta[996], theta[995], theta[994], theta[993], theta[992], theta[991], theta[990], theta[989], theta[988], theta[987], theta[986], theta[985], theta[984], theta[983], theta[982], theta[981], theta[980], theta[979], theta[978], theta[977], theta[976], theta[975], theta[974], theta[973], theta[972], theta[971], theta[970], theta[969], theta[968], theta[967], theta[966], theta[965], theta[964], theta[963], theta[962], theta[961], theta[960], theta[959], theta[958], theta[957], theta[956], theta[955], theta[954], theta[953], theta[952], theta[951], theta[950], theta[949], theta[948], theta[947], theta[946], theta[945], theta[944], theta[943], theta[942], theta[941], theta[940], theta[939], theta[938], theta[937], theta[936], theta[935], theta[934], theta[933], theta[932], theta[931], theta[930], theta[929], theta[928], theta[927], theta[926], theta[925], theta[924], theta[923], theta[922], theta[921], theta[920], theta[919], theta[918], theta[917], theta[916], theta[915], theta[914], theta[913], theta[912], theta[911], theta[910], theta[909], theta[908], theta[907], theta[906], theta[905], theta[904], theta[903], theta[902], theta[901], theta[900], theta[899], theta[898], theta[897], theta[896], theta[895], theta[894], theta[893], theta[892], theta[891], theta[890], theta[889], theta[888], theta[887], theta[886], theta[885], theta[884], theta[883], theta[882], theta[881], theta[880], theta[879], theta[878], theta[877], theta[876], theta[875], theta[874], theta[873], theta[872], theta[871], theta[870], theta[869], theta[868], theta[867], theta[866], theta[865], theta[864], theta[863], theta[862], theta[861], theta[860], theta[859], theta[858], theta[857], theta[856], theta[855], theta[854], theta[853], theta[852], theta[851], theta[850], theta[849], theta[848], theta[847], theta[846], theta[845], theta[844], theta[843], theta[842], theta[841], theta[840], theta[839], theta[838], theta[837], theta[836], theta[835], theta[834], theta[833], theta[832], theta[831], theta[830], theta[829], theta[828], theta[827], theta[826], theta[825], theta[824], theta[823], theta[822], theta[821], theta[820], theta[819], theta[818], theta[817], theta[816], theta[815], theta[814], theta[813], theta[812], theta[811], theta[810], theta[809], theta[808], theta[807], theta[806], theta[805], theta[804], theta[803], theta[802], theta[801], theta[800], theta[799], theta[798], theta[797], theta[796], theta[795], theta[794], theta[793], theta[792], theta[791], theta[790], theta[789], theta[788], theta[787], theta[786], theta[785], theta[784], theta[783], theta[782], theta[781], theta[780], theta[779], theta[778], theta[777], theta[776], theta[775], theta[774], theta[773], theta[772], theta[771], theta[770], theta[769], theta[768], theta[767], theta[766], theta[765], theta[764], theta[763], theta[762], theta[761], theta[760], theta[759], theta[758], theta[757], theta[756], theta[755], theta[754], theta[753], theta[752], theta[751], theta[750], theta[749], theta[748], theta[747], theta[746], theta[745], theta[744], theta[743], theta[742], theta[741], theta[740], theta[739], theta[738], theta[737], theta[736], theta[735], theta[734], theta[733], theta[732], theta[731], theta[730], theta[729], theta[728], theta[727], theta[726], theta[725], theta[724], theta[723], theta[722], theta[721], theta[720], theta[719], theta[718], theta[717], theta[716], theta[715], theta[714], theta[713], theta[712], theta[711], theta[710], theta[709], theta[708], theta[707], theta[706], theta[705], theta[704], theta[703], theta[702], theta[701], theta[700], theta[699], theta[698], theta[697], theta[696], theta[695], theta[694], theta[693], theta[692], theta[691], theta[690], theta[689], theta[688], theta[687], theta[686], theta[685], theta[684], theta[683], theta[682], theta[681], theta[680], theta[679], theta[678], theta[677], theta[676], theta[675], theta[674], theta[673], theta[672], theta[671], theta[670], theta[669], theta[668], theta[667], theta[666], theta[665], theta[664], theta[663], theta[662], theta[661], theta[660], theta[659], theta[658], theta[657], theta[656], theta[655], theta[654], theta[653], theta[652], theta[651], theta[650], theta[649], theta[648], theta[647], theta[646], theta[645], theta[644], theta[643], theta[642], theta[641], theta[640], theta[639], theta[638], theta[637], theta[636], theta[635], theta[634], theta[633], theta[632], theta[631], theta[630], theta[629], theta[628], theta[627], theta[626], theta[625], theta[624], theta[623], theta[622], theta[621], theta[620], theta[619], theta[618], theta[617], theta[616], theta[615], theta[614], theta[613], theta[612], theta[611], theta[610], theta[609], theta[608], theta[607], theta[606], theta[605], theta[604], theta[603], theta[602], theta[601], theta[600], theta[599], theta[598], theta[597], theta[596], theta[595], theta[594], theta[593], theta[592], theta[591], theta[590], theta[589], theta[588], theta[587], theta[586], theta[585], theta[584], theta[583], theta[582], theta[581], theta[580], theta[579], theta[578], theta[577], theta[576], theta[575], theta[574], theta[573], theta[572], theta[571], theta[570], theta[569], theta[568], theta[567], theta[566], theta[565], theta[564], theta[563], theta[562], theta[561], theta[560], theta[559], theta[558], theta[557], theta[556], theta[555], theta[554], theta[553], theta[552], theta[551], theta[550], theta[549], theta[548], theta[547], theta[546], theta[545], theta[544], theta[543], theta[542], theta[541], theta[540], theta[539], theta[538], theta[537], theta[536], theta[535], theta[534], theta[533], theta[532], theta[531], theta[530], theta[529], theta[528], theta[527], theta[526], theta[525], theta[524], theta[523], theta[522], theta[521], theta[520], theta[519], theta[518], theta[517], theta[516], theta[515], theta[514], theta[513], theta[512], theta[511], theta[510], theta[509], theta[508], theta[507], theta[506], theta[505], theta[504], theta[503], theta[502], theta[501], theta[500], theta[499], theta[498], theta[497], theta[496], theta[495], theta[494], theta[493], theta[492], theta[491], theta[490], theta[489], theta[488], theta[487], theta[486], theta[485], theta[484], theta[483], theta[482], theta[481], theta[480], theta[479], theta[478], theta[477], theta[476], theta[475], theta[474], theta[473], theta[472], theta[471], theta[470], theta[469], theta[468], theta[467], theta[466], theta[465], theta[464], theta[463], theta[462], theta[461], theta[460], theta[459], theta[458], theta[457], theta[456], theta[455], theta[454], theta[453], theta[452], theta[451], theta[450], theta[449], theta[448], theta[447], theta[446], theta[445], theta[444], theta[443], theta[442], theta[441], theta[440], theta[439], theta[438], theta[437], theta[436], theta[435], theta[434], theta[433], theta[432], theta[431], theta[430], theta[429], theta[428], theta[427], theta[426], theta[425], theta[424], theta[423], theta[422], theta[421], theta[420], theta[419], theta[418], theta[417], theta[416], theta[415], theta[414], theta[413], theta[412], theta[411], theta[410], theta[409], theta[408], theta[407], theta[406], theta[405], theta[404], theta[403], theta[402], theta[401], theta[400], theta[399], theta[398], theta[397], theta[396], theta[395], theta[394], theta[393], theta[392], theta[391], theta[390], theta[389], theta[388], theta[387], theta[386], theta[385], theta[384], theta[383], theta[382], theta[381], theta[380], theta[379], theta[378], theta[377], theta[376], theta[375], theta[374], theta[373], theta[372], theta[371], theta[370], theta[369], theta[368], theta[367], theta[366], theta[365], theta[364], theta[363], theta[362], theta[361], theta[360], theta[359], theta[358], theta[357], theta[356], theta[355], theta[354], theta[353], theta[352], theta[351], theta[350], theta[349], theta[348], theta[347], theta[346], theta[345], theta[344], theta[343], theta[342], theta[341], theta[340], theta[339], theta[338], theta[337], theta[336], theta[335], theta[334], theta[333], theta[332], theta[331], theta[330], theta[329], theta[328], theta[327], theta[326], theta[325], theta[324], theta[323], theta[322], theta[321], theta[320], theta[319], theta[318], theta[317], theta[316], theta[315], theta[314], theta[313], theta[312], theta[311], theta[310], theta[309], theta[308], theta[307], theta[306], theta[305], theta[304], theta[303], theta[302], theta[301], theta[300], theta[299], theta[298], theta[297], theta[296], theta[295], theta[294], theta[293], theta[292], theta[291], theta[290], theta[289], theta[288], theta[287], theta[286], theta[285], theta[284], theta[283], theta[282], theta[281], theta[280], theta[279], theta[278], theta[277], theta[276], theta[275], theta[274], theta[273], theta[272], theta[271], theta[270], theta[269], theta[268], theta[267], theta[266], theta[265], theta[264], theta[263], theta[262], theta[261], theta[260], theta[259], theta[258], theta[257], theta[256], theta[255], theta[254], theta[253], theta[252], theta[251], theta[250], theta[249], theta[248], theta[247], theta[246], theta[245], theta[244], theta[243], theta[242], theta[241], theta[240], theta[239], theta[238], theta[237], theta[236], theta[235], theta[234], theta[233], theta[232], theta[231], theta[230], theta[229], theta[228], theta[227], theta[226], theta[225], theta[224], theta[223], theta[222], theta[221], theta[220], theta[219], theta[218], theta[217], theta[216], theta[215], theta[214], theta[213], theta[212], theta[211], theta[210], theta[209], theta[208], theta[207], theta[206], theta[205], theta[204], theta[203], theta[202], theta[201], theta[200], theta[199], theta[198], theta[197], theta[196], theta[195], theta[194], theta[193], theta[192], theta[191], theta[190], theta[189], theta[188], theta[187], theta[186], theta[185], theta[184], theta[183], theta[182], theta[181], theta[180], theta[179], theta[178], theta[177], theta[176], theta[175], theta[174], theta[173], theta[172], theta[171], theta[170], theta[169], theta[168], theta[167], theta[166], theta[165], theta[164], theta[163], theta[162], theta[161], theta[160], theta[159], theta[158], theta[157], theta[156], theta[155], theta[154], theta[153], theta[152], theta[151], theta[150], theta[149], theta[148], theta[147], theta[146], theta[145], theta[144], theta[143], theta[142], theta[141], theta[140], theta[139], theta[138], theta[137], theta[136], theta[135], theta[134], theta[133], theta[132], theta[131], theta[130], theta[129], theta[128], theta[127], theta[126], theta[125], theta[124], theta[123], theta[122], theta[121], theta[120], theta[119], theta[118], theta[117], theta[116], theta[115], theta[114], theta[113], theta[112], theta[111], theta[110], theta[109], theta[108], theta[107], theta[106], theta[105], theta[104], theta[103], theta[102], theta[101], theta[100], theta[99], theta[98], theta[97], theta[96], theta[95], theta[94], theta[93], theta[92], theta[91], theta[90], theta[89], theta[88], theta[87], theta[86], theta[85], theta[84], theta[83], theta[82], theta[81], theta[80], theta[79], theta[78], theta[77], theta[76], theta[75], theta[74], theta[73], theta[72], theta[71], theta[70], theta[69], theta[68], theta[67], theta[66], theta[65], theta[64], theta[63], theta[62], theta[61], theta[60], theta[59], theta[58], theta[57], theta[56], theta[55], theta[54], theta[53], theta[52], theta[51], theta[50], theta[49], theta[48], theta[47], theta[46], theta[45], theta[44], theta[43], theta[42], theta[41], theta[40], theta[39], theta[38], theta[37], theta[36], theta[35], theta[34], theta[33], theta[32], theta[31], theta[30], theta[29], theta[28], theta[27], theta[26], theta[25], theta[24], theta[23], theta[22], theta[21], theta[20], theta[19], theta[18], theta[17], theta[16], theta[15], theta[14], theta[13], theta[12], theta[11], theta[10], theta[9], theta[8], theta[7], theta[6], theta[5], theta[4], theta[3], theta[2], theta[1]</span>
+
+<span class="sgr33"><span class="sgr1">  Variable sizes and types:</span></span>
+    <span class="sgr36">alpha</span>: <span class="sgr32">size = (5,), type = Vector{Float64}</span>
+    <span class="sgr36">p</span>: <span class="sgr32">size = (1000, 5), type = Matrix{Float64}</span>
+    <span class="sgr36">culm</span>: <span class="sgr32">size = (32,), type = Vector{Int64}</span>
+    <span class="sgr36">N</span>: <span class="sgr32">type = Int64</span>
+    <span class="sgr36">R</span>: <span class="sgr32">type = Int64</span>
+    <span class="sgr36">r</span>: <span class="sgr32">size = (1000, 5), type = Matrix{Int64}</span>
+    <span class="sgr36">T</span>: <span class="sgr32">type = Int64</span>
+    <span class="sgr36">a</span>: <span class="sgr32">size = (5,), type = Vector{Float64}</span>
+    <span class="sgr36">beta</span>: <span class="sgr32">type = Float64</span>
+    <span class="sgr36">response</span>: <span class="sgr32">size = (32, 5), type = Matrix{Int64}</span>
+    <span class="sgr36">theta</span>: <span class="sgr32">size = (1000,), type = Vector{Float64}</span>
+</code></pre><p>All of the classic examples ship with the package under <code>JuliaBUGS.BUGSExamples</code>, bundling the model definition, data, initial values, and reference results (this one is <code>JuliaBUGS.BUGSExamples.VOLUME_1.lsat</code>).</p><h2 id="Sampling"><a class="docs-heading-anchor" href="#Sampling">Sampling</a><a id="Sampling-1"></a><a class="docs-heading-anchor-permalink" href="#Sampling" title="Permalink"></a></h2><p>To draw posterior samples, construct the model with gradient support and run the No-U-Turn sampler:</p><pre><code class="language-julia hljs">using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
+using LogDensityProblems
+
+model = lsat(data; adtype=AutoMooncake(; config=nothing))
+
+n_samples, n_adapts = 2000, 1000
+D = LogDensityProblems.dimension(model)
+chain = AbstractMCMC.sample(
+    model, NUTS(0.8), n_samples;
+    chain_type=VNChain, n_adapts=n_adapts,
+    init_params=rand(D), discard_initial=n_adapts,
+)
+summarystats(chain)</code></pre><p>BUGS-style initial values for this example are available as <code>JuliaBUGS.BUGSExamples.VOLUME_1.lsat.inits</code> and can be applied with <code>initialize!(model, inits)</code>.</p><h2 id="Results"><a class="docs-heading-anchor" href="#Results">Results</a><a id="Results-1"></a><a class="docs-heading-anchor-permalink" href="#Results" title="Permalink"></a></h2><p>Reference posterior summaries are not bundled with the package for this example (the <code>reference_results</code> field of <code>JuliaBUGS.BUGSExamples.VOLUME_1.lsat</code> is empty). The published results — posterior summaries for the centred item difficulties <code>a[1]</code>–<code>a[5]</code> and the scale parameter <code>beta</code> — are shown in the <a href="https://chjackson.github.io/openbugsdoc/Examples/Lsat.html">OpenBUGS write-up</a> of this example. A correctly converged chain&#39;s <code>summarystats</code> output should match those published values up to Monte Carlo error.</p><p>See also: <a href="../">gallery overview</a> and the <a href="../../getting_started/">getting-started tutorial</a>.</p><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+mermaid.initialize({
+    startOnLoad: true,
+    theme: "neutral"
+});
+</script></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../oxford/">« Oxford</a><a class="docs-footer-nextpage" href="../bones/">Bones »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Tuesday 7 July 2026 08:54">Tuesday 7 July 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
