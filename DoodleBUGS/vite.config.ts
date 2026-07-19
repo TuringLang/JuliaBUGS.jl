@@ -1,33 +1,18 @@
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import vueDevTools from 'vite-plugin-vue-devtools'
-import { resolve } from 'node:path'
-import { copyFileSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 function copyWidgetDemo() {
   return {
     name: 'copy-widget-demo',
     closeBundle() {
-      const distDir = resolve(__dirname, 'dist')
-      const widgetDir = resolve(distDir, 'DoodleWidget')
-      const libDir = resolve(distDir, 'lib')
-
+      const widgetDir = resolve(__dirname, 'dist/DoodleWidget')
       if (!existsSync(widgetDir)) mkdirSync(widgetDir, { recursive: true })
-      if (!existsSync(libDir)) mkdirSync(libDir, { recursive: true })
-
-      const libFiles = ['doodlebugs.js', 'doodlebugs.css', 'doodlebugs.umd.cjs']
-      libFiles.forEach((file) => {
-        const src = resolve(__dirname, 'dist-lib', file)
-        if (existsSync(src)) copyFileSync(src, resolve(libDir, file))
-      })
-
-      const demoSrc = resolve(__dirname, 'docs/DoodleWidget/index.html')
-      let demoContent = readFileSync(demoSrc, 'utf-8')
-      demoContent = demoContent
-        .replace('../../dist-lib/doodlebugs.css', '../lib/doodlebugs.css')
-        .replace('../../dist-lib/doodlebugs.js', '../lib/doodlebugs.js')
-      writeFileSync(resolve(widgetDir, 'index.html'), demoContent)
+      copyFileSync(
+        resolve(__dirname, 'docs/DoodleWidget/index.html'),
+        resolve(widgetDir, 'index.html')
+      )
     },
   }
 }
@@ -38,7 +23,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: baseUrl,
-    plugins: [vue(), vueDevTools(), copyWidgetDemo()],
+    plugins: [copyWidgetDemo()],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
