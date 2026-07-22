@@ -18,6 +18,7 @@ makedocs(;
             "Modeling" => [
                 "Choosing `@bugs` or `@model`" => "two_macros.md",
                 "Defining Models with `@model`" => "model_macro.md",
+                "Initial Values" => "guides/initialization.md",
                 "Structuring Parameters with `of`" => "of_design_doc.md",
                 "Inspecting Model Graphs" => "graph_plotting.md",
                 "Common Modeling Pitfalls" => "guides/pitfalls.md",
