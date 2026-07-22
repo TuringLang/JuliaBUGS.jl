@@ -10,10 +10,7 @@ makedocs(;
     warnonly=[:cross_references, :doctest],
     pages=[
         "Home" => "index.md",
-        "Get Started" => [
-            "Getting Started" => "getting_started.md",
-            "In-Depth Tutorial: Seeds" => "example.md",
-        ],
+        "Get Started" => "getting_started.md",
         "User Guide" => [
             "Modeling" => [
                 "Choosing `@bugs` or `@model`" => "two_macros.md",

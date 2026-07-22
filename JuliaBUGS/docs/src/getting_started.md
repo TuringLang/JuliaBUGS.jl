@@ -156,6 +156,7 @@ That is the whole workflow: write the model with `@bugs`, put the data in a `Nam
 ## Where next
 
 - The [Example Gallery](examples/index.md) walks through more classic BUGS models, ready to run.
-- The [Seeds tutorial](example.md) treats a random-effects logistic regression in more depth, including running original BUGS-syntax programs verbatim and supplying initial values.
+- The [Seeds example](examples/seeds.md) treats a random-effects logistic regression in more depth, including supplying explicit initial values.
+- [Initial Values](guides/initialization.md) explains named, partial, array-valued, and sampler-specific initialization.
 - [Coming from WinBUGS, OpenBUGS, and JAGS](guides/differences.md) maps your existing workflow — R `list()` data, initial values, CODA summaries — onto JuliaBUGS.
 - [DoodleBUGS](https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/) lets you build JuliaBUGS models by drawing the graph, in the spirit of DoodleBUGS from WinBUGS.
