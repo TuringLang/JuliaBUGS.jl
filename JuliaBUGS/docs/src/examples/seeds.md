@@ -4,6 +4,13 @@ This is the classic *Seeds* example from [Volume 1 of the BUGS examples](https:/
 
 The scientific question is how seed type, root extract, and their interaction affect the probability of germination, while acknowledging that plates differ from one another for reasons the covariates do not capture. To handle this extra plate-to-plate variability (over-dispersion relative to a plain binomial model), the model is a **random-effects logistic regression**: each plate gets its own random intercept `b[i]`, drawn from a common normal distribution whose precision `tau` is estimated from the data.
 
+This example demonstrates:
+
+- logistic regression for a factorial experiment,
+- random effects for extra-binomial variation,
+- translating BUGS link-function syntax into Julia-native syntax, and
+- starting a model from supplied initial values.
+
 ## Model
 
 Let $p_i$ be the germination probability on plate $i$. The model is
@@ -16,9 +23,9 @@ r_i &\sim \text{Binomial}(n_i, p_i)
 \end{aligned}
 ```
 
-with vague priors on the regression coefficients and a vague gamma prior on the random-effect precision `tau`. The derived quantity `sigma = 1 / sqrt(tau)` is the standard deviation of the plate random effects.
+Here ``\alpha_0`` is the baseline log-odds of germination, ``\alpha_1`` and ``\alpha_2`` are the main effects of seed type and root extract, and ``\alpha_{12}`` is their interaction. The plate effects ``b_i`` capture variation left unexplained by those factors. The regression coefficients receive vague priors, as does the random-effect precision `tau`; the derived quantity `sigma = 1 / sqrt(tau)` is the standard deviation of the plate effects.
 
-Here is the model written with the `@bugs` macro. Because Julia treats `f(x) = ...` as a function definition, the BUGS link-function form `logit(p[i]) <- ...` is written by applying the inverse link (`logistic`) on the right-hand side.
+Here is the model written with the `@bugs` macro. Because Julia treats `f(x) = ...` as a function definition, the BUGS link-function form `logit(p[i]) <- ...` is written by applying the inverse link (`logistic`) on the right-hand side. JuliaBUGS can also run the original BUGS program directly; see [Migrating from WinBUGS, OpenBUGS, and JAGS](../guides/differences.md) for that workflow.
 
 ```@example seeds
 using JuliaBUGS
@@ -57,6 +64,21 @@ model = seeds(data)
 
 All of the classic examples ship with the package under `JuliaBUGS.BUGSExamples`, bundling the model definition, data, initial values, and published reference results (this one is `JuliaBUGS.BUGSExamples.VOLUME_1.seeds`).
 
+## Initial values
+
+The initial values published with the classic example set the regression coefficients to zero and
+the random-effect precision to 10:
+
+```@example seeds
+inits = (alpha0=0.0, alpha1=0.0, alpha2=0.0, alpha12=0.0, tau=10.0)
+model = seeds(data, inits)
+nothing # hide
+```
+
+JuliaBUGS draws the omitted plate effects `b` from their prior. See [Initial
+Values](../guides/initialization.md) for partial initialization, array-valued parameters, and the
+flat vectors accepted by samplers.
+
 ## Sampling
 
 To draw posterior samples, construct the model with gradient support and run the No-U-Turn sampler:
@@ -77,8 +99,6 @@ chain = AbstractMCMC.sample(
 summarystats(chain)
 ```
 
-BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.seeds.inits` and can be applied with `initialize!(model, inits)`.
-
 ## Results
 
 The published reference posterior summaries for this example are:
@@ -93,4 +113,5 @@ The published reference posterior summaries for this example are:
 
 A correctly converged chain's `summarystats` output should match these values up to Monte Carlo error.
 
-See also: [gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: [gallery overview](index.md), [getting-started tutorial](../getting_started.md), and
+[migration guide](../guides/differences.md).
