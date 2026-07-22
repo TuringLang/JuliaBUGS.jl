@@ -10,10 +10,34 @@ makedocs(;
     warnonly=[:cross_references, :doctest],
     pages=[
         "Home" => "index.md",
-        "Tutorials" =>
-            ["Getting Started" => "getting_started.md", "In Depth: Seeds" => "example.md"],
-        "Example Gallery" => [
-            "Overview" => "examples/index.md",
+        "Get Started" => [
+            "Getting Started" => "getting_started.md",
+            "In-Depth Tutorial: Seeds" => "example.md",
+        ],
+        "User Guide" => [
+            "Modeling" => [
+                "Choosing `@bugs` or `@model`" => "two_macros.md",
+                "Defining Models with `@model`" => "model_macro.md",
+                "Structuring Parameters with `of`" => "of_design_doc.md",
+                "Inspecting Model Graphs" => "graph_plotting.md",
+                "Common Modeling Pitfalls" => "guides/pitfalls.md",
+                "BUGS Modeling Techniques" => "guides/tricks.md",
+            ],
+            "Inference" => [
+                "Automatic Differentiation" => "inference/ad.md",
+                "Evaluation Modes" => "inference/evaluation_modes.md",
+                "Discrete Variables and Auto-Marginalization" =>
+                    "inference/auto_marginalization.md",
+                "Slice Sampling" => "inference/slice_sampling.md",
+                "Parallel & Distributed Sampling" => "inference/parallel.md",
+            ],
+            "Working with Models" => [
+                "Generated Quantities" => "inference/generated_quantities.md",
+                "Fixing Variables (`fix` / `unfix`)" => "inference/fixing.md",
+                "Model as a Distribution" => "model_as_distribution.md",
+            ],
+        ],
+        hide("Examples" => "examples/index.md", [
             "Rats" => "examples/rats.md",
             "Pumps" => "examples/pumps.md",
             "Dogs" => "examples/dogs.md",
@@ -33,38 +57,18 @@ makedocs(;
             "Kidney" => "examples/kidney.md",
             "Leuk" => "examples/leuk.md",
             "LeukFr" => "examples/leukfr.md",
-        ],
-        "Coming from..." => [
+        ]),
+        "Migration Guides" => [
             "WinBUGS, OpenBUGS, JAGS" => "guides/differences.md",
             "Turing.jl" => "migration/from_turing.md",
             "R" => "R_interface.md",
         ],
-        "Modeling" => [
-            "Two Macros: `@bugs` & `@model`" => "two_macros.md",
-            "`@model` Macro" => "model_macro.md",
-            "Model as a Distribution" => "model_as_distribution.md",
-        ],
-        "Inference" => [
-            "Automatic Differentiation" => "inference/ad.md",
-            "Evaluation Modes" => "inference/evaluation_modes.md",
-            "Auto-Marginalization" => "inference/auto_marginalization.md",
-            "Generated Quantities" => "inference/generated_quantities.md",
-            "Fixing Variables (`fix` / `unfix`)" => "inference/fixing.md",
-            "Slice Sampling" => "inference/slice_sampling.md",
-            "Parallel & Distributed Sampling" => "inference/parallel.md",
-        ],
-        "Guides" => [
-            "Pitfalls" => "guides/pitfalls.md",
-            "Implementation Tricks" => "guides/tricks.md",
-        ],
-        "Plotting" => "graph_plotting.md",
-        "API Reference" => [
-            "General" => "api/api.md",
+        "Reference" => [
+            "Julia API" => "api/api.md",
             "Functions" => "api/functions.md",
             "Distributions" => "api/distributions.md",
         ],
-        "Design & Internals" => [
-            "`of` Type System" => "of_design_doc.md",
+        "Developer Guide" => [
             "Parser" => "developers/parser.md",
             "Source Code Generation" => "developers/source_gen.md",
             "Notes on BUGS Implementations" => "developers/BUGS_notes.md",
