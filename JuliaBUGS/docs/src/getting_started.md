@@ -111,14 +111,18 @@ If your data lives in the R-style `list()` format used by the classic BUGS syste
 
 ## Fit the model
 
-Compile the model by calling the definition with the data:
+Compile the model by calling the definition with the data, switch to the generated log-density evaluator, and attach the automatic-differentiation backend that NUTS needs:
 
 ```@example getting_started
-model = rats(data; adtype=AutoMooncake(; config=nothing))
+model = rats(data)
+model = JuliaBUGS.set_evaluation_mode(
+    model, JuliaBUGS.UseGeneratedLogDensityFunction()
+)
+model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
 nothing # hide
 ```
 
-The `adtype` keyword equips the model with automatic differentiation, which the sampler needs in order to follow the gradient of the posterior — you can treat that part of the line as boilerplate. Compiling the model and its gradient code takes about a minute.
+The generated evaluator compiles the model's log density into a Julia function instead of walking the model graph for every evaluation. `BUGSModelWithGradient` then equips that function with Mooncake automatic differentiation so the sampler can follow the gradient of the posterior. This setup has a small up-front compilation cost but makes the repeated evaluations during sampling substantially faster.
 
 Now draw posterior samples with NUTS, the standard gradient-based MCMC sampler:
 
@@ -151,7 +155,7 @@ The table has a row for each of the 30 intercepts `alpha[i]` and slopes `beta[i]
 
 Your numbers will not match the published values to every digit, and they will change slightly each time you run the sampler: posterior means estimated from 2000 draws carry a small Monte Carlo error (reported in the `mcse` column), so agreement to within that error is exactly what success looks like. As a quick health check, `rhat` should be very close to 1 for every row.
 
-That is the whole workflow: write the model with `@bugs`, put the data in a `NamedTuple`, call the definition to compile, `sample` to fit, and `summarystats` to read the results.
+That is the whole workflow: write the model with `@bugs`, put the data in a `NamedTuple`, compile it with a suitable evaluation mode and gradient backend, `sample` to fit, and `summarystats` to read the results.
 
 ## Where next
 
