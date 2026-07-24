@@ -111,14 +111,21 @@ If your data lives in the R-style `list()` format used by the classic BUGS syste
 
 ## Fit the model
 
-Compile the model by calling the definition with the data:
+Compiling the model is a single call: apply the definition to the data. Two of the three lines below are the essential steps — that call, and attaching the automatic-differentiation backend that NUTS needs. The line in between is an optional performance setting, explained in the note that follows:
 
 ```@example getting_started
-model = rats(data; adtype=AutoMooncake(; config=nothing))
+model = rats(data)
+model = JuliaBUGS.set_evaluation_mode(
+    model, JuliaBUGS.UseGeneratedLogDensityFunction()
+)
+model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
 nothing # hide
 ```
 
-The `adtype` keyword equips the model with automatic differentiation, which the sampler needs in order to follow the gradient of the posterior — you can treat that part of the line as boilerplate. Compiling the model and its gradient code takes about a minute.
+`rats(data)` combines the model definition with the data and returns a compiled model, ready for inference. `BUGSModelWithGradient` then wraps that model with Mooncake automatic differentiation: NUTS works by following the gradient of the log posterior, so any gradient-based sampler needs this step.
+
+!!! note "What does `set_evaluation_mode` do?"
+    Out of the box, JuliaBUGS computes a model's log density by walking the model's graph — that works for every model with no extra setup, and you can omit this line entirely. `UseGeneratedLogDensityFunction()` instead generates and compiles a dedicated Julia function for this model's log density. NUTS will evaluate the log density many thousands of times below, so for a model like Rats this makes sampling substantially faster. Its requirements — the default parameterization produced by compilation and a compatible AD backend such as Mooncake — are already met by the code above, and if JuliaBUGS cannot generate such a function for a model, it warns and keeps the default evaluator. See [Evaluation Modes](inference/evaluation_modes.md) and [Automatic Differentiation](inference/ad.md) for the options and tradeoffs.
 
 Now draw posterior samples with NUTS, the standard gradient-based MCMC sampler:
 
@@ -151,11 +158,12 @@ The table has a row for each of the 30 intercepts `alpha[i]` and slopes `beta[i]
 
 Your numbers will not match the published values to every digit, and they will change slightly each time you run the sampler: posterior means estimated from 2000 draws carry a small Monte Carlo error (reported in the `mcse` column), so agreement to within that error is exactly what success looks like. As a quick health check, `rhat` should be very close to 1 for every row.
 
-That is the whole workflow: write the model with `@bugs`, put the data in a `NamedTuple`, call the definition to compile, `sample` to fit, and `summarystats` to read the results.
+That is the whole workflow: write the model with `@bugs`, put the data in a `NamedTuple`, compile it, attach a gradient backend when the sampler needs one, `sample` to fit, and `summarystats` to read the results.
 
 ## Where next
 
 - The [Example Gallery](examples/index.md) walks through more classic BUGS models, ready to run.
-- The [Seeds tutorial](example.md) treats a random-effects logistic regression in more depth, including running original BUGS-syntax programs verbatim and supplying initial values.
+- The [Seeds example](examples/seeds.md) treats a random-effects logistic regression in more depth, including supplying explicit initial values.
+- [Initial Values](guides/initialization.md) explains named, partial, array-valued, and sampler-specific initialization.
 - [Coming from WinBUGS, OpenBUGS, and JAGS](guides/differences.md) maps your existing workflow — R `list()` data, initial values, CODA summaries — onto JuliaBUGS.
 - [DoodleBUGS](https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/) lets you build JuliaBUGS models by drawing the graph, in the spirit of DoodleBUGS from WinBUGS.

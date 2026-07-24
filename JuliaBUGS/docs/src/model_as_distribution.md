@@ -14,7 +14,7 @@ for gradient-based samplers — see the [Limitations](#Limitations-and-non-goals
 admonition below.
 
 You obtain a `BUGSModel` by calling a model definition with your data
-(see [Getting Started](example.md) and
+(see [Getting Started](getting_started.md) and
 [Two Macros: `@bugs` & `@model`](two_macros.md)), then pass it to
 `to_distribution`.
 
@@ -263,7 +263,7 @@ is to modify a `rand(d)` draw in place.
       `model.transformed` and adds **no log-abs-det-Jacobian** (constrained-space
       density). Handing it to a gradient-based unconstrained sampler would sample
       the wrong distribution for any constrained parameter. Use the model's
-      `LogDensityProblems` interface (see [Getting Started](example.md)) for an
+      `LogDensityProblems` interface (see [Getting Started](getting_started.md)) for an
       HMC/NUTS target instead.
     - **`logpdf` is the full joint, not a likelihood.** `loglikelihood(d, x)` is
       an alias for the joint `logpdf` (prior plus likelihood of baked-in data),
