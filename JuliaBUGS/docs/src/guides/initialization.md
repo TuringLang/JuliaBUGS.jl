@@ -22,19 +22,26 @@ end
 data = (; y=3.0)
 inits = (; a=1.0, b=2.0)
 model = model_def(data, inits)
-nothing # hide
+params = JuliaBUGS.getparams(Dict, model)
+(; a=params[@varname(a)], b=params[@varname(b)])
 ```
 
 The names in `inits` correspond to unobserved stochastic variables in the model. Named values are
-given in the variables' original, constrained space.
+given in the variables' original, constrained space. `getparams(Dict, model)` returns the current
+parameter values keyed by `VarName`; because `a` and `b` are unconstrained, their transformed and
+original values are identical here.
 
 Initial values can be partial. JuliaBUGS draws omitted parameters from their priors and then
 recomputes deterministic variables:
 
 ```@example initialization
 model = model_def(data, (; a=1.0))
-nothing # hide
+params = JuliaBUGS.getparams(Dict, model)
+params[@varname(a)]
 ```
+
+The output confirms that `a` kept its supplied value. The omitted `b` is still drawn from its
+prior, so its value is intentionally not shown.
 
 Array-valued parameters are initialized under their model name with an array of the corresponding
 shape. For example, a model containing `theta[i] ~ dnorm(0, 1)` for `i in 1:3` accepts
@@ -47,7 +54,8 @@ Use `initialize!` to replace the initial state after constructing a model:
 ```@example initialization
 model = model_def(data)
 model = initialize!(model, inits)
-nothing # hide
+params = JuliaBUGS.getparams(Dict, model)
+(; a=params[@varname(a)], b=params[@varname(b)])
 ```
 
 As during construction, a `NamedTuple` contains values in the original space and may omit
