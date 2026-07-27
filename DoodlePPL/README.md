@@ -1,8 +1,8 @@
-# DoodleBUGS: Browser-Based Graphical Interface for JuliaBUGS
+# DoodlePPL: Browser-Based Graphical Interface for JuliaBUGS
 
-A web-based graphical editor for creating Bayesian models, inspired by DoodleBUGS and designed to work with JuliaBUGS. This project aims to provide a visual interface for building, understanding, and sharing probabilistic models.
+A web-based graphical editor for creating Bayesian models, inspired by DoodleBUGS and designed to work with JuliaBUGS. This project provides a visual interface for building, understanding, and sharing probabilistic models.
 
-Try DoodleBUGS at [`https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/`](https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/).
+Try DoodlePPL at [`https://turinglang.org/JuliaBUGS.jl/DoodlePPL/`](https://turinglang.org/JuliaBUGS.jl/DoodlePPL/).
 
 # Project Status
 
@@ -15,41 +15,11 @@ We welcome contributions! Feel free to explore the code, report [issues](https:/
 
 ## Architecture
 
-The editor itself lives in the [`doodleppl`](https://www.npmjs.com/package/doodleppl) npm package (developed in the [mcmcjs](https://github.com/mcmcjs/mcmcjs) monorepo), with its graph-to-code generation in [`@mcmcjs/doodleppl`](https://www.npmjs.com/package/@mcmcjs/doodleppl).
-This directory is the deployed site: a thin shell that mounts the editor full-page, plus the DoodleWidget demo article and the bundled example graphs.
+The editor lives in the [`doodleppl`](https://www.npmjs.com/package/doodleppl) npm package (developed in the [mcmcjs](https://github.com/mcmcjs/mcmcjs) monorepo), with its graph-to-code generation in [`@mcmcjs/doodleppl`](https://www.npmjs.com/package/@mcmcjs/doodleppl).
+The bundled example models (Rats, Pumps, Seeds, and the rest) ship inside the package too, so the editor works offline and on any host page.
 
-## Project Setup
-
-```sh
-npm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
-npm run dev
-```
-
-### Type-Check, Compile and Minify for Production
-
-```sh
-npm run build
-```
-
-### Preview Production Build
-
-```sh
-npm run preview
-```
-
-### Formatting and Validation
-
-```sh
-npm run format       # format with Prettier
-npm run format:check # check formatting
-npm run typecheck    # type checking
-npm run validate     # typecheck + format check
-```
+This directory is the deployed site: a static page that mounts the editor full-page from a CDN, plus the DoodleWidget demo article.
+There is nothing to build; edit the HTML and it deploys on merge.
 
 For more information, questions, or to get involved, please contact [@shravanngoswamii](https://github.com/shravanngoswamii) (Ping me on [Julia Slack](https://julialang.slack.com/archives/CCYDC34A0)).
 
@@ -58,7 +28,7 @@ For more information, questions, or to get involved, please contact [@shravanngo
 
 ## Stan Code Generation
 
-DoodleBUGS can generate Stan code from your graphical model, enabling you to run Bayesian inference using the Stan ecosystem.
+DoodlePPL can generate Stan code from your graphical model, enabling you to run Bayesian inference using the Stan ecosystem.
 
 ### Features
 
@@ -100,9 +70,9 @@ The generator handles key differences between BUGS and Stan:
 
 ## DoodleWidget: Embeddable Component
 
-DoodleBUGS can be embedded as a standalone web component in any HTML page or web app. This allows you to integrate the DoodleBUGS into documentation, tutorials, or custom applications.
+DoodlePPL can be embedded as a standalone web component in any HTML page or web app. This allows you to integrate the editor into documentation, tutorials, or custom applications.
 
-**Try DoodleWidget**: [`https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/DoodleWidget/`](https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/DoodleWidget/)
+**Try DoodleWidget**: [`https://turinglang.org/JuliaBUGS.jl/DoodlePPL/DoodleWidget/`](https://turinglang.org/JuliaBUGS.jl/DoodlePPL/DoodleWidget/)
 
 ### Usage
 
@@ -135,23 +105,26 @@ const editor = new DoodlePPL({
 
 All props are optional:
 
-| Prop            | Type   | Default   | Description                                                                 |
-| --------------- | ------ | --------- | --------------------------------------------------------------------------- |
-| `width`         | string | `"100%"`  | Widget width                                                                |
-| `height`        | string | `"600px"` | Widget height                                                               |
-| `model`         | string | -         | Built-in model (`"rats"`, `"pumps"`, `"seeds"`) or URL to JSON file         |
-| `local-model`   | string | -         | Path to local JSON file                                                     |
-| `initial-state` | string | -         | JSON string to restore saved work (get from `state-update` event)           |
-| `storage-key`   | string | auto      | Custom key for localStorage (only needed for multiple widgets on same page) |
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `width` | string | `"100%"` | Widget width |
+| `height` | string | `"600px"` | Widget height |
+| `model` | string | - | Built-in model (`"rats"`, `"pumps"`, `"seeds"`, ...) or URL to JSON file |
+| `local-model` | string | - | URL to a portable model JSON file (a `data:` URL works for an inline graph) |
+| `mode` | string | `"embedded"` | `"embedded"` keeps the maximize and edit toggles; `"fullpage"` pins the editor maximized, editable |
+| `read-only` | boolean | `false` | Show the graph view-only: editing and panning are locked and the edit toggle is hidden |
+| `theme-mode` | string | - | `"light"` or `"dark"` |
+| `initial-state` | string | - | JSON string to restore saved work (get from `state-update` event) |
+| `storage-key` | string | auto | Custom key for localStorage (only needed for multiple widgets on same page) |
 
 ### Events
 
-| Event              | Payload     | Description                                              |
-| ------------------ | ----------- | -------------------------------------------------------- |
-| `state-update`     | JSON string | Fires on any change. Contains complete state             |
-| `bugs-code-update` | string      | Fires when the generated BUGS code changes               |
-| `stan-code-update` | string      | Fires when the generated Stan code changes               |
-| `ready`            | JSON string | Fires once after mount with the initial state            |
+| Event | Payload | Description |
+| --- | --- | --- |
+| `state-update` | JSON string | Fires on any change. Contains complete state |
+| `bugs-code-update` | string | Fires when the generated BUGS code changes |
+| `stan-code-update` | string | Fires when the generated Stan code changes |
+| `ready` | JSON string | Fires once after mount with the initial state |
 | `models-available` | JSON string | Fires once with the list of built-in example model names |
 
 Both `bugs-code-update` and `stan-code-update` fire whenever the model changes, regardless of which language the user has visible in the code preview panel. Host applications that need one specific language should subscribe to the matching event.
@@ -174,7 +147,7 @@ widget.setAttribute('initial-state', savedState);
 
 ## Acknowledgements & GSoC 2025
 
-This project was initiated as part of the Google Summer of Code 2025 program.
+This project was initiated as DoodleBUGS as part of the Google Summer of Code 2025 program.
 
 - GSoC Project: [https://summerofcode.withgoogle.com/archive/2025/projects/4ecMbDwU](https://summerofcode.withgoogle.com/archive/2025/projects/4ecMbDwU)
 - GSoC Report: [https://turinglang.org/GSoC-2025-Report-DoodleBUGS](https://turinglang.org/GSoC-2025-Report-DoodleBUGS)

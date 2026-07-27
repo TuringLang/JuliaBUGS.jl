@@ -10,7 +10,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <title>DoodleBUGS</title>
+    <title>DoodlePPL</title>
+    <meta
+      name="description"
+      content="A browser-based graphical editor for Bayesian models, designed to work with JuliaBUGS."
+    />
     <style>
       html,
       body {
@@ -18,10 +22,10 @@
         height: 100%;
       }
     </style>
+    <script src="https://unpkg.com/doodleppl@0.6/dist/doodleppl.global.js" defer></script>
   </head>
 
   <body>
     <doodle-ppl mode="fullpage" model="rats" width="100%" height="100vh"></doodle-ppl>
-    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -23,12 +23,3 @@ updates:
       all-julia-packages:
         patterns:
           - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/DoodleBUGS"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-npm-packages:
-        patterns:
-          - "*"
