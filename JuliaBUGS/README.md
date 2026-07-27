@@ -40,7 +40,7 @@ rng, sampler = Random.MersenneTwister(123), JuliaBUGS.IndependentMH()
 chain = AbstractMCMC.sample(rng, posterior, sampler, 1000)
 ```
 
-For a complete walkthrough, see the [example](https://turinglang.org/JuliaBUGS.jl/stable/example).
+For a complete walkthrough, see [Getting Started](https://turinglang.org/JuliaBUGS.jl/stable/getting_started/).
 
 ---
 

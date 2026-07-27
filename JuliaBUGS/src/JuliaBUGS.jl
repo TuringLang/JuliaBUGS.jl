@@ -48,8 +48,14 @@ string form `@bugs"..."`). Calling it with a data `NamedTuple` compiles the mode
 model_def = @bugs begin
     x ~ dnorm(0, 1)
 end
-model = model_def((;))   # equivalent to `compile(model_def, (;))`
+model = model_def((;))              # equivalent to `compile(model_def, (;))`
+model = model_def(data, inits)      # start from given initial values
+model = model_def(data; adtype=AutoMooncake(; config=nothing))   # attach a gradient backend
 ```
+
+The optional second positional argument is a `NamedTuple` of initial parameter values
+(defaulting to prior samples); it is useful when random draws from vague priors would
+otherwise land outside a distribution's support during construction.
 
 The underlying `Expr` stays accessible via the `model_def` field for introspection,
 serialization, and source generation.
@@ -367,8 +373,10 @@ end
 function compile(model_def::BUGSModelDef, args...; kwargs...)
     return compile(model_def.model_def, args...; kwargs...)
 end
-function (model_def::BUGSModelDef)(data::NamedTuple=(;); kwargs...)
-    return compile(model_def.model_def, data; kwargs...)
+function (model_def::BUGSModelDef)(
+    data::NamedTuple=(;), initial_params::NamedTuple=NamedTuple(); kwargs...
+)
+    return compile(model_def.model_def, data, initial_params; kwargs...)
 end
 
 """
