@@ -122,6 +122,8 @@ initialize!(model, inits)
 
 Any parameter you leave out of `inits` is initialized by drawing from its prior, which matches the "gen inits" behavior of the classic programs. You can also pass initial values directly to `AbstractMCMC.sample` through its `init_params` keyword. From here, sampling and summarizing work exactly as in [Getting Started](../getting_started.md).
 
+See [Initial Values](initialization.md) for the complete initialization interface, including array-valued parameters and flat sampler-space vectors.
+
 !!! tip "The Volume 1 examples ship with JuliaBUGS"
     All examples from Volume 1 of the classic BUGS examples come pre-translated in `JuliaBUGS.BUGSExamples.VOLUME_1`. Each entry — for instance `JuliaBUGS.BUGSExamples.VOLUME_1.seeds` — carries the translated model as `.model_def`, plus `.data`, `.inits`, and the published `.reference_results`. They are handy for cross-checking your own translations.
 
