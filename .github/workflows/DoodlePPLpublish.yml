@@ -1,0 +1,34 @@
+name: DoodlePPL Publish
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'DoodlePPL/**'
+      - '.github/workflows/DoodlePPLpublish.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: DoodlePPL
+          target-folder: DoodlePPL
+          clean: true
+          clean-exclude: pr-previews
