@@ -7,9 +7,10 @@ quantities, and the sampler's own statistics.
 ```@example output
 using JuliaBUGS
 using AbstractMCMC
+using MCMCChains
 
 model_def = @bugs begin
-    mu ~ dnorm(0, 0.0001)
+    mu ~ dnorm(0, 1)
     for i in 1:N
         y[i] ~ dnorm(mu, 1)
     end
@@ -29,7 +30,7 @@ per draw. This is the lightest format and the only one that needs no extra packa
 draws = AbstractMCMC.sample(
     model,
     JuliaBUGS.IndependentMH(),
-    100;
+    500;
     chain_type = Vector{ParamsWithStats},
     progress = false,
 )
@@ -74,7 +75,6 @@ A vector of `ParamsWithStats` converts into either chain type with
 across the columns, so a single run needs a `reshape`:
 
 ```@example output
-using MCMCChains
 chain = AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))
 summarystats(chain)
 ```
