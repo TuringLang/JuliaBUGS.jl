@@ -1,5 +1,22 @@
 using AbstractMCMC: AbstractMCMC
 
+"""
+    BUGSModelLike
+
+A `BUGSModel` or a wrapper around one, as accepted by [`base_bugs_model`](@ref).
+"""
+const BUGSModelLike = Union{BUGSModel,BUGSModelWithGradient}
+
+"""
+    base_bugs_model(model)
+
+Unwrap `model` down to the `BUGSModel` it is built on, stripping the
+`AbstractMCMC.LogDensityModel` and `BUGSModelWithGradient` wrappers.
+"""
+base_bugs_model(model::BUGSModel) = model
+base_bugs_model(model::BUGSModelWithGradient) = model.base_model
+base_bugs_model(model::AbstractMCMC.LogDensityModel) = base_bugs_model(model.logdensity)
+
 function AbstractMCMC.ParamsWithStats(
     model::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::AbstractMCMC.AbstractSampler,

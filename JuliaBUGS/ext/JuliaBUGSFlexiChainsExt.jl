@@ -4,38 +4,21 @@ using AbstractMCMC
 using FlexiChains: FlexiChains, Parameter, Extra
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient, OrderedDict
-using JuliaBUGS.Model: reconstruct_chain_values, param_samples_from_environments
+using JuliaBUGS.Model: BUGSModelLike, base_bugs_model, reconstruct_chain_values
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.AbstractPPL: VarName
 using Random: default_rng
 
 function JuliaBUGS.gen_chains(
     chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}},
-    model::AbstractMCMC.LogDensityModel{<:BUGSModel},
+    model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     samples,
     stats_names,
     stats_values;
     kwargs...,
 )
-    # Extract BUGSModel and delegate
     return JuliaBUGS.gen_chains(
-        chain_type, model.logdensity, samples, stats_names, stats_values; kwargs...
-    )
-end
-
-function JuliaBUGS.gen_chains(
-    chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}},
-    model::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
-    samples,
-    stats_names,
-    stats_values;
-    kwargs...,
-)
-    # Extract BUGSModel from gradient wrapper
-    bugs_model = model.logdensity.base_model
-
-    return JuliaBUGS.gen_chains(
-        chain_type, bugs_model, samples, stats_names, stats_values; kwargs...
+        chain_type, base_bugs_model(model), samples, stats_names, stats_values; kwargs...
     )
 end
 
@@ -102,42 +85,14 @@ function JuliaBUGS.gen_chains(
 end
 
 function AbstractMCMC.bundle_samples(
-    samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::JuliaBUGS.Gibbs,
-    states,
-    chain_type::Type{FlexiChains.VNChain};
-    discard_initial=0,
-    kwargs...,
-)
-    param_samples = param_samples_from_environments(logdensitymodel.logdensity, samples)
-
-    # No statistics for Gibbs sampler itself
-    return JuliaBUGS.gen_chains(
-        chain_type,
-        logdensitymodel,
-        param_samples,
-        Symbol[],
-        [];
-        discard_initial=discard_initial,
-        kwargs...,
-    )
-end
-
-function AbstractMCMC.bundle_samples(
-    samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::JuliaBUGS.IndependentMH,
-    state,  # Final state only (AbstractMCMC interface)
+    ts::Vector,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler,
+    state,
     chain_type::Type{FlexiChains.VNChain};
     kwargs...,
 )
-    param_samples = param_samples_from_environments(logdensitymodel.logdensity, samples)
-
-    # No per-sample log probabilities available since AbstractMCMC only passes final state
-    return JuliaBUGS.gen_chains(
-        chain_type, logdensitymodel, param_samples, Symbol[], []; kwargs...
-    )
+    return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
 end
 
 end

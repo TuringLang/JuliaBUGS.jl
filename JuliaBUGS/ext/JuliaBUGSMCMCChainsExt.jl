@@ -3,35 +3,28 @@ module JuliaBUGSMCMCChainsExt
 using AbstractMCMC
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient
-using JuliaBUGS.Model: reconstruct_chain_values, param_samples_from_environments
+using JuliaBUGS.Model: BUGSModelLike, base_bugs_model, reconstruct_chain_values
 using JuliaBUGS.AbstractPPL
 using MCMCChains
 using Random: default_rng
 
-function JuliaBUGS.gen_chains(
-    model::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    samples,
-    stats_names,
-    stats_values;
-    kwargs...,
-)
-    # Extract BUGSModel and delegate
+function JuliaBUGS.gen_chains(model, samples, stats_names, stats_values; kwargs...)
     return JuliaBUGS.gen_chains(
-        model.logdensity, samples, stats_names, stats_values; kwargs...
+        MCMCChains.Chains, model, samples, stats_names, stats_values; kwargs...
     )
 end
 
 function JuliaBUGS.gen_chains(
-    model::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
+    chain_type::Type{MCMCChains.Chains},
+    model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     samples,
     stats_names,
     stats_values;
     kwargs...,
 )
-    # Extract BUGSModel from gradient wrapper
-    bugs_model = model.logdensity.base_model
-
-    return JuliaBUGS.gen_chains(bugs_model, samples, stats_names, stats_values; kwargs...)
+    return JuliaBUGS.gen_chains(
+        chain_type, base_bugs_model(model), samples, stats_names, stats_values; kwargs...
+    )
 end
 
 """
@@ -118,6 +111,7 @@ This function:
 4. Creates a properly formatted Chains object
 """
 function JuliaBUGS.gen_chains(
+    ::Type{MCMCChains.Chains},
     model::BUGSModel,
     samples,
     stats_names,
@@ -127,6 +121,8 @@ function JuliaBUGS.gen_chains(
     thinning=1,
     kwargs...,
 )
+    stats_names, stats_values = flatten_stats(stats_names, stats_values)
+
     # Reconstruct the per-draw values (model parameters plus forward-sampled generated
     # quantities, with marginalized discrete latents recovered) via the shared helper used
     # by both chain-output extensions.
@@ -188,34 +184,66 @@ function JuliaBUGS.gen_chains(
 end
 
 function AbstractMCMC.bundle_samples(
-    samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::JuliaBUGS.Gibbs,
-    states,
-    ::Type{MCMCChains.Chains};
-    discard_initial=0,
+    ts::Vector,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler,
+    state,
+    chain_type::Type{MCMCChains.Chains};
     kwargs...,
 )
-    param_samples = param_samples_from_environments(logdensitymodel.logdensity, samples)
-
-    # No statistics for Gibbs sampler itself
-    return JuliaBUGS.gen_chains(
-        logdensitymodel, param_samples, [], []; discard_initial=discard_initial, kwargs...
-    )
+    return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
 end
 
-function AbstractMCMC.bundle_samples(
-    samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::JuliaBUGS.IndependentMH,
-    state,  # Final state only (AbstractMCMC interface)
-    ::Type{MCMCChains.Chains};
-    kwargs...,
-)
-    param_samples = param_samples_from_environments(logdensitymodel.logdensity, samples)
+"""
+    flatten_stats(stats_names, stats_values)
 
-    # No per-sample log probabilities available since AbstractMCMC only passes final state
-    return JuliaBUGS.gen_chains(logdensitymodel, param_samples, [], []; kwargs...)
+Expand array-valued sampler statistics into one scalar column per element, named
+`key[i,j]`, since `MCMCChains.Chains` stores scalars only. Draws that do not carry a value
+for a column get `NaN`.
+"""
+function flatten_stats(stats_names, stats_values)
+    isempty(stats_values) && return collect(Symbol, stats_names), stats_values
+
+    specs = Any[]
+    for (position, name) in enumerate(stats_names)
+        prototype = stat_prototype(stats_values, position)
+        if prototype isa AbstractArray
+            for index in CartesianIndices(prototype)
+                push!(
+                    specs,
+                    (name=indexed_stat_name(name, index), position=position, index=index),
+                )
+            end
+        else
+            push!(specs, (name=Symbol(name), position=position, index=nothing))
+        end
+    end
+
+    names = Symbol[spec.name for spec in specs]
+    values = [[stat_value(draw, spec) for spec in specs] for draw in stats_values]
+    return names, values
+end
+
+function stat_prototype(stats_values, position)
+    for draw in stats_values
+        draw[position] isa AbstractArray && return draw[position]
+    end
+    return first(stats_values)[position]
+end
+
+function indexed_stat_name(name, index::CartesianIndex)
+    return Symbol(string(name), "[", join(Tuple(index), ","), "]")
+end
+
+function stat_value(draw, spec)
+    value = draw[spec.position]
+    if spec.index === nothing
+        return value isa Real ? value : NaN
+    elseif value isa AbstractArray && spec.index in CartesianIndices(value)
+        return value[spec.index]
+    else
+        return NaN
+    end
 end
 
 end

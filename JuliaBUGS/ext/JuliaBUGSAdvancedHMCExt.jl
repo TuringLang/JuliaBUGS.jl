@@ -7,7 +7,6 @@ using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient, getparams, initialize!
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.Random
-using MCMCChains
 
 import JuliaBUGS: gibbs_internal
 
@@ -65,37 +64,13 @@ function _gibbs_internal_hmc(
     return updated_model.evaluation_env, s
 end
 
-function AbstractMCMC.bundle_samples(
-    ts::Vector{<:AdvancedHMC.Transition},
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
-    sampler::AdvancedHMC.AbstractHMCSampler,
-    state,
-    chain_type::Type{MCMCChains.Chains};
-    discard_initial=0,
-    thinning=1,
-    kwargs...,
+function JuliaBUGS.transition_params_and_stats(
+    ::BUGSModel, ts::Vector{<:AdvancedHMC.Transition}, ::AdvancedHMC.AbstractHMCSampler
 )
-    # Extract parameter values and statistics from transitions
     param_samples = [t.z.θ for t in ts]
-
-    # Collect statistic names and values
-    # Include log probability and HMC-specific stats (step size, acceptance, etc.)
     stats_names = collect(keys(merge((; lp=ts[1].z.ℓπ.value), AdvancedHMC.stat(ts[1]))))
-    stats_values = [
-        vcat(ts[i].z.ℓπ.value, collect(values(AdvancedHMC.stat(ts[i])))) for
-        i in eachindex(ts)
-    ]
-
-    # Delegate to gen_chains for proper parameter naming from BUGSModel
-    return JuliaBUGS.gen_chains(
-        logdensitymodel,
-        param_samples,
-        stats_names,
-        stats_values;
-        discard_initial=discard_initial,
-        thinning=thinning,
-        kwargs...,
-    )
+    stats_values = [vcat(t.z.ℓπ.value, collect(values(AdvancedHMC.stat(t)))) for t in ts]
+    return param_samples, stats_names, stats_values
 end
 
 end

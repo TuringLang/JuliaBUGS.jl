@@ -105,6 +105,12 @@ function AbstractMCMC.step(
     end
 end
 
+# `AbstractMCMC.bundle_samples` only sees the final state, so the per-draw log densities held
+# in `IndependentMHState` are not available here and no statistics are reported.
+function transition_params_and_stats(model::BUGSModel, evaluation_envs, ::IndependentMH)
+    return Model.param_samples_from_environments(model, evaluation_envs), Symbol[], []
+end
+
 # For use within Gibbs sampling
 """
     gibbs_internal(rng, cond_model, ::IndependentMH, state)
