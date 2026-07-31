@@ -214,3 +214,33 @@ end
     @test predcol ≈ mucol .+ 1.0
     @test all(z -> z in (1, 2), zcol)
 end
+
+@testset "from_samples converts ParamsWithStats draws" begin
+    model_def = @bugs begin
+        x[1:2] ~ dmnorm(m[1:2], tau[1:2, 1:2])
+        y ~ dnorm(x[1] + x[2], 1)
+        total = x[1] + x[2]
+    end
+    model = compile(model_def, (m=[0.0, 0.0], tau=[1.0 0.0; 0.0 1.0], y=0.5))
+
+    draws = Base.invokelatest(
+        AbstractMCMC.sample,
+        StableRNG(11),
+        model,
+        JuliaBUGS.IndependentMH(),
+        10;
+        progress=false,
+        chain_type=Vector{AbstractMCMC.ParamsWithStats},
+    )
+    chn = AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))
+
+    @test chn isa Chains
+    @test size(chn) == (10, 3, 1)
+    # Array-valued variables are flattened into one column per element, named after the
+    # leaf `VarName` exactly as `gen_chains` names them.
+    @test Set(chn.name_map[:parameters]) ==
+        Set([Symbol("x[1:2][1]"), Symbol("x[1:2][2]"), :total])
+    @test vec(chn[Symbol("x[1:2][1]")].data) ≈
+        [d.params[@varname(x[1:2])][1] for d in draws]
+    @test vec(chn[:total].data) ≈ [d.params[@varname(total)] for d in draws]
+end

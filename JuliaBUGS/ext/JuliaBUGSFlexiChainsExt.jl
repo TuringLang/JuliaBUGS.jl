@@ -4,7 +4,8 @@ using AbstractMCMC
 using FlexiChains: FlexiChains, Parameter, Extra
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient, OrderedDict
-using JuliaBUGS.Model: BUGSModelLike, base_bugs_model, reconstruct_chain_values
+using JuliaBUGS.Model:
+    BUGSModelLike, BUGSParamsWithStats, base_bugs_model, reconstruct_chain_values
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.AbstractPPL: VarName
 using Random: default_rng
@@ -93,6 +94,34 @@ function AbstractMCMC.bundle_samples(
     kwargs...,
 )
     return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
+end
+
+"""
+    AbstractMCMC.from_samples(
+        ::Type{<:FlexiChains.FlexiChain{<:VarName}},
+        draws::AbstractMatrix{<:BUGSParamsWithStats},
+    )
+
+Convert draws sampled with `chain_type = Vector{AbstractMCMC.ParamsWithStats}` into a
+`FlexiChains.FlexiChain{VarName}`, keeping array-valued variables whole and storing sampler
+statistics as `FlexiChains.Extra` entries. Rows are iterations and columns are chains, so a
+single run needs `reshape(draws, :, 1)`.
+"""
+function AbstractMCMC.from_samples(
+    ::Type{<:FlexiChains.FlexiChain{<:VarName}},
+    draws::AbstractMatrix{<:BUGSParamsWithStats},
+)
+    dicts = map(draws) do draw
+        d = OrderedDict{FlexiChains.ParameterOrExtra{<:VarName},Any}()
+        for (vn, value) in pairs(draw.params)
+            d[Parameter(vn)] = value
+        end
+        for (name, value) in pairs(draw.stats)
+            d[Extra(name)] = value
+        end
+        d
+    end
+    return FlexiChains.FlexiChain{VarName}(size(draws, 1), size(draws, 2), dicts)
 end
 
 end

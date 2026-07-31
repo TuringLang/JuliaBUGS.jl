@@ -3,7 +3,8 @@ module JuliaBUGSMCMCChainsExt
 using AbstractMCMC
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient
-using JuliaBUGS.Model: BUGSModelLike, base_bugs_model, reconstruct_chain_values
+using JuliaBUGS.Model:
+    BUGSModelLike, BUGSParamsWithStats, base_bugs_model, reconstruct_chain_values
 using JuliaBUGS.AbstractPPL
 using MCMCChains
 using Random: default_rng
@@ -192,6 +193,50 @@ function AbstractMCMC.bundle_samples(
     kwargs...,
 )
     return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
+end
+
+"""
+    AbstractMCMC.from_samples(
+        ::Type{MCMCChains.Chains}, draws::AbstractMatrix{<:BUGSParamsWithStats}
+    )
+
+Convert draws sampled with `chain_type = Vector{AbstractMCMC.ParamsWithStats}` into an
+`MCMCChains.Chains`, flattening array-valued variables into scalar columns. Rows are
+iterations and columns are chains, so a single run needs `reshape(draws, :, 1)`.
+
+All draws must carry the same variables and statistics.
+"""
+function AbstractMCMC.from_samples(
+    ::Type{MCMCChains.Chains}, draws::AbstractMatrix{<:BUGSParamsWithStats}
+)
+    isempty(draws) && throw(ArgumentError("cannot build a chain from zero draws"))
+
+    first_draw = first(draws)
+    param_leaves = JuliaBUGS.VarName[]
+    for (vn, value) in pairs(first_draw.params)
+        append!(param_leaves, elementwise_varnames(vn, value))
+    end
+    stats_names = collect(keys(first_draw.stats))
+
+    niters, nchains = size(draws)
+    vals = Array{Real}(undef, niters, length(param_leaves) + length(stats_names), nchains)
+    for j in 1:nchains, i in 1:niters
+        draw = draws[i, j]
+        row = vcat(
+            collect(Iterators.flatten(values(draw.params))), collect(values(draw.stats))
+        )
+        if length(row) != size(vals, 2)
+            throw(ArgumentError("draws do not all carry the same variables and statistics"))
+        end
+        vals[i, :, j] = row
+    end
+
+    param_symbols = Symbol.(param_leaves)
+    return MCMCChains.Chains(
+        MCMCChains.concretize(vals),
+        vcat(param_symbols, stats_names),
+        (parameters=param_symbols, internals=stats_names),
+    )
 end
 
 """
