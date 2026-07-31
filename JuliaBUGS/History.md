@@ -1,5 +1,18 @@
 # JuliaBUGS Changelog
 
+## 0.16.0
+
+### Highlights
+
+- **`ParamsWithStats` output.** Passing `chain_type = Vector{ParamsWithStats}` to `AbstractMCMC.sample` returns one [`AbstractMCMC.ParamsWithStats`](https://turinglang.org/AbstractMCMC.jl/stable/callbacks/#ParamsWithStats) per draw instead of a chain object. Each entry holds the model parameters and generated quantities in an `OrderedDict` keyed by `VarName` (array-valued variables stay whole) plus the sampler statistics in a `NamedTuple`. This needs no extension, since AbstractMCMC is already a dependency. Draws convert into either chain format with `AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))` or `AbstractMCMC.from_samples(VNChain, reshape(draws, :, 1))`, so you can pick the downstream workflow after sampling rather than before. See the *Sampling Output Formats* page in the docs.
+
+- **One extraction point per sampler.** `JuliaBUGS.transition_params_and_stats(model, ts, sampler)` is the single method a sampler implements to unpack its transitions into parameters and statistics; every output format is then built from that. The chain extensions no longer repeat the same unpacking once per output format, and four extensions (`JuliaBUGSAdvancedHMCFlexiChainsExt`, `JuliaBUGSAdvancedMHFlexiChainsExt`, `JuliaBUGSSliceSamplingMCMCChainsExt`, `JuliaBUGSSliceSamplingFlexiChainsExt`) were folded away.
+
+### Breaking Changes
+
+- `AbstractMCMC.ParamsWithStats(model, sampler, transition, state)`, used by callbacks, now returns parameters keyed by `VarName` in an `OrderedDict` rather than a `Symbol`-keyed `NamedTuple` built from stringified names. Callback code that read `pws.params.mu` should read `pws.params[@varname(mu)]`. Array values are copied, so they no longer alias the evaluation environment's buffers.
+- `JuliaBUGSAdvancedHMCExt` and `JuliaBUGSAdvancedMHExt` are triggered by their sampler package alone, no longer also requiring `MCMCChains`. `gibbs_internal` for HMC and MH therefore works without loading `MCMCChains`.
+
 ## 0.15.0
 
 ### Highlights
