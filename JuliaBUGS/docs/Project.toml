@@ -23,7 +23,7 @@ JuliaBUGS = {path = ".."}
 
 [compat]
 ADTypes = "1.22.2"
-AbstractMCMC = "5.15.1"
+AbstractMCMC = "5.16"
 AbstractPPL = "0.15.5"
 AdvancedHMC = "0.8.6"
 DifferentiationInterface = "0.7.20"
