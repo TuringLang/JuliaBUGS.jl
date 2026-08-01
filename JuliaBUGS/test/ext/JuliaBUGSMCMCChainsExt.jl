@@ -244,3 +244,36 @@ end
         [d.params[@varname(x[1:2])][1] for d in draws]
     @test vec(chn[:total].data) ≈ [d.params[@varname(total)] for d in draws]
 end
+
+@testset "from_samples flattens array-valued statistics" begin
+    model_def = @bugs begin
+        a ~ dnorm(0, 1)
+        b ~ dnorm(0, 1)
+        y ~ dnorm(a + b, 1)
+    end
+    model = compile(model_def, (; y=0.5), (; a=0.0, b=0.0))
+
+    # A multivariate slice sampler reports `num_proposals` per coordinate, so the statistic
+    # is an array in every draw.
+    draws = Base.invokelatest(
+        AbstractMCMC.sample,
+        StableRNG(31),
+        model,
+        SliceSampling.RandPermGibbs(SliceSampling.SliceSteppingOut(1.0)),
+        12;
+        progress=false,
+        chain_type=Vector{AbstractMCMC.ParamsWithStats},
+    )
+    @test draws[1].stats.num_proposals isa AbstractArray
+
+    chn = AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))
+    @test chn.name_map[:internals] ==
+        [:lp, Symbol("num_proposals[1]"), Symbol("num_proposals[2]")]
+    # The initial transition carries no `num_proposals`, so its column entry is `NaN`.
+    @test all(
+        isequal.(
+            vec(chn[Symbol("num_proposals[1]")].data),
+            [d.stats.num_proposals[1] for d in draws],
+        ),
+    )
+end

@@ -216,14 +216,18 @@ function AbstractMCMC.from_samples(
     for (vn, value) in pairs(first_draw.params)
         append!(param_leaves, elementwise_varnames(vn, value))
     end
-    stats_names = collect(keys(first_draw.stats))
 
     niters, nchains = size(draws)
+    flat_draws = vec(draws)
+    stats_names, stats_values = flatten_stats(
+        collect(keys(first_draw.stats)), [collect(values(d.stats)) for d in flat_draws]
+    )
+
     vals = Array{Real}(undef, niters, length(param_leaves) + length(stats_names), nchains)
     for j in 1:nchains, i in 1:niters
-        draw = draws[i, j]
+        k = (j - 1) * niters + i
         row = vcat(
-            collect(Iterators.flatten(values(draw.params))), collect(values(draw.stats))
+            collect(Iterators.flatten(values(flat_draws[k].params))), stats_values[k]
         )
         if length(row) != size(vals, 2)
             throw(ArgumentError("draws do not all carry the same variables and statistics"))
