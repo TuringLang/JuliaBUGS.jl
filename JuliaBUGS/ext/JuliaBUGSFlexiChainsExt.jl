@@ -14,19 +14,18 @@ function JuliaBUGS.gen_chains(
     chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}},
     model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     samples,
-    stats_names,
-    stats_values;
+    stats;
     kwargs...,
 )
     return JuliaBUGS.gen_chains(
-        chain_type, base_bugs_model(model), samples, stats_names, stats_values; kwargs...
+        chain_type, base_bugs_model(model), samples, stats; kwargs...
     )
 end
 
 """
     gen_chains(
         chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}}, model::BUGSModel,
-        samples, stats_names, stats_values;
+        samples, stats;
         rng=default_rng(), discard_initial=0, thinning=1, kwargs...
     )
 
@@ -38,14 +37,13 @@ This function:
    marginalized discrete latents recovered, generated quantities forward-sampled)
 2. Stores parameters and generated quantities keyed by their `VarName` (array-valued
    variables are kept whole instead of being flattened into scalar columns)
-3. Stores sampler statistics as `FlexiChains.Extra` entries
+3. Stores each draw's sampler statistics as `FlexiChains.Extra` entries
 """
 function JuliaBUGS.gen_chains(
     ::Type{<:FlexiChains.FlexiChain{<:VarName}},
     model::BUGSModel,
     samples,
-    stats_names,
-    stats_values;
+    stats;
     rng=default_rng(),
     discard_initial=0,
     thinning=1,
@@ -69,10 +67,8 @@ function JuliaBUGS.gen_chains(
         for (j, vn) in enumerate(generated_vars)
             d[Parameter(vn)] = generated_vals[i][j]
         end
-        if !isempty(stats_values)
-            for (j, name) in enumerate(stats_names)
-                d[Extra(Symbol(name))] = stats_values[i][j]
-            end
+        for (name, value) in pairs(stats[i])
+            d[Extra(name)] = value
         end
         dicts[i] = d
     end

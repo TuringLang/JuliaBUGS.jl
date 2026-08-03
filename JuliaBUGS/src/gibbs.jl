@@ -465,6 +465,6 @@ function AbstractMCMC.step(
 end
 
 # The component samplers keep their own statistics, which `Gibbs` does not aggregate.
-function transition_params_and_stats(model::BUGSModel, evaluation_envs, ::Gibbs)
-    return Model.param_samples_from_environments(model, evaluation_envs), Symbol[], []
+function transition_params_and_stats(model::BUGSModel, ::Gibbs, evaluation_env::NamedTuple)
+    return Model.params_from_environment(model, evaluation_env), NamedTuple()
 end

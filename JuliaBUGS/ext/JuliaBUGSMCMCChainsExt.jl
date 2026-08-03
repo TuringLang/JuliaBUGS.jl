@@ -9,22 +9,24 @@ using JuliaBUGS.AbstractPPL
 using MCMCChains
 using Random: default_rng
 
-function JuliaBUGS.gen_chains(model, samples, stats_names, stats_values; kwargs...)
-    return JuliaBUGS.gen_chains(
-        MCMCChains.Chains, model, samples, stats_names, stats_values; kwargs...
-    )
+function JuliaBUGS.gen_chains(
+    model::Union{BUGSModelLike,AbstractMCMC.LogDensityModel{<:BUGSModelLike}},
+    samples,
+    stats;
+    kwargs...,
+)
+    return JuliaBUGS.gen_chains(MCMCChains.Chains, model, samples, stats; kwargs...)
 end
 
 function JuliaBUGS.gen_chains(
     chain_type::Type{MCMCChains.Chains},
     model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     samples,
-    stats_names,
-    stats_values;
+    stats;
     kwargs...,
 )
     return JuliaBUGS.gen_chains(
-        chain_type, base_bugs_model(model), samples, stats_names, stats_values; kwargs...
+        chain_type, base_bugs_model(model), samples, stats; kwargs...
     )
 end
 
@@ -99,7 +101,7 @@ end
 """
     gen_chains(
         model::BUGSModel,
-        samples, stats_names, stats_values;
+        samples, stats;
         discard_initial=0, thinning=1, kwargs...
     )
 
@@ -115,14 +117,13 @@ function JuliaBUGS.gen_chains(
     ::Type{MCMCChains.Chains},
     model::BUGSModel,
     samples,
-    stats_names,
-    stats_values;
+    stats;
     rng=default_rng(),
     discard_initial=0,
     thinning=1,
     kwargs...,
 )
-    stats_names, stats_values = flatten_stats(stats_names, stats_values)
+    stats_names, stats_values = flatten_stats(stats)
 
     # Reconstruct the per-draw values (model parameters plus forward-sampled generated
     # quantities, with marginalized discrete latents recovered) via the shared helper used
@@ -197,87 +198,86 @@ end
 
 """
     AbstractMCMC.from_samples(
-        ::Type{MCMCChains.Chains}, draws::AbstractMatrix{<:BUGSParamsWithStats}
+        ::Type{MCMCChains.Chains},
+        draws::AbstractMatrix{<:BUGSParamsWithStats};
+        start=1,
+        thin=1,
     )
 
 Convert draws sampled with `chain_type = Vector{AbstractMCMC.ParamsWithStats}` into an
 `MCMCChains.Chains`, flattening array-valued variables into scalar columns. Rows are
 iterations and columns are chains, so a single run needs `reshape(draws, :, 1)`.
 
-All draws must carry the same variables and statistics.
+A plain vector of draws carries no iteration indices, so pass `start` and `thin` to restore
+the ones the sampling run had (`start = discard_initial + 1`).
 """
 function AbstractMCMC.from_samples(
-    ::Type{MCMCChains.Chains}, draws::AbstractMatrix{<:BUGSParamsWithStats}
+    ::Type{MCMCChains.Chains},
+    draws::AbstractMatrix{<:BUGSParamsWithStats};
+    start::Int=1,
+    thin::Int=1,
 )
     isempty(draws) && throw(ArgumentError("cannot build a chain from zero draws"))
 
-    first_draw = first(draws)
     param_leaves = JuliaBUGS.VarName[]
-    for (vn, value) in pairs(first_draw.params)
+    for (vn, value) in pairs(first(draws).params)
         append!(param_leaves, elementwise_varnames(vn, value))
     end
 
-    niters, nchains = size(draws)
-    flat_draws = vec(draws)
-    stats_names, stats_values = flatten_stats(
-        collect(keys(first_draw.stats)), [collect(values(d.stats)) for d in flat_draws]
-    )
+    stats_names, stats_values = flatten_stats([d.stats for d in vec(draws)])
+    param_symbols = Symbol.(param_leaves)
 
-    vals = Array{Real}(undef, niters, length(param_leaves) + length(stats_names), nchains)
+    niters, nchains = size(draws)
+    vals = [
+        vcat(
+            collect(Iterators.flatten(values(draws[i, j].params))),
+            stats_values[(j - 1) * niters + i],
+        ) for i in 1:niters, j in 1:nchains
+    ]
+    ncols = length(param_symbols) + length(stats_names)
+    all(row -> length(row) == ncols, vals) ||
+        throw(ArgumentError("draws do not all carry the same variables"))
+
+    data = Array{Real}(undef, niters, ncols, nchains)
     for j in 1:nchains, i in 1:niters
-        k = (j - 1) * niters + i
-        row = vcat(
-            collect(Iterators.flatten(values(flat_draws[k].params))), stats_values[k]
-        )
-        if length(row) != size(vals, 2)
-            throw(ArgumentError("draws do not all carry the same variables and statistics"))
-        end
-        vals[i, :, j] = row
+        data[i, :, j] = vals[i, j]
     end
 
-    param_symbols = Symbol.(param_leaves)
     return MCMCChains.Chains(
-        MCMCChains.concretize(vals),
+        MCMCChains.concretize(data),
         vcat(param_symbols, stats_names),
-        (parameters=param_symbols, internals=stats_names),
+        (parameters=param_symbols, internals=stats_names);
+        start=start,
+        thin=thin,
     )
 end
 
 """
-    flatten_stats(stats_names, stats_values)
+    flatten_stats(stats)
 
-Expand array-valued sampler statistics into one scalar column per element, named
-`key[i,j]`, since `MCMCChains.Chains` stores scalars only. Draws that do not carry a value
-for a column get `NaN`.
+Lay out the per-draw statistics `NamedTuple`s as scalar columns, since
+`MCMCChains.Chains` stores scalars only. Column names are the union of the keys across draws,
+in first-seen order, with array-valued statistics expanded to one column per element
+(`key[i,j]`). Draws that do not report a column get `NaN`.
 """
-function flatten_stats(stats_names, stats_values)
-    isempty(stats_values) && return collect(Symbol, stats_names), stats_values
-
+function flatten_stats(stats)
     specs = Any[]
-    for (position, name) in enumerate(stats_names)
-        prototype = stat_prototype(stats_values, position)
-        if prototype isa AbstractArray
-            for index in CartesianIndices(prototype)
-                push!(
-                    specs,
-                    (name=indexed_stat_name(name, index), position=position, index=index),
-                )
+    seen = Set{Symbol}()
+    for draw in stats, (key, value) in pairs(draw)
+        key in seen && continue
+        push!(seen, key)
+        if value isa AbstractArray
+            for index in CartesianIndices(value)
+                push!(specs, (name=indexed_stat_name(key, index), key=key, index=index))
             end
         else
-            push!(specs, (name=Symbol(name), position=position, index=nothing))
+            push!(specs, (name=Symbol(key), key=key, index=nothing))
         end
     end
 
     names = Symbol[spec.name for spec in specs]
-    values = [[stat_value(draw, spec) for spec in specs] for draw in stats_values]
+    values = [[stat_value(draw, spec) for spec in specs] for draw in stats]
     return names, values
-end
-
-function stat_prototype(stats_values, position)
-    for draw in stats_values
-        draw[position] isa AbstractArray && return draw[position]
-    end
-    return first(stats_values)[position]
 end
 
 function indexed_stat_name(name, index::CartesianIndex)
@@ -285,7 +285,8 @@ function indexed_stat_name(name, index::CartesianIndex)
 end
 
 function stat_value(draw, spec)
-    value = draw[spec.position]
+    haskey(draw, spec.key) || return NaN
+    value = draw[spec.key]
     if spec.index === nothing
         return value isa Real ? value : NaN
     elseif value isa AbstractArray && spec.index in CartesianIndices(value)

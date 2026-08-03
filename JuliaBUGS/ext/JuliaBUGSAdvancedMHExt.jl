@@ -75,9 +75,9 @@ function _gibbs_internal_mh(
 end
 
 function JuliaBUGS.transition_params_and_stats(
-    ::BUGSModel, ts::Vector{<:AdvancedMH.Transition}, ::AdvancedMH.MHSampler
+    ::BUGSModel, ::AdvancedMH.MHSampler, t::AdvancedMH.AbstractTransition
 )
-    return [t.params for t in ts], [:lp], [[t.lp] for t in ts]
+    return t.params, (; lp=t.lp)
 end
 
 end

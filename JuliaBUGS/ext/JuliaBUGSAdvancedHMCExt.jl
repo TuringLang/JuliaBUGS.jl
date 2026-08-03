@@ -65,12 +65,9 @@ function _gibbs_internal_hmc(
 end
 
 function JuliaBUGS.transition_params_and_stats(
-    ::BUGSModel, ts::Vector{<:AdvancedHMC.Transition}, ::AdvancedHMC.AbstractHMCSampler
+    ::BUGSModel, ::AdvancedHMC.AbstractHMCSampler, t::AdvancedHMC.Transition
 )
-    param_samples = [t.z.θ for t in ts]
-    stats_names = collect(keys(merge((; lp=ts[1].z.ℓπ.value), AdvancedHMC.stat(ts[1]))))
-    stats_values = [vcat(t.z.ℓπ.value, collect(values(AdvancedHMC.stat(t)))) for t in ts]
-    return param_samples, stats_names, stats_values
+    return t.z.θ, merge((; lp=t.z.ℓπ.value), AdvancedHMC.stat(t))
 end
 
 end

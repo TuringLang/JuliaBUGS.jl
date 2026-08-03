@@ -47,47 +47,79 @@ function sampled_parameters(model::BUGSModel)
     end
 end
 
+"""
+    named_parameters(model::BUGSModel, evaluation_env)
+
+Read the sampled parameters out of `evaluation_env` into a [`ParamsDict`](@ref), copying array
+values so they do not alias the buffers the next evaluation reuses.
+"""
+function named_parameters(model::BUGSModel, evaluation_env)
+    d = ParamsDict()
+    for vn in sampled_parameters(model)
+        d[vn] = _maybe_copy_chain_value(AbstractPPL.getvalue(evaluation_env, vn))
+    end
+    return d
+end
+
+# The environment-based samplers hand back the whole evaluation environment, so the values can
+# be read straight off it. Everything else reports a flat parameter vector, which has to be
+# pushed back through the model to recover names and the constrained space.
+transition_environment(model::BUGSModel, transition::NamedTuple, params::AbstractVector) =
+    merge(model.evaluation_env, transition)
+transition_environment(model::BUGSModel, transition, params::AbstractVector) =
+    first(evaluate!!(model, params))
+
+function model_log_density(model::BUGSModel, evaluation_env)
+    log_densities = if model.evaluation_mode isa UseAutoMarginalization
+        _, lds = evaluate_with_marginalization_values!!(model, getparams(model, evaluation_env))
+        lds
+    else
+        model_with_env = BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
+        _, lds = evaluate_with_env!!(model_with_env; transformed=model.transformed)
+        lds
+    end
+    return log_densities.tempered_logjoint
+end
+
+"""
+    AbstractMCMC.ParamsWithStats(model, sampler, transition, state; params, stats, extras)
+
+Extract a callback's view of a draw: the sampled parameters keyed by `VarName`, and the
+statistics the sampler reported for that step.
+
+Generated quantities are *not* included. They are forward-sampled once at the end of
+sampling, so they only appear in the sampling output (`chain_type`), not here. Samplers that
+report no statistics of their own get the model's log density under `lp`.
+"""
 function AbstractMCMC.ParamsWithStats(
     model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     sampler::AbstractMCMC.AbstractSampler,
-    transition::NamedTuple,
+    transition,
     state;
     params::Bool=true,
     stats::Bool=false,
     extras::Bool=false,
 )
     bugs_model = base_bugs_model(model)
-    transition_env = merge(bugs_model.evaluation_env, transition)
-
-    p = if params
-        d = ParamsDict()
-        for vn in sampled_parameters(bugs_model)
-            d[vn] = _maybe_copy_chain_value(AbstractPPL.getvalue(transition_env, vn))
-        end
-        d
+    transition_params, transition_stats = JuliaBUGS.transition_params_and_stats(
+        bugs_model, sampler, transition
+    )
+    evaluation_env = if params || (stats && isempty(transition_stats))
+        transition_environment(bugs_model, transition, transition_params)
     else
         nothing
     end
 
-    s = if stats
-        log_densities = if bugs_model.evaluation_mode isa UseAutoMarginalization
-            _, lds = evaluate_with_marginalization_values!!(
-                bugs_model, getparams(bugs_model, transition_env)
-            )
-            lds
-        else
-            model_with_env = BangBang.setproperty!!(bugs_model, :evaluation_env, transition_env)
-            _, lds = evaluate_with_env!!(model_with_env; transformed=bugs_model.transformed)
-            lds
-        end
-        (lp=log_densities.tempered_logjoint,)
-    else
+    p = params ? named_parameters(bugs_model, evaluation_env) : nothing
+    s = if !stats
         NamedTuple()
+    elseif isempty(transition_stats)
+        (lp=model_log_density(bugs_model, evaluation_env),)
+    else
+        transition_stats
     end
 
-    e = extras ? NamedTuple() : NamedTuple()
-
-    return AbstractMCMC.ParamsWithStats(p, s, e)
+    return AbstractMCMC.ParamsWithStats(p, s, NamedTuple())
 end
 
 # Chain outputs store one value per draw, so array-valued variables must be copied before the
@@ -139,20 +171,13 @@ function reconstruct_chain_values(rng::Random.AbstractRNG, model::BUGSModel, sam
 end
 
 """
-    param_samples_from_environments(model, evaluation_envs)
+    params_from_environment(model, evaluation_env)
 
-Convert the evaluation environments produced by environment-based samplers (`Gibbs`,
-`IndependentMH`) into the flat parameter vectors that `gen_chains` consumes, by reading
-`getparams` from each environment. Shared by the `bundle_samples` methods of the chain-output
-extensions, which differ only in the chain type they target.
+Convert the evaluation environment produced by an environment-based sampler (`Gibbs`,
+`IndependentMH`) into the flat parameter vector that `gen_chains` consumes.
 """
-function param_samples_from_environments(model::BUGSModel, evaluation_envs)
-    param_samples = Vector{Vector{Float64}}()
-    for env in evaluation_envs
-        model_with_env = Accessors.@set model.evaluation_env = env
-        push!(param_samples, getparams(model_with_env))
-    end
-    return param_samples
+function params_from_environment(model::BUGSModel, evaluation_env)
+    return getparams(Accessors.@set model.evaluation_env = evaluation_env)
 end
 
 """
@@ -177,15 +202,13 @@ function JuliaBUGS.gen_chains(
     ::Type{<:AbstractVector{<:AbstractMCMC.ParamsWithStats}},
     model::BUGSModel,
     samples,
-    stats_names,
-    stats_values;
+    stats;
     rng::Random.AbstractRNG=Random.default_rng(),
     kwargs...,
 )
     param_vars, generated_vars, param_vals, generated_vals = reconstruct_chain_values(
         rng, model, samples
     )
-    stat_keys = Tuple(Symbol.(stats_names))
 
     return map(eachindex(samples)) do i
         params = ParamsDict()
@@ -195,13 +218,18 @@ function JuliaBUGS.gen_chains(
         for (j, vn) in enumerate(generated_vars)
             params[vn] = generated_vals[i][j]
         end
-        stats = if isempty(stat_keys)
-            NamedTuple()
-        else
-            NamedTuple{stat_keys}(Tuple(stats_values[i]))
-        end
-        AbstractMCMC.ParamsWithStats(params, stats)
+        AbstractMCMC.ParamsWithStats(params, stats[i])
     end
+end
+
+# `chain_type = ParamsWithStats` (without the `Vector`) is a likely typo. Without this method
+# AbstractMCMC's fallback would hand back the raw transitions.
+function JuliaBUGS.gen_chains(
+    ::Type{<:AbstractMCMC.ParamsWithStats}, model::BUGSModel, samples, stats; kwargs...
+)
+    return JuliaBUGS.gen_chains(
+        Vector{AbstractMCMC.ParamsWithStats}, model, samples, stats; kwargs...
+    )
 end
 
 function AbstractMCMC.bundle_samples(
@@ -209,7 +237,9 @@ function AbstractMCMC.bundle_samples(
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     sampler::AbstractMCMC.AbstractSampler,
     state,
-    chain_type::Type{<:AbstractVector{<:AbstractMCMC.ParamsWithStats}};
+    chain_type::Type{
+        <:Union{AbstractMCMC.ParamsWithStats,AbstractVector{<:AbstractMCMC.ParamsWithStats}}
+    };
     kwargs...,
 )
     return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)

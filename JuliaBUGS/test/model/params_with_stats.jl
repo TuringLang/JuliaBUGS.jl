@@ -125,7 +125,11 @@ const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
 
         samples = [[m] for m in range(-1.0, 1.0; length=10)]
         draws = JuliaBUGS.gen_chains(
-            PWSVector, marginalized_model, samples, Symbol[], []; rng=StableRNG(2024)
+            PWSVector,
+            marginalized_model,
+            samples,
+            fill(NamedTuple(), length(samples));
+            rng=StableRNG(2024),
         )
 
         @test [d.params[@varname(mu)] for d in draws] ≈ [s[1] for s in samples]

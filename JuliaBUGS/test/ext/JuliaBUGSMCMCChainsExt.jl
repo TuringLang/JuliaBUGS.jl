@@ -143,7 +143,9 @@ end
 
     # Synthetic posterior draws of the single model parameter `mu`.
     samples = [[m] for m in range(-1.0, 1.0; length=25)]
-    chn = JuliaBUGS.gen_chains(model, samples, Symbol[], []; rng=StableRNG(2024))
+    chn = JuliaBUGS.gen_chains(
+        model, samples, fill(NamedTuple(), length(samples)); rng=StableRNG(2024)
+    )
 
     colnames = names(chn)
     @test :mu in colnames
@@ -177,7 +179,9 @@ end
     @test !isempty(JuliaBUGS.Model.generated_quantities(model))
 
     samples = [[-0.5], [0.5]]
-    chn = JuliaBUGS.gen_chains(model, samples, Symbol[], []; rng=StableRNG(2024))
+    chn = JuliaBUGS.gen_chains(
+        model, samples, fill(NamedTuple(), length(samples)); rng=StableRNG(2024)
+    )
 
     colnames = names(chn)
     @test :x in colnames
@@ -198,7 +202,9 @@ end
     @test LogDensityProblems.dimension(model) == 1
 
     samples = [[m] for m in range(-1.0, 1.0; length=25)]
-    chn = JuliaBUGS.gen_chains(model, samples, Symbol[], []; rng=StableRNG(2024))
+    chn = JuliaBUGS.gen_chains(
+        model, samples, fill(NamedTuple(), length(samples)); rng=StableRNG(2024)
+    )
 
     colnames = names(chn)
     @test :mu in colnames
@@ -254,7 +260,7 @@ end
     model = compile(model_def, (; y=0.5), (; a=0.0, b=0.0))
 
     # A multivariate slice sampler reports `num_proposals` per coordinate, so the statistic
-    # is an array in every draw.
+    # is an array. The initial transition reports no `num_proposals` at all.
     draws = Base.invokelatest(
         AbstractMCMC.sample,
         StableRNG(31),
@@ -264,16 +270,101 @@ end
         progress=false,
         chain_type=Vector{AbstractMCMC.ParamsWithStats},
     )
-    @test draws[1].stats.num_proposals isa AbstractArray
+    @test keys(draws[1].stats) == (:lp,)
+    @test draws[2].stats.num_proposals isa AbstractArray
 
     chn = AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))
     @test chn.name_map[:internals] ==
         [:lp, Symbol("num_proposals[1]"), Symbol("num_proposals[2]")]
-    # The initial transition carries no `num_proposals`, so its column entry is `NaN`.
-    @test all(
-        isequal.(
-            vec(chn[Symbol("num_proposals[1]")].data),
-            [d.stats.num_proposals[1] for d in draws],
-        ),
+    # Draws that never reported the statistic get `NaN` in its columns.
+    column = vec(chn[Symbol("num_proposals[1]")].data)
+    @test isnan(column[1])
+    @test column[2:end] == [d.stats.num_proposals[1] for d in draws[2:end]]
+end
+
+@testset "from_samples matches sampling straight to Chains" begin
+    model_def = @bugs begin
+        mu ~ dnorm(0, 1)
+        for i in 1:N
+            y[i] ~ dnorm(mu, 1)
+        end
+        doubled = 2 * mu
+    end
+    model = compile(model_def, (N=3, y=[1.2, 0.8, 1.5]), (; mu=0.0))
+
+    Random.seed!(404)
+    direct = Base.invokelatest(
+        AbstractMCMC.sample,
+        StableRNG(77),
+        model,
+        JuliaBUGS.IndependentMH(),
+        15;
+        progress=false,
+        chain_type=Chains,
+        discard_initial=5,
     )
+    Random.seed!(404)
+    draws = Base.invokelatest(
+        AbstractMCMC.sample,
+        StableRNG(77),
+        model,
+        JuliaBUGS.IndependentMH(),
+        15;
+        progress=false,
+        chain_type=Vector{AbstractMCMC.ParamsWithStats},
+        discard_initial=5,
+    )
+    converted = AbstractMCMC.from_samples(Chains, reshape(draws, :, 1); start=6)
+
+    @test names(converted) == names(direct)
+    @test converted.name_map == direct.name_map
+    @test Array(converted) == Array(direct)
+    # A plain vector carries no iteration indices, so `start` restores them.
+    @test range(converted) == range(direct)
+end
+
+@testset "from_samples over multiple chains" begin
+    model_def = @bugs begin
+        mu ~ dnorm(0, 1)
+        y ~ dnorm(mu, 1)
+    end
+    model = compile(model_def, (; y=0.4), (; mu=0.0))
+
+    chains = Base.invokelatest(
+        AbstractMCMC.sample,
+        StableRNG(55),
+        model,
+        JuliaBUGS.IndependentMH(),
+        MCMCSerial(),
+        8,
+        3;
+        progress=false,
+        chain_type=Vector{AbstractMCMC.ParamsWithStats},
+    )
+    chn = AbstractMCMC.from_samples(Chains, reduce(hcat, chains))
+
+    @test size(chn) == (8, 1, 3)
+    @test vec(chn[:mu].data[:, 2]) ≈ [d.params[@varname(mu)] for d in chains[2]]
+end
+
+@testset "MALA draws are named after the model" begin
+    model_def = @bugs begin
+        mu ~ dnorm(0, 1)
+        y ~ dnorm(mu, 1)
+    end
+    model = compile(model_def, (; y=0.4), (; mu=0.0); adtype=AutoReverseDiff())
+
+    chn = Base.invokelatest(
+        AbstractMCMC.sample,
+        StableRNG(66),
+        model,
+        AdvancedMH.MALA(g -> MvNormal(0.1 .* g, 0.2 * LinearAlgebra.I)),
+        12;
+        progress=false,
+        chain_type=Chains,
+        initial_params=[0.0],
+    )
+
+    @test chn.name_map[:parameters] == [:mu]
+    @test chn.name_map[:internals] == [:lp]
 end
