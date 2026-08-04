@@ -13,7 +13,9 @@
 ### Breaking Changes
 
 - `AbstractMCMC.ParamsWithStats(model, sampler, transition, state)`, used by callbacks, now returns parameters keyed by `VarName` in an `OrderedDict` rather than a `Symbol`-keyed `NamedTuple` built from stringified names. Callback code that read `pws.params.mu` should read `pws.params[@varname(mu)]`. Array values are copied, so they no longer alias the evaluation environment's buffers.
-- Sampler statistics a draw did not report are now genuinely absent instead of padded. In a `FlexiChains.VNChain` they appear as `missing` where they were previously `NaN`, and the column keeps the sampler's own element type (for instance `Union{Missing,Int}` for a slice sampler's `num_proposals` instead of `Float64`). `MCMCChains.Chains` still fills them with `NaN`, since it stores scalar `Float64` columns.
+- Sampler statistics a draw did not report are now genuinely absent instead of padded. In a `FlexiChains.VNChain` they appear as `missing` where they were previously `NaN`, and the column keeps the sampler's own element type (for instance `Union{Missing,Int}` for a slice sampler's `num_proposals` instead of `Float64`). `MCMCChains.Chains` continues to fill them with `NaN`.
+- Samplers that report no statistics of their own, `Gibbs` and `IndependentMH`, now record the model's log density as `lp`. Their chains previously had an empty `internals` section and carried no log density at all. The evaluation that reconstructs each draw already computes it, so this costs nothing.
+- A sampler package that defines its own `AbstractMCMC.bundle_samples` for `MCMCChains.Chains` but no `JuliaBUGS.transition_params_and_stats` now raises an error naming the method to implement, where it previously produced a chain with generic `param_i` names.
 - `JuliaBUGS.gen_chains` takes the per-draw statistics as a vector of `NamedTuple`s (`gen_chains(chain_type, model, samples, stats)`) rather than a `(stats_names, stats_values)` pair.
 - `JuliaBUGSAdvancedHMCExt` and `JuliaBUGSAdvancedMHExt` are triggered by their sampler package alone, no longer also requiring `MCMCChains`. `gibbs_internal` for HMC and MH therefore works without loading `MCMCChains`.
 

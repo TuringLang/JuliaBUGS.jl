@@ -61,12 +61,15 @@ function named_parameters(model::BUGSModel, evaluation_env)
     return d
 end
 
-# The environment-based samplers hand back the whole evaluation environment, so the values can
-# be read straight off it. Everything else reports a flat parameter vector, which has to be
-# pushed back through the model to recover names and the constrained space.
-transition_environment(model::BUGSModel, transition::NamedTuple, params::AbstractVector) =
-    merge(model.evaluation_env, transition)
-transition_environment(model::BUGSModel, transition, params::AbstractVector) =
+"""
+    transition_environment(model, sampler, transition, params)
+
+Recover the evaluation environment a draw corresponds to. Samplers whose transition *is* an
+evaluation environment override this so the values can be read straight off it; by default the
+flat parameter vector is pushed back through the model, which also returns it to the model's
+own parameter space.
+"""
+transition_environment(model::BUGSModel, sampler, transition, params::AbstractVector) =
     first(evaluate!!(model, params))
 
 function model_log_density(model::BUGSModel, evaluation_env)
@@ -105,7 +108,7 @@ function AbstractMCMC.ParamsWithStats(
         bugs_model, sampler, transition
     )
     evaluation_env = if params || (stats && isempty(transition_stats))
-        transition_environment(bugs_model, transition, transition_params)
+        transition_environment(bugs_model, sampler, transition, transition_params)
     else
         nothing
     end
@@ -116,7 +119,7 @@ function AbstractMCMC.ParamsWithStats(
     elseif isempty(transition_stats)
         (lp=model_log_density(bugs_model, evaluation_env),)
     else
-        transition_stats
+        copy_stat_values(transition_stats)
     end
 
     return AbstractMCMC.ParamsWithStats(p, s, NamedTuple())
@@ -126,6 +129,16 @@ end
 # next evaluation reuses the environment's buffers.
 _maybe_copy_chain_value(x::AbstractArray) = copy(x)
 _maybe_copy_chain_value(x) = x
+
+"""
+    copy_stat_values(stats::NamedTuple)
+
+Copy array-valued statistics, for the same reason parameter values are copied: a sampler is
+free to report a buffer it reuses on the next step.
+"""
+function copy_stat_values(stats::NamedTuple)
+    return NamedTuple{keys(stats)}(map(_maybe_copy_chain_value, values(stats)))
+end
 
 """
     reconstruct_chain_values(rng, model, samples)
@@ -141,11 +154,13 @@ matters because `evaluate!!` leaves generated quantities at stale environment va
 reported draws would otherwise be wrong; forward-sampling makes them genuine
 posterior(-predictive) draws.
 
-Returns `(param_vars, generated_vars, param_vals, generated_vals)` where:
+Returns `(param_vars, generated_vars, param_vals, generated_vals, log_densities)` where:
 - `param_vars == model_parameters(model)` and `generated_vars == generated_quantities(model)`
   (disjoint by construction),
 - `param_vals[i]` / `generated_vals[i]` hold the values for draw `i`, ordered to match
-  `param_vars` / `generated_vars`.
+  `param_vars` / `generated_vars`,
+- `log_densities[i]` is the log joint density at draw `i`, which the evaluation computes
+  anyway.
 
 Array values are copied per draw, so callers may store them directly without aliasing the
 environment buffers that the next evaluation reuses.
@@ -155,8 +170,9 @@ function reconstruct_chain_values(rng::Random.AbstractRNG, model::BUGSModel, sam
     generated_vars = generated_quantities(model)
     param_vals = Vector{Any}(undef, length(samples))
     generated_vals = Vector{Any}(undef, length(samples))
+    log_densities = Vector{Float64}(undef, length(samples))
     for (i, sample) in enumerate(samples)
-        evaluation_env = first(evaluate!!(model, sample))
+        evaluation_env, log_densities[i] = evaluate!!(model, sample)
         evaluation_env = forward_sample_generated_quantities!!(rng, model, evaluation_env)
         param_vals[i] = Any[
             _maybe_copy_chain_value(AbstractPPL.getvalue(evaluation_env, vn)) for
@@ -167,7 +183,20 @@ function reconstruct_chain_values(rng::Random.AbstractRNG, model::BUGSModel, sam
             vn in generated_vars
         ]
     end
-    return param_vars, generated_vars, param_vals, generated_vals
+    return param_vars, generated_vars, param_vals, generated_vals, log_densities
+end
+
+"""
+    stats_with_log_density(stats, log_densities)
+
+Report the model's log density as `lp` for draws whose sampler recorded no statistics of its
+own, so that every output format carries the standard BUGS diagnostic. Draws that already
+carry statistics are left alone.
+"""
+function stats_with_log_density(stats, log_densities)
+    return map(stats, log_densities) do draw_stats, logp
+        isempty(draw_stats) ? (lp=logp,) : draw_stats
+    end
 end
 
 """
@@ -206,9 +235,10 @@ function JuliaBUGS.gen_chains(
     rng::Random.AbstractRNG=Random.default_rng(),
     kwargs...,
 )
-    param_vars, generated_vars, param_vals, generated_vals = reconstruct_chain_values(
+    param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
         rng, model, samples
     )
+    stats = stats_with_log_density(stats, log_densities)
 
     return map(eachindex(samples)) do i
         params = ParamsDict()
@@ -218,7 +248,7 @@ function JuliaBUGS.gen_chains(
         for (j, vn) in enumerate(generated_vars)
             params[vn] = generated_vals[i][j]
         end
-        AbstractMCMC.ParamsWithStats(params, stats[i])
+        AbstractMCMC.ParamsWithStats(params, copy_stat_values(stats[i]))
     end
 end
 

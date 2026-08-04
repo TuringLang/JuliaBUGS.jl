@@ -31,7 +31,9 @@ const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
         @test Set(keys(draws[1].params)) == Set([@varname(alpha), @varname(doubled)])
         @test draws[1].params[@varname(alpha)] isa Real
         @test draws[1].params[@varname(doubled)] ≈ 2 * draws[1].params[@varname(alpha)]
-        @test draws[1].stats == NamedTuple()
+        # The sampler reports no statistics of its own, so the model's log density stands in.
+        @test keys(draws[1].stats) == (:lp,)
+        @test all(d -> isfinite(d.stats.lp), draws)
     end
 
     @testset "Base.pairs flattens parameters and statistics" begin
@@ -46,7 +48,7 @@ const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
         )
 
         names = [first(p) for p in Base.pairs(draws[1])]
-        @test Set(names) == Set([@varname(alpha), @varname(doubled)])
+        @test Set(names) == Set([@varname(alpha), @varname(doubled), :lp])
     end
 
     @testset "Gibbs reports parameters" begin
@@ -63,7 +65,7 @@ const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
 
         @test length(draws) == 10
         @test haskey(draws[1].params, @varname(alpha))
-        @test draws[1].stats == NamedTuple()
+        @test keys(draws[1].stats) == (:lp,)
     end
 
     @testset "HMC records sampler statistics" begin

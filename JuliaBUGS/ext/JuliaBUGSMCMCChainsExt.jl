@@ -4,7 +4,11 @@ using AbstractMCMC
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient
 using JuliaBUGS.Model:
-    BUGSModelLike, BUGSParamsWithStats, base_bugs_model, reconstruct_chain_values
+    BUGSModelLike,
+    BUGSParamsWithStats,
+    base_bugs_model,
+    reconstruct_chain_values,
+    stats_with_log_density
 using JuliaBUGS.AbstractPPL
 using MCMCChains
 using Random: default_rng
@@ -123,14 +127,13 @@ function JuliaBUGS.gen_chains(
     thinning=1,
     kwargs...,
 )
-    stats_names, stats_values = flatten_stats(stats)
-
     # Reconstruct the per-draw values (model parameters plus forward-sampled generated
     # quantities, with marginalized discrete latents recovered) via the shared helper used
     # by both chain-output extensions.
-    param_vars, generated_vars, param_vals, generated_vals = reconstruct_chain_values(
+    param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
         rng, model, samples
     )
+    stats_names, stats_values = flatten_stats(stats_with_log_density(stats, log_densities))
 
     # Flatten variable names for array parameters
     param_name_leaves = collect(
@@ -257,8 +260,9 @@ end
 
 Lay out the per-draw statistics `NamedTuple`s as scalar columns, since
 `MCMCChains.Chains` stores scalars only. Column names are the union of the keys across draws,
-in first-seen order, with array-valued statistics expanded to one column per element
-(`key[i,j]`). Draws that do not report a column get `NaN`.
+in first-seen order, with numeric array statistics expanded to one column per element
+(`key[i,j]`). Draws that do not report a column, and statistics that are not real numbers, get
+`NaN`.
 """
 function flatten_stats(stats)
     specs = Any[]
@@ -266,7 +270,7 @@ function flatten_stats(stats)
     for draw in stats, (key, value) in pairs(draw)
         key in seen && continue
         push!(seen, key)
-        if value isa AbstractArray
+        if value isa AbstractArray{<:Real}
             for index in CartesianIndices(value)
                 push!(specs, (name=indexed_stat_name(key, index), key=key, index=index))
             end

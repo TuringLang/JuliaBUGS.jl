@@ -5,7 +5,12 @@ using FlexiChains: FlexiChains, Parameter, Extra
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient, OrderedDict
 using JuliaBUGS.Model:
-    BUGSModelLike, BUGSParamsWithStats, base_bugs_model, reconstruct_chain_values
+    BUGSModelLike,
+    BUGSParamsWithStats,
+    base_bugs_model,
+    copy_stat_values,
+    reconstruct_chain_values,
+    stats_with_log_density
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.AbstractPPL: VarName
 using Random: default_rng
@@ -53,9 +58,10 @@ function JuliaBUGS.gen_chains(
     # quantities, with marginalized discrete latents recovered) via the shared helper used
     # by both chain-output extensions. `reconstruct_chain_values` already copies array
     # values, so they can be stored directly.
-    param_vars, generated_vars, param_vals, generated_vals = reconstruct_chain_values(
+    param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
         rng, model, samples
     )
+    stats = stats_with_log_density(stats, log_densities)
 
     niters = length(samples)
     dicts = Vector{OrderedDict{FlexiChains.ParameterOrExtra{<:VarName},Any}}(undef, niters)
@@ -67,7 +73,7 @@ function JuliaBUGS.gen_chains(
         for (j, vn) in enumerate(generated_vars)
             d[Parameter(vn)] = generated_vals[i][j]
         end
-        for (name, value) in pairs(stats[i])
+        for (name, value) in pairs(copy_stat_values(stats[i]))
             d[Extra(name)] = value
         end
         dicts[i] = d
@@ -95,17 +101,24 @@ end
 """
     AbstractMCMC.from_samples(
         ::Type{<:FlexiChains.FlexiChain{<:VarName}},
-        draws::AbstractMatrix{<:BUGSParamsWithStats},
+        draws::AbstractMatrix{<:BUGSParamsWithStats};
+        start=1,
+        thin=1,
     )
 
 Convert draws sampled with `chain_type = Vector{AbstractMCMC.ParamsWithStats}` into a
 `FlexiChains.FlexiChain{VarName}`, keeping array-valued variables whole and storing sampler
 statistics as `FlexiChains.Extra` entries. Rows are iterations and columns are chains, so a
 single run needs `reshape(draws, :, 1)`.
+
+A plain vector of draws carries no iteration indices, so pass `start` and `thin` to restore
+the ones the sampling run had (`start = discard_initial + 1`).
 """
 function AbstractMCMC.from_samples(
     ::Type{<:FlexiChains.FlexiChain{<:VarName}},
-    draws::AbstractMatrix{<:BUGSParamsWithStats},
+    draws::AbstractMatrix{<:BUGSParamsWithStats};
+    start::Int=1,
+    thin::Int=1,
 )
     dicts = map(draws) do draw
         d = OrderedDict{FlexiChains.ParameterOrExtra{<:VarName},Any}()
@@ -117,7 +130,10 @@ function AbstractMCMC.from_samples(
         end
         d
     end
-    return FlexiChains.FlexiChain{VarName}(size(draws, 1), size(draws, 2), dicts)
+    niters = size(draws, 1)
+    return FlexiChains.FlexiChain{VarName}(
+        niters, size(draws, 2), dicts; iter_indices=range(start; step=thin, length=niters)
+    )
 end
 
 end

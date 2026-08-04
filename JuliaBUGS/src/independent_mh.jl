@@ -113,6 +113,12 @@ function transition_params_and_stats(
     return Model.params_from_environment(model, evaluation_env), NamedTuple()
 end
 
+function Model.transition_environment(
+    model::BUGSModel, ::IndependentMH, evaluation_env::NamedTuple, params::AbstractVector
+)
+    return merge(model.evaluation_env, evaluation_env)
+end
+
 # For use within Gibbs sampling
 """
     gibbs_internal(rng, cond_model, ::IndependentMH, state)

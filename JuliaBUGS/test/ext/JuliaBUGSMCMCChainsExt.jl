@@ -241,7 +241,9 @@ end
     chn = AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))
 
     @test chn isa Chains
-    @test size(chn) == (10, 3, 1)
+    # Two parameter columns, one generated quantity, and `lp`.
+    @test size(chn) == (10, 4, 1)
+    @test chn.name_map[:internals] == [:lp]
     # Array-valued variables are flattened into one column per element, named after the
     # leaf `VarName` exactly as `gen_chains` names them.
     @test Set(chn.name_map[:parameters]) ==
@@ -292,7 +294,6 @@ end
     end
     model = compile(model_def, (N=3, y=[1.2, 0.8, 1.5]), (; mu=0.0))
 
-    Random.seed!(404)
     direct = Base.invokelatest(
         AbstractMCMC.sample,
         StableRNG(77),
@@ -302,8 +303,8 @@ end
         progress=false,
         chain_type=Chains,
         discard_initial=5,
+        rng=StableRNG(404),
     )
-    Random.seed!(404)
     draws = Base.invokelatest(
         AbstractMCMC.sample,
         StableRNG(77),
@@ -313,6 +314,7 @@ end
         progress=false,
         chain_type=Vector{AbstractMCMC.ParamsWithStats},
         discard_initial=5,
+        rng=StableRNG(404),
     )
     converted = AbstractMCMC.from_samples(Chains, reshape(draws, :, 1); start=6)
 
@@ -343,7 +345,7 @@ end
     )
     chn = AbstractMCMC.from_samples(Chains, reduce(hcat, chains))
 
-    @test size(chn) == (8, 1, 3)
+    @test size(chn) == (8, 2, 3)
     @test vec(chn[:mu].data[:, 2]) ≈ [d.params[@varname(mu)] for d in chains[2]]
 end
 

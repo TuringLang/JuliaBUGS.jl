@@ -144,9 +144,13 @@ draws = AbstractMCMC.sample(
 ## What a callback sees
 
 `AbstractMCMC.ParamsWithStats(model, sampler, transition, state)` inside an `mcmc_callback`
-reports the same `VarName`-keyed parameters and the same sampler statistics, for every
-sampler. It does **not** include generated quantities: those are forward-sampled once at the
-end of a run, so they appear only in the sampling output.
+reports the same `VarName`-keyed parameters and the same statistics as the sampling output,
+for every sampler. It does **not** include generated quantities: those are forward-sampled
+once at the end of a run, so they appear only in the sampling output.
+
+For samplers whose transitions do not already carry the model's variables, which is every
+sampler except `Gibbs` and `IndependentMH`, naming a draw costs one model evaluation per
+iteration. That is worth knowing when a callback runs on every step of a long chain.
 
 ## Supporting a new sampler
 
