@@ -4,7 +4,9 @@
 
 ### Highlights
 
-- **`ParamsWithStats` output.** `chain_type = Vector{ParamsWithStats}` returns one [`AbstractMCMC.ParamsWithStats`](https://turinglang.org/AbstractMCMC.jl/stable/callbacks/#ParamsWithStats) per draw instead of a chain object. Params are keyed by `VarName`, so array variables stay whole. Stats are what the sampler reported. Convert with `AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))` or the same with `VNChain`. See the *Sampling Output Formats* page.
+- **`ParamsWithStats` is the default output.** `sample` without a `chain_type` returns one [`AbstractMCMC.ParamsWithStats`](https://turinglang.org/AbstractMCMC.jl/stable/callbacks/#ParamsWithStats) per draw instead of raw sampler transitions, one vector per chain with the parallel samplers. Params are keyed by `VarName`, so array variables stay whole. Stats are what the sampler reported. Convert with `AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))` or the same with `VNChain`. See the *Sampling Output Formats* page.
+
+- **`rand([rng,] model)`** draws from the prior and returns the evaluation environment, an instance of `of(model)`. Observed variables keep their data values.
 
 - **One method per sampler.** `JuliaBUGS.transition_params_and_stats(model, sampler, transition)` unpacks one transition into a `(params, stats)` pair, and all output formats plus the callback view are built from it.
 
@@ -16,6 +18,7 @@
 
 ### Breaking Changes
 
+- Sampling without a `chain_type` returns `Vector{ParamsWithStats}` instead of raw sampler transitions. Samplers without a `transition_params_and_stats` method still return their raw transitions.
 - Callback params are keyed by `VarName` in an `OrderedDict`, not a `Symbol`-keyed `NamedTuple`. `pws.params.mu` becomes `pws.params[@varname(mu)]`. Array values are copied.
 - A statistic a draw did not report is absent, not padded. In `VNChain` it is `missing` instead of `NaN`, keeping the sampler's element type. `Chains` still fills `NaN`.
 - Gibbs and IndependentMH chains have one extra column, `lp`.
