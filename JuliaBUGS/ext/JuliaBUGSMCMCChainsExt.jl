@@ -245,13 +245,20 @@ function AbstractMCMC.from_samples(
     all(row -> length(row) == ncols, vals) ||
         throw(ArgumentError("draws do not all carry the same variable shapes"))
 
-    data = Array{Real}(undef, niters, ncols, nchains)
+    # `Chains` wants a concretely typed array; rows may mix Float64, Int and Bool.
+    T = mapreduce(
+        row -> mapreduce(typeof, promote_type, row; init=Union{}),
+        promote_type,
+        vals;
+        init=Union{},
+    )
+    data = Array{T}(undef, niters, ncols, nchains)
     for j in 1:nchains, i in 1:niters
         data[i, :, j] = vals[i, j]
     end
 
     return MCMCChains.Chains(
-        MCMCChains.concretize(data),
+        data,
         vcat(param_symbols, stats_names),
         (parameters=param_symbols, internals=stats_names);
         start=start,
