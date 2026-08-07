@@ -16,13 +16,18 @@
 
 - **MALA columns are named after the model** instead of `param_1`.
 
+### Improvements
+
+- Reconstructed generated quantities and marginalized latents are reproducible from the sampling seed, with an independent stream per chain.
+- AdvancedMH draws report `accepted` alongside `lp`.
+
 ### Breaking Changes
 
 - Sampling without a `chain_type` returns `Vector{ParamsWithStats}` instead of raw sampler transitions. Samplers without a `transition_params_and_stats` method still return their raw transitions.
 - Callback params are keyed by `VarName` in an `OrderedDict`, not a `Symbol`-keyed `NamedTuple`. `pws.params.mu` becomes `pws.params[@varname(mu)]`. Array values are copied.
 - A statistic a draw did not report is absent, not padded. In `VNChain` it is `missing` instead of `NaN`, keeping the sampler's element type. `Chains` still fills `NaN`.
 - Gibbs and IndependentMH chains have one extra column, `lp`.
-- `gen_chains` takes one `NamedTuple` per draw: `gen_chains(chain_type, model, samples, stats)`.
+- `gen_chains` takes one `NamedTuple` per draw: `gen_chains(chain_type, model, samples, draw_stats)`.
 - A sampler package with its own `Chains` `bundle_samples` but no `transition_params_and_stats` now errors, naming the method to implement.
 - `JuliaBUGSAdvancedHMCExt` and `JuliaBUGSAdvancedMHExt` are triggered by their sampler package alone. `gibbs_internal` for HMC and MH no longer needs `MCMCChains` loaded.
 
