@@ -139,6 +139,44 @@ const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
     end
 end
 
+@testset "generated-quantity reconstruction is reproducible" begin
+    gq_def = @bugs begin
+        mu ~ dnorm(0, 1)
+        y ~ dnorm(mu, 1)
+        pred ~ dnorm(mu, 1)
+    end
+    gq_model = compile(gq_def, (; y=0.7), (; mu=0.0))
+
+    run() = Base.invokelatest(
+        AbstractMCMC.sample,
+        StableRNG(7),
+        gq_model,
+        IndependentMH(),
+        20;
+        progress=false,
+        chain_type=PWSVector,
+    )
+    a, b = run(), run()
+    @test [d.params[@varname(pred)] for d in a] == [d.params[@varname(pred)] for d in b]
+
+    multi() = Base.invokelatest(
+        AbstractMCMC.sample,
+        StableRNG(7),
+        gq_model,
+        IndependentMH(),
+        MCMCSerial(),
+        20,
+        3;
+        progress=false,
+        chain_type=PWSVector,
+    )
+    ma, mb = multi(), multi()
+    preds(chains) = [[d.params[@varname(pred)] for d in c] for c in chains]
+    @test preds(ma) == preds(mb)
+    # Chains draw from independent reconstruction streams.
+    @test allunique(preds(ma))
+end
+
 # A sampler JuliaBUGS has no transition_params_and_stats method for.
 struct OpaqueSampler <: AbstractMCMC.AbstractSampler end
 struct OpaqueTransition

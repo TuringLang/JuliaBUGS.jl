@@ -9,11 +9,11 @@ using JuliaBUGS.Model:
     BUGSParamsWithStats,
     base_bugs_model,
     copy_stat_values,
+    postprocess_rng,
     reconstruct_chain_values,
     stats_with_log_density
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.AbstractPPL: VarName
-using Random: default_rng
 
 function JuliaBUGS.gen_chains(
     chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}},
@@ -31,7 +31,7 @@ end
     gen_chains(
         chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}}, model::BUGSModel,
         samples, stats;
-        rng=default_rng(), discard_initial=0, thinning=1, kwargs...
+        rng=nothing, discard_initial=0, thinning=1, kwargs...
     )
 
 Convert parameter samples to a `FlexiChains.FlexiChain{VarName}` (`VNChain`).
@@ -49,7 +49,8 @@ function JuliaBUGS.gen_chains(
     model::BUGSModel,
     samples,
     stats;
-    rng=default_rng(),
+    rng=nothing,
+    chain_number=nothing,
     discard_initial=0,
     thinning=1,
     kwargs...,
@@ -59,7 +60,7 @@ function JuliaBUGS.gen_chains(
     # by both chain-output extensions. `reconstruct_chain_values` already copies array
     # values, so they can be stored directly.
     param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
-        rng, model, samples
+        postprocess_rng(rng, samples, chain_number), model, samples
     )
     stats = stats_with_log_density(stats, log_densities)
 

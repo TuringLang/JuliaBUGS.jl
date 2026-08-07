@@ -142,6 +142,22 @@ function copy_stat_values(stats::NamedTuple)
 end
 
 """
+    postprocess_rng(rng, samples, chain_number)
+
+The RNG used to reconstruct generated quantities and marginalized discrete latents.
+
+By default the stream is seeded from the draws themselves and the chain number, so a seeded
+sampling run reconstructs identically without any RNG plumbing, and parallel chains get
+independent streams with nothing shared across threads. An explicit `rng` is used as given;
+that is meant for direct `gen_chains` calls, not for parallel sampling, where it would be
+shared across chains.
+"""
+function postprocess_rng(rng, samples, chain_number)
+    rng === nothing || return rng
+    return Random.Xoshiro(hash((samples, chain_number)))
+end
+
+"""
     reconstruct_chain_values(rng, model, samples)
 
 Reconstruct the per-draw values reported by `gen_chains`. This is the shared core of the
@@ -216,7 +232,7 @@ end
         model::BUGSModel,
         samples,
         stats;
-        rng=Random.default_rng(),
+        rng=nothing,
         kwargs...,
     )
 
@@ -225,18 +241,20 @@ the model parameters and generated quantities together in a [`ParamsDict`](@ref)
 sampler statistics in a `NamedTuple`.
 
 Unlike the chain formats, a plain vector carries no iteration indices, so `discard_initial`
-and `thinning` leave no trace in the result.
+and `thinning` leave no trace in the result. The reconstruction RNG comes from
+[`postprocess_rng`](@ref).
 """
 function JuliaBUGS.gen_chains(
     ::Type{<:AbstractVector{<:AbstractMCMC.ParamsWithStats}},
     model::BUGSModel,
     samples,
     stats;
-    rng::Random.AbstractRNG=Random.default_rng(),
+    rng::Union{Nothing,Random.AbstractRNG}=nothing,
+    chain_number=nothing,
     kwargs...,
 )
     param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
-        rng, model, samples
+        postprocess_rng(rng, samples, chain_number), model, samples
     )
     stats = stats_with_log_density(stats, log_densities)
 

@@ -124,16 +124,9 @@ loses that mapping.
 
 ## Reproducing generated quantities
 
-Generated quantities are forward-sampled when the draws are laid out, using the global RNG
-rather than the sampler's. Pass `rng` to `sample` to make stochastic generated quantities
-reproducible:
-
-```julia
-draws = AbstractMCMC.sample(
-    model, JuliaBUGS.IndependentMH(), 500;
-    chain_type = Vector{ParamsWithStats}, rng = StableRNG(1),
-)
-```
+Generated quantities are forward-sampled when the draws are laid out, from a stream seeded
+by the draws themselves and the chain number. A seeded sampling run therefore reconstructs
+identically, and parallel chains get independent streams, with nothing extra to pass.
 
 ## What a callback sees
 

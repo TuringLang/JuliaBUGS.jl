@@ -7,11 +7,11 @@ using JuliaBUGS.Model:
     BUGSModelLike,
     BUGSParamsWithStats,
     base_bugs_model,
+    postprocess_rng,
     reconstruct_chain_values,
     stats_with_log_density
 using JuliaBUGS.AbstractPPL
 using MCMCChains
-using Random: default_rng
 
 function JuliaBUGS.gen_chains(
     model::Union{BUGSModelLike,AbstractMCMC.LogDensityModel{<:BUGSModelLike}},
@@ -122,7 +122,8 @@ function JuliaBUGS.gen_chains(
     model::BUGSModel,
     samples,
     stats;
-    rng=default_rng(),
+    rng=nothing,
+    chain_number=nothing,
     discard_initial=0,
     thinning=1,
     kwargs...,
@@ -131,7 +132,7 @@ function JuliaBUGS.gen_chains(
     # quantities, with marginalized discrete latents recovered) via the shared helper used
     # by both chain-output extensions.
     param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
-        rng, model, samples
+        postprocess_rng(rng, samples, chain_number), model, samples
     )
     stats_names, stats_values = flatten_stats(stats_with_log_density(stats, log_densities))
 
