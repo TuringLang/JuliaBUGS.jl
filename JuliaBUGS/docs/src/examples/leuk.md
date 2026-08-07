@@ -83,8 +83,10 @@ data = (
     t = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 22, 23, 35]
 )
 
-model = leuk(data)
+model = leuk(data, (; beta=0.0))
 ```
+
+The initial value for `beta` matters here: its prior `dnorm(0.0, 0.000001)` has standard deviation 1000, and a random draw far in the tails overflows `exp(beta * Z[i])` during model construction. Passing a starting value avoids that.
 
 All of the classic examples ship with the package in `JuliaBUGS.BUGSExamples`, so the model definition, data, and initial values above are also available directly as `JuliaBUGS.BUGSExamples.VOLUME_1.leuk`.
 
@@ -96,7 +98,7 @@ We draw posterior samples with the NUTS sampler from AdvancedHMC, rebuilding the
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = leuk(data; adtype=AutoMooncake(; config=nothing))
+model = leuk(data, (; beta=0.0); adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)
