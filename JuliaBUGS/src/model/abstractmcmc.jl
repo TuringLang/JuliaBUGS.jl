@@ -212,9 +212,13 @@ end
 
 Report the model's log density as `lp` for draws whose sampler recorded no statistics of its
 own, so that every output format carries the standard BUGS diagnostic. Draws that already
-carry statistics are left alone.
+carry statistics are left alone. `stats` may be an empty collection (or `nothing`) when no
+draw carries statistics.
 """
 function stats_with_log_density(stats, log_densities)
+    if stats === nothing || isempty(stats)
+        return [(lp=logp,) for logp in log_densities]
+    end
     return map(stats, log_densities) do draw_stats, logp
         isempty(draw_stats) ? (lp=logp,) : draw_stats
     end

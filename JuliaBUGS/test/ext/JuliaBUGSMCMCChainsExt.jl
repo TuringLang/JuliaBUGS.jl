@@ -143,9 +143,7 @@ end
 
     # Synthetic posterior draws of the single model parameter `mu`.
     samples = [[m] for m in range(-1.0, 1.0; length=25)]
-    chn = JuliaBUGS.gen_chains(
-        model, samples, fill(NamedTuple(), length(samples)); rng=StableRNG(2024)
-    )
+    chn = JuliaBUGS.gen_chains(model, samples, []; rng=StableRNG(2024))
 
     colnames = names(chn)
     @test :mu in colnames
@@ -179,9 +177,7 @@ end
     @test !isempty(JuliaBUGS.Model.generated_quantities(model))
 
     samples = [[-0.5], [0.5]]
-    chn = JuliaBUGS.gen_chains(
-        model, samples, fill(NamedTuple(), length(samples)); rng=StableRNG(2024)
-    )
+    chn = JuliaBUGS.gen_chains(model, samples, []; rng=StableRNG(2024))
 
     colnames = names(chn)
     @test :x in colnames
@@ -202,9 +198,7 @@ end
     @test LogDensityProblems.dimension(model) == 1
 
     samples = [[m] for m in range(-1.0, 1.0; length=25)]
-    chn = JuliaBUGS.gen_chains(
-        model, samples, fill(NamedTuple(), length(samples)); rng=StableRNG(2024)
-    )
+    chn = JuliaBUGS.gen_chains(model, samples, []; rng=StableRNG(2024))
 
     colnames = names(chn)
     @test :mu in colnames
