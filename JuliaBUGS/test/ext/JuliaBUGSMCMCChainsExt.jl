@@ -90,7 +90,7 @@
         :alpha
         :gen_quant
     ]
-    @test mh_chain.name_map[:internals] == [:lp]
+    @test mh_chain.name_map[:internals] == [:lp, :accepted]
     means = mean(mh_chain)
     @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.3
     @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.3
@@ -368,7 +368,7 @@ end
     )
 
     @test chn.name_map[:parameters] == [:mu]
-    @test chn.name_map[:internals] == [:lp]
+    @test chn.name_map[:internals] == [:lp, :accepted]
 end
 
 @testset "from_samples unions statistic layouts across draws" begin

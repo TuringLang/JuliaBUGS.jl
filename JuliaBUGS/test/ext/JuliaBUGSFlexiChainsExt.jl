@@ -107,7 +107,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
     @test mh_chain isa VNChain
     @test Set(FlexiChains.parameters(mh_chain)) ==
         Set([@varname(sigma), @varname(beta), @varname(alpha), @varname(gen_quant)])
-    @test FlexiChains.get_name.(FlexiChains.extras(mh_chain)) == [:lp]
+    @test FlexiChains.get_name.(FlexiChains.extras(mh_chain)) == [:lp, :accepted]
     mh_means = mean(mh_chain)
     @test mh_means[@varname(alpha)] ≈ 2.3 atol = 0.3
     @test mh_means[@varname(beta)] ≈ 2.1 atol = 0.3
@@ -287,7 +287,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
         )
         @test chain isa VNChain
         @test @varname(mu) in FlexiChains.parameters(chain)
-        @test FlexiChains.get_name.(FlexiChains.extras(chain)) == [:lp]
+        @test FlexiChains.get_name.(FlexiChains.extras(chain)) == [:lp, :accepted]
     end
 
     @testset "auto-marginalization with chain_type=VNChain" begin

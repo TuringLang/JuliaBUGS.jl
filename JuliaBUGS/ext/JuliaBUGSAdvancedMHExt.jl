@@ -77,7 +77,7 @@ end
 function JuliaBUGS.transition_params_and_stats(
     ::BUGSModel, ::AdvancedMH.MHSampler, t::AdvancedMH.AbstractTransition
 )
-    return t.params, (; lp=t.lp)
+    return t.params, (; lp=t.lp, accepted=t.accepted)
 end
 
 end
