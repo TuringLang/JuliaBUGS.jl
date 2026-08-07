@@ -133,8 +133,22 @@ themselves.
 
 Implementing this method is all a sampler needs to do to support every JuliaBUGS output
 format, including the `AbstractMCMC.ParamsWithStats` a callback sees.
+
+The fallback returns `nothing`, meaning the sampler is not known to JuliaBUGS. Sampling
+without a `chain_type` then hands back the raw transitions; asking for a specific output
+format raises an error naming this method.
 """
 function transition_params_and_stats end
+
+function require_transition_params_and_stats(model, sampler, transition)
+    extracted = transition_params_and_stats(model, sampler, transition)
+    extracted === nothing && error(
+        "JuliaBUGS does not know how to read draws from $(typeof(sampler)). " *
+        "Define `JuliaBUGS.transition_params_and_stats(::BUGSModel, ::$(typeof(sampler)), " *
+        "::$(typeof(transition)))` returning a `(params, stats)` pair.",
+    )
+    return extracted
+end
 
 """
     bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
@@ -144,7 +158,7 @@ Shared body of the `AbstractMCMC.bundle_samples` methods: unpack the transitions
 """
 function bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
     model = Model.base_bugs_model(logdensitymodel)
-    extracted = [transition_params_and_stats(model, sampler, t) for t in ts]
+    extracted = [require_transition_params_and_stats(model, sampler, t) for t in ts]
     return gen_chains(chain_type, model, first.(extracted), last.(extracted); kwargs...)
 end
 
@@ -153,13 +167,7 @@ using .Model
 using .Model: AbstractBUGSModel, BUGSModel
 export to_distribution
 
-function transition_params_and_stats(::BUGSModel, sampler, transition)
-    return error(
-        "JuliaBUGS does not know how to read draws from $(typeof(sampler)). " *
-        "Define `JuliaBUGS.transition_params_and_stats(::BUGSModel, ::$(typeof(sampler)), " *
-        "::$(typeof(transition)))` returning a `(params, stats)` pair.",
-    )
-end
+transition_params_and_stats(::BUGSModel, ::Any, ::Any) = nothing
 
 include("independent_mh.jl")
 include("gibbs.jl")

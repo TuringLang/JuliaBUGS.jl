@@ -21,20 +21,14 @@ model = model_def((; N = 3, y = [1.2, 0.8, 1.5]))
 
 ## `Vector{ParamsWithStats}`
 
-`chain_type = Vector{ParamsWithStats}` returns one
+This is the default: `sample` without a `chain_type` returns one
 [`AbstractMCMC.ParamsWithStats`](https://turinglang.org/AbstractMCMC.jl/stable/callbacks/#ParamsWithStats)
-per draw. It is the most general of the three and the only one that needs no extra package,
+per draw, the same as `chain_type = Vector{ParamsWithStats}`. It is the most general of the three and the only one that needs no extra package,
 since `AbstractMCMC` is already a dependency. It is not the most compact: a chain stores one
 array, whereas this repeats the `VarName` keys for every draw.
 
 ```@example output
-draws = AbstractMCMC.sample(
-    model,
-    JuliaBUGS.IndependentMH(),
-    500;
-    chain_type = Vector{ParamsWithStats},
-    progress = false,
-)
+draws = AbstractMCMC.sample(model, JuliaBUGS.IndependentMH(), 500; progress = false)
 draws[1]
 ```
 
@@ -72,13 +66,13 @@ iteration numbers the run actually used.
 Multiple chains come back as one vector per chain:
 
 ```julia
-chains = AbstractMCMC.sample(
-    model, JuliaBUGS.IndependentMH(), MCMCThreads(), 500, 4;
-    chain_type = Vector{ParamsWithStats},
-)
+chains = AbstractMCMC.sample(model, JuliaBUGS.IndependentMH(), MCMCThreads(), 500, 4)
 length(chains)     # 4
 length(chains[1])  # 500
 ```
+
+Samplers JuliaBUGS has no `transition_params_and_stats` method for keep AbstractMCMC's
+behaviour and hand back their raw transitions.
 
 ## `MCMCChains.Chains`
 

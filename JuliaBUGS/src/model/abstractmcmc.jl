@@ -104,7 +104,7 @@ function AbstractMCMC.ParamsWithStats(
     extras::Bool=false,
 )
     bugs_model = base_bugs_model(model)
-    transition_params, transition_stats = JuliaBUGS.transition_params_and_stats(
+    transition_params, transition_stats = JuliaBUGS.require_transition_params_and_stats(
         bugs_model, sampler, transition
     )
     evaluation_env = if params || (stats && isempty(transition_stats))
@@ -273,4 +273,24 @@ function AbstractMCMC.bundle_samples(
     kwargs...,
 )
     return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
+end
+
+# Sampling without a `chain_type` returns `ParamsWithStats` draws. Samplers JuliaBUGS does
+# not know how to read keep AbstractMCMC's behaviour and hand back the raw transitions.
+function AbstractMCMC.bundle_samples(
+    ts::Vector,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler,
+    state,
+    ::Type{Any};
+    kwargs...,
+)
+    isempty(ts) && return ts
+    model = base_bugs_model(logdensitymodel)
+    if JuliaBUGS.transition_params_and_stats(model, sampler, first(ts)) === nothing
+        return ts
+    end
+    return JuliaBUGS.bundle_transitions(
+        Vector{AbstractMCMC.ParamsWithStats}, logdensitymodel, ts, sampler; kwargs...
+    )
 end

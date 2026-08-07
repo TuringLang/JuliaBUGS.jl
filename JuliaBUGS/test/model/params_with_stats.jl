@@ -138,3 +138,77 @@ const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
         @test all(d -> d.params[@varname(z)] in (1, 2), draws)
     end
 end
+
+# A sampler JuliaBUGS has no transition_params_and_stats method for.
+struct OpaqueSampler <: AbstractMCMC.AbstractSampler end
+struct OpaqueTransition
+    v::Float64
+end
+function AbstractMCMC.step(rng, ::AbstractMCMC.LogDensityModel, ::OpaqueSampler; kwargs...)
+    return OpaqueTransition(0.0), nothing
+end
+function AbstractMCMC.step(
+    rng, ::AbstractMCMC.LogDensityModel, ::OpaqueSampler, state; kwargs...
+)
+    return OpaqueTransition(0.1), nothing
+end
+
+@testset "sampling without a chain_type" begin
+    model_def = @bugs begin
+        mu ~ dnorm(0, 1)
+        y ~ dnorm(mu, 1)
+        doubled = 2 * mu
+    end
+    model = compile(model_def, (; y=0.4), (; mu=0.0))
+
+    @testset "draws come back as ParamsWithStats" begin
+        draws = Base.invokelatest(
+            AbstractMCMC.sample, StableRNG(1), model, IndependentMH(), 10; progress=false
+        )
+        @test draws isa Vector{<:AbstractMCMC.ParamsWithStats}
+        @test haskey(draws[1].params, @varname(mu))
+        @test haskey(draws[1].params, @varname(doubled))
+        @test keys(draws[1].stats) == (:lp,)
+    end
+
+    @testset "multiple chains give one vector per chain" begin
+        chains = Base.invokelatest(
+            AbstractMCMC.sample,
+            StableRNG(2),
+            model,
+            IndependentMH(),
+            MCMCSerial(),
+            8,
+            3;
+            progress=false,
+        )
+        @test length(chains) == 3
+        @test all(c -> c isa Vector{<:AbstractMCMC.ParamsWithStats}, chains)
+        @test all(c -> length(c) == 8, chains)
+    end
+
+    @testset "unknown samplers keep their raw transitions" begin
+        raw = Base.invokelatest(
+            AbstractMCMC.sample, StableRNG(3), model, OpaqueSampler(), 5; progress=false
+        )
+        @test raw isa Vector{OpaqueTransition}
+
+        # Asking for a specific format names the method to implement.
+        err = try
+            Base.invokelatest(
+                AbstractMCMC.sample,
+                StableRNG(3),
+                model,
+                OpaqueSampler(),
+                5;
+                progress=false,
+                chain_type=PWSVector,
+            )
+            nothing
+        catch e
+            e
+        end
+        @test err !== nothing
+        @test occursin("transition_params_and_stats", sprint(showerror, err))
+    end
+end
