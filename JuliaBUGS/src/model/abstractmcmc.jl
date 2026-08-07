@@ -215,8 +215,7 @@ end
         ::Type{<:AbstractVector{<:AbstractMCMC.ParamsWithStats}},
         model::BUGSModel,
         samples,
-        stats_names,
-        stats_values;
+        stats;
         rng=Random.default_rng(),
         kwargs...,
     )
