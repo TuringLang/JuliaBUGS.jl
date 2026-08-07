@@ -9,7 +9,7 @@ recomputed.
 
 ```julia
 draw = rand(model)
-draws = [rand(rng, model) for _ in 1:1000]
+draws = rand(rng, model, 1000)
 ```
 
 ## Joint density with `to_distribution`

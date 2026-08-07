@@ -590,4 +590,9 @@ end
     a, b = rand(StableRNG(1), model), rand(StableRNG(2), model)
     @test a.mu != b.mu
     @test model.evaluation_env.mu == 0.0
+
+    many = rand(StableRNG(3), model, 5)
+    @test many isa Vector
+    @test length(many) == 5
+    @test allunique(d.mu for d in many)
 end
