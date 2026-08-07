@@ -526,6 +526,23 @@ Return a vector of `VarName` containing the names of all the variables in the mo
 """
 variables(model::BUGSModel) = collect(labels(model.g))
 
+"""
+    Base.rand([rng::Random.AbstractRNG,] model::BUGSModel)
+
+Draw from the prior by ancestral sampling and return the resulting evaluation environment,
+a `NamedTuple` that is an instance of `of(model)`. Observed variables keep their data
+values; every unobserved stochastic variable is sampled and every deterministic variable is
+recomputed.
+
+```julia
+draws = [rand(model) for _ in 1:1000]
+draws[1].mu
+```
+"""
+Base.rand(rng::Random.AbstractRNG, model::BUGSModel) =
+    first(evaluate_with_rng!!(rng, model))
+Base.rand(model::BUGSModel) = rand(Random.default_rng(), model)
+
 const AllowedArray{T} = AbstractArray{T} where {T<:Union{Int,Float64,Missing}}
 const AllowedValue = Union{Int,Float64,Missing,AllowedArray}
 

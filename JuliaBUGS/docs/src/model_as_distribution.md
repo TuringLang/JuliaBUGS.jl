@@ -1,5 +1,19 @@
 # Model as a Distribution
 
+## Prior draws with `rand`
+
+`rand(model)` draws from the prior by ancestral sampling and returns the evaluation
+environment, a `NamedTuple` that is an instance of `of(model)`. Observed variables keep
+their data values; unobserved stochastic variables are sampled and deterministic variables
+recomputed.
+
+```julia
+draw = rand(model)
+draws = [rand(rng, model) for _ in 1:1000]
+```
+
+## Joint density with `to_distribution`
+
 `to_distribution` wraps a compiled `BUGSModel` as a
 `Distributions.Distribution` whose variate is a `NamedTuple`. This lets you
 treat a model's joint density as an ordinary distribution object: you can `rand`
