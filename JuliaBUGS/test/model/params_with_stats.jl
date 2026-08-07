@@ -248,5 +248,16 @@ end
         end
         @test err !== nothing
         @test occursin("transition_params_and_stats", sprint(showerror, err))
+
+        # A callback that asked for nothing extracts nothing, even for unknown samplers.
+        pws = AbstractMCMC.ParamsWithStats(
+            AbstractMCMC.LogDensityModel(model),
+            OpaqueSampler(),
+            OpaqueTransition(0.0),
+            nothing;
+            params=false,
+            stats=false,
+        )
+        @test isempty(pws)
     end
 end

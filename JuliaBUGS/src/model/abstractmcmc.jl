@@ -104,6 +104,10 @@ function AbstractMCMC.ParamsWithStats(
     stats::Bool=false,
     extras::Bool=false,
 )
+    if !params && !stats
+        return AbstractMCMC.ParamsWithStats(nothing, NamedTuple(), NamedTuple())
+    end
+
     bugs_model = base_bugs_model(model)
     transition_params, transition_stats = JuliaBUGS.require_transition_params_and_stats(
         bugs_model, sampler, transition
