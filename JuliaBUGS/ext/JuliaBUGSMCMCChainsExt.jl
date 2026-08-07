@@ -16,21 +16,21 @@ using MCMCChains
 function JuliaBUGS.gen_chains(
     model::Union{BUGSModelLike,AbstractMCMC.LogDensityModel{<:BUGSModelLike}},
     samples,
-    stats;
+    draw_stats;
     kwargs...,
 )
-    return JuliaBUGS.gen_chains(MCMCChains.Chains, model, samples, stats; kwargs...)
+    return JuliaBUGS.gen_chains(MCMCChains.Chains, model, samples, draw_stats; kwargs...)
 end
 
 function JuliaBUGS.gen_chains(
     chain_type::Type{MCMCChains.Chains},
     model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     samples,
-    stats;
+    draw_stats;
     kwargs...,
 )
     return JuliaBUGS.gen_chains(
-        chain_type, base_bugs_model(model), samples, stats; kwargs...
+        chain_type, base_bugs_model(model), samples, draw_stats; kwargs...
     )
 end
 
@@ -105,7 +105,7 @@ end
 """
     gen_chains(
         model::BUGSModel,
-        samples, stats;
+        samples, draw_stats;
         discard_initial=0, thinning=1, kwargs...
     )
 
@@ -121,7 +121,7 @@ function JuliaBUGS.gen_chains(
     ::Type{MCMCChains.Chains},
     model::BUGSModel,
     samples,
-    stats;
+    draw_stats;
     rng=nothing,
     chain_number=nothing,
     discard_initial=0,
@@ -134,7 +134,9 @@ function JuliaBUGS.gen_chains(
     param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
         postprocess_rng(rng, samples, chain_number), model, samples
     )
-    stats_names, stats_values = flatten_stats(stats_with_log_density(stats, log_densities))
+    stats_names, stats_values = flatten_stats(
+        stats_with_log_density(draw_stats, log_densities)
+    )
 
     # Flatten variable names for array parameters
     param_name_leaves = collect(

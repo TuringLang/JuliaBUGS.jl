@@ -19,18 +19,18 @@ function JuliaBUGS.gen_chains(
     chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}},
     model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     samples,
-    stats;
+    draw_stats;
     kwargs...,
 )
     return JuliaBUGS.gen_chains(
-        chain_type, base_bugs_model(model), samples, stats; kwargs...
+        chain_type, base_bugs_model(model), samples, draw_stats; kwargs...
     )
 end
 
 """
     gen_chains(
         chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}}, model::BUGSModel,
-        samples, stats;
+        samples, draw_stats;
         rng=nothing, discard_initial=0, thinning=1, kwargs...
     )
 
@@ -48,7 +48,7 @@ function JuliaBUGS.gen_chains(
     ::Type{<:FlexiChains.FlexiChain{<:VarName}},
     model::BUGSModel,
     samples,
-    stats;
+    draw_stats;
     rng=nothing,
     chain_number=nothing,
     discard_initial=0,
@@ -62,7 +62,7 @@ function JuliaBUGS.gen_chains(
     param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
         postprocess_rng(rng, samples, chain_number), model, samples
     )
-    stats = stats_with_log_density(stats, log_densities)
+    draw_stats = stats_with_log_density(draw_stats, log_densities)
 
     niters = length(samples)
     dicts = Vector{OrderedDict{FlexiChains.ParameterOrExtra{<:VarName},Any}}(undef, niters)
@@ -74,7 +74,7 @@ function JuliaBUGS.gen_chains(
         for (j, vn) in enumerate(generated_vars)
             d[Parameter(vn)] = generated_vals[i][j]
         end
-        for (name, value) in pairs(copy_stat_values(stats[i]))
+        for (name, value) in pairs(copy_stat_values(draw_stats[i]))
             d[Extra(name)] = value
         end
         dicts[i] = d

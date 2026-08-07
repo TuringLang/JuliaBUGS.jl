@@ -208,19 +208,19 @@ function reconstruct_chain_values(rng::Random.AbstractRNG, model::BUGSModel, sam
 end
 
 """
-    stats_with_log_density(stats, log_densities)
+    stats_with_log_density(draw_stats, log_densities)
 
 Report the model's log density as `lp` for draws whose sampler recorded no statistics of its
 own, so that every output format carries the standard BUGS diagnostic. Draws that already
-carry statistics are left alone. `stats` may be an empty collection (or `nothing`) when no
-draw carries statistics.
+carry statistics are left alone. `draw_stats` may be an empty collection (or `nothing`) when
+no draw carries statistics.
 """
-function stats_with_log_density(stats, log_densities)
-    if stats === nothing || isempty(stats)
+function stats_with_log_density(draw_stats, log_densities)
+    if draw_stats === nothing || isempty(draw_stats)
         return [(lp=logp,) for logp in log_densities]
     end
-    return map(stats, log_densities) do draw_stats, logp
-        isempty(draw_stats) ? (lp=logp,) : draw_stats
+    return map(draw_stats, log_densities) do stats, logp
+        isempty(stats) ? (lp=logp,) : stats
     end
 end
 
@@ -239,7 +239,7 @@ end
         ::Type{<:AbstractVector{<:AbstractMCMC.ParamsWithStats}},
         model::BUGSModel,
         samples,
-        stats;
+        draw_stats;
         rng=nothing,
         kwargs...,
     )
@@ -256,7 +256,7 @@ function JuliaBUGS.gen_chains(
     ::Type{<:AbstractVector{<:AbstractMCMC.ParamsWithStats}},
     model::BUGSModel,
     samples,
-    stats;
+    draw_stats;
     rng::Union{Nothing,Random.AbstractRNG}=nothing,
     chain_number=nothing,
     kwargs...,
@@ -264,7 +264,7 @@ function JuliaBUGS.gen_chains(
     param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
         postprocess_rng(rng, samples, chain_number), model, samples
     )
-    stats = stats_with_log_density(stats, log_densities)
+    draw_stats = stats_with_log_density(draw_stats, log_densities)
 
     return map(eachindex(samples)) do i
         params = ParamsDict()
@@ -274,17 +274,17 @@ function JuliaBUGS.gen_chains(
         for (j, vn) in enumerate(generated_vars)
             params[vn] = generated_vals[i][j]
         end
-        AbstractMCMC.ParamsWithStats(params, copy_stat_values(stats[i]))
+        AbstractMCMC.ParamsWithStats(params, copy_stat_values(draw_stats[i]))
     end
 end
 
 # `chain_type = ParamsWithStats` (without the `Vector`) is a likely typo. Without this method
 # AbstractMCMC's fallback would hand back the raw transitions.
 function JuliaBUGS.gen_chains(
-    ::Type{<:AbstractMCMC.ParamsWithStats}, model::BUGSModel, samples, stats; kwargs...
+    ::Type{<:AbstractMCMC.ParamsWithStats}, model::BUGSModel, samples, draw_stats; kwargs...
 )
     return JuliaBUGS.gen_chains(
-        Vector{AbstractMCMC.ParamsWithStats}, model, samples, stats; kwargs...
+        Vector{AbstractMCMC.ParamsWithStats}, model, samples, draw_stats; kwargs...
     )
 end
 
