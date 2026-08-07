@@ -222,9 +222,10 @@ function AbstractMCMC.from_samples(
 )
     isempty(draws) && throw(ArgumentError("cannot build a chain from zero draws"))
 
+    param_keys = collect(keys(first(draws).params))
     param_leaves = JuliaBUGS.VarName[]
-    for (vn, value) in pairs(first(draws).params)
-        append!(param_leaves, elementwise_varnames(vn, value))
+    for vn in param_keys
+        append!(param_leaves, elementwise_varnames(vn, first(draws).params[vn]))
     end
 
     stats_names, stats_values = flatten_stats([d.stats for d in vec(draws)])
@@ -233,13 +234,13 @@ function AbstractMCMC.from_samples(
     niters, nchains = size(draws)
     vals = [
         vcat(
-            collect(Iterators.flatten(values(draws[i, j].params))),
+            collect(Iterators.flatten(ordered_param_values(draws[i, j], param_keys))),
             stats_values[(j - 1) * niters + i],
         ) for i in 1:niters, j in 1:nchains
     ]
     ncols = length(param_symbols) + length(stats_names)
     all(row -> length(row) == ncols, vals) ||
-        throw(ArgumentError("draws do not all carry the same variables"))
+        throw(ArgumentError("draws do not all carry the same variable shapes"))
 
     data = Array{Real}(undef, niters, ncols, nchains)
     for j in 1:nchains, i in 1:niters
@@ -259,29 +260,43 @@ end
     flatten_stats(stats)
 
 Lay out the per-draw statistics `NamedTuple`s as scalar columns, since
-`MCMCChains.Chains` stores scalars only. Column names are the union of the keys across draws,
-in first-seen order, with numeric array statistics expanded to one column per element
-(`key[i,j]`). Draws that do not report a column, and statistics that are not real numbers, get
-`NaN`.
+`MCMCChains.Chains` stores scalars only. Columns are the union of the `(key, index)` pairs
+seen across draws, in first-seen order, with numeric array statistics expanded to one column
+per element (`key[i,j]`). Draws that do not report a column get `NaN`. Statistics that are
+never real numbers get no column at all.
 """
 function flatten_stats(stats)
     specs = Any[]
-    seen = Set{Symbol}()
+    seen = Set{Tuple{Symbol,Any}}()
     for draw in stats, (key, value) in pairs(draw)
-        key in seen && continue
-        push!(seen, key)
-        if value isa AbstractArray{<:Real}
-            for index in CartesianIndices(value)
-                push!(specs, (name=indexed_stat_name(key, index), key=key, index=index))
+        if value isa Real
+            id = (key, nothing)
+            if !(id in seen)
+                push!(seen, id)
+                push!(specs, (name=Symbol(key), key=key, index=nothing))
             end
-        else
-            push!(specs, (name=Symbol(key), key=key, index=nothing))
+        elseif value isa AbstractArray{<:Real}
+            for index in CartesianIndices(value)
+                id = (key, index)
+                if !(id in seen)
+                    push!(seen, id)
+                    push!(specs, (name=indexed_stat_name(key, index), key=key, index=index))
+                end
+            end
         end
     end
 
     names = Symbol[spec.name for spec in specs]
     values = [[stat_value(draw, spec) for spec in specs] for draw in stats]
     return names, values
+end
+
+# Values are looked up by the first draw's keys, so draws whose dicts iterate in a
+# different order still land in the right columns. A missing key throws a `KeyError`.
+function ordered_param_values(draw, param_keys)
+    length(draw.params) == length(param_keys) ||
+        throw(ArgumentError("draws do not all carry the same variables"))
+    return (draw.params[k] for k in param_keys)
 end
 
 function indexed_stat_name(name, index::CartesianIndex)
@@ -294,7 +309,8 @@ function stat_value(draw, spec)
     if spec.index === nothing
         return value isa Real ? value : NaN
     elseif value isa AbstractArray && spec.index in CartesianIndices(value)
-        return value[spec.index]
+        element = value[spec.index]
+        return element isa Real ? element : NaN
     else
         return NaN
     end

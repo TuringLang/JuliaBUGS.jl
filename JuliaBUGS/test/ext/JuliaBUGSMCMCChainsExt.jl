@@ -370,3 +370,38 @@ end
     @test chn.name_map[:parameters] == [:mu]
     @test chn.name_map[:internals] == [:lp]
 end
+
+@testset "from_samples unions statistic layouts across draws" begin
+    params() = JuliaBUGS.Model.ParamsDict(@varname(mu) => 1.0)
+    draws = [
+        AbstractMCMC.ParamsWithStats(params(), (lp=-1.0, np=[1, 2], note=:warmup)),
+        AbstractMCMC.ParamsWithStats(params(), (lp=-2.0, np=[3, 4, 5])),
+        AbstractMCMC.ParamsWithStats(params(), (lp=-3.0, np=6.0)),
+    ]
+    chn = AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))
+
+    # Columns are the union of (key, index) pairs in first-seen order; `note` is never a
+    # real number, so it gets no column.
+    @test chn.name_map[:internals] ==
+        [:lp, Symbol("np[1]"), Symbol("np[2]"), Symbol("np[3]"), :np]
+    @test all(isequal.(vec(chn[Symbol("np[1]")].data), [1.0, 3.0, NaN]))
+    @test all(isequal.(vec(chn[Symbol("np[3]")].data), [NaN, 5.0, NaN]))
+    @test all(isequal.(vec(chn[:np].data), [NaN, NaN, 6.0]))
+end
+
+@testset "from_samples is independent of dict insertion order" begin
+    a = JuliaBUGS.Model.ParamsDict(@varname(mu) => 1.0, @varname(tau) => 2.0)
+    b = JuliaBUGS.Model.ParamsDict(@varname(tau) => 20.0, @varname(mu) => 10.0)
+    draws = [
+        AbstractMCMC.ParamsWithStats(a, NamedTuple()),
+        AbstractMCMC.ParamsWithStats(b, NamedTuple()),
+    ]
+    chn = AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))
+
+    @test vec(chn[:mu].data) == [1.0, 10.0]
+    @test vec(chn[:tau].data) == [2.0, 20.0]
+
+    missing_key = JuliaBUGS.Model.ParamsDict(@varname(mu) => 1.0, @varname(sig) => 0.5)
+    bad = [draws[1], AbstractMCMC.ParamsWithStats(missing_key, NamedTuple())]
+    @test_throws KeyError AbstractMCMC.from_samples(Chains, reshape(bad, :, 1))
+end
