@@ -87,12 +87,13 @@ end
 """
     AbstractMCMC.ParamsWithStats(model, sampler, transition, state; params, stats, extras)
 
-Extract a callback's view of a draw: the sampled parameters keyed by `VarName`, and the
-statistics the sampler reported for that step.
+Extract a callback's view of a draw: the parameters the sampler moves, keyed by `VarName`,
+and the statistics the sampler reported for that step.
 
-Generated quantities are *not* included. They are forward-sampled once at the end of
-sampling, so they only appear in the sampling output (`chain_type`), not here. Samplers that
-report no statistics of their own get the model's log density under `lp`.
+The view holds only what the sampler moves. Generated quantities, and under
+`UseAutoMarginalization` the marginalized discrete latents, are reconstructed once at the
+end of sampling, so they appear in the sampling output (`chain_type`) but not here. Samplers
+that report no statistics of their own get the model's log density under `lp`.
 """
 function AbstractMCMC.ParamsWithStats(
     model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
