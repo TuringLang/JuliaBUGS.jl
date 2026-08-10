@@ -17,6 +17,20 @@ base_bugs_model(model::BUGSModel) = model
 base_bugs_model(model::BUGSModelWithGradient) = model.base_model
 base_bugs_model(model::AbstractMCMC.LogDensityModel) = base_bugs_model(model.logdensity)
 
+# Strip the model wrappers once, so the per-format `gen_chains` methods only need a
+# `BUGSModel` method.
+function JuliaBUGS.gen_chains(
+    chain_type::Type,
+    model::Union{BUGSModelWithGradient,AbstractMCMC.LogDensityModel{<:BUGSModelLike}},
+    samples,
+    draw_stats;
+    kwargs...,
+)
+    return JuliaBUGS.gen_chains(
+        chain_type, base_bugs_model(model), samples, draw_stats; kwargs...
+    )
+end
+
 """
     ParamsDict
 
@@ -64,13 +78,16 @@ end
 """
     transition_environment(model, sampler, transition, params)
 
-Recover the evaluation environment a draw corresponds to. Samplers whose transition *is* an
-evaluation environment override this so the values can be read straight off it; by default the
-flat parameter vector is pushed back through the model, which also returns it to the model's
-own parameter space.
+Recover the evaluation environment a draw corresponds to. Environment-based samplers
+(`Gibbs`, `IndependentMH`) pass their evaluation environment through
+[`transition_params_and_stats`](@ref) whole, so it only needs completing against the model's
+own environment; the flat parameter vector other samplers produce is pushed back through the
+model, which also returns it to the model's own parameter space.
 """
 transition_environment(model::BUGSModel, sampler, transition, params::AbstractVector) =
     first(evaluate!!(model, params))
+transition_environment(model::BUGSModel, sampler, transition, params::NamedTuple) =
+    merge(model.evaluation_env, params)
 
 function model_log_density(model::BUGSModel, evaluation_env)
     log_densities = if model.evaluation_mode isa UseAutoMarginalization
@@ -93,7 +110,9 @@ and the statistics the sampler reported for that step.
 The view holds only what the sampler moves. Generated quantities, and under
 `UseAutoMarginalization` the marginalized discrete latents, are reconstructed once at the
 end of sampling, so they appear in the sampling output (`chain_type`) but not here. Samplers
-that report no statistics of their own get the model's log density under `lp`.
+that report no statistics of their own get the model's log density under `lp`. Samplers
+JuliaBUGS does not know how to read (no [`transition_params_and_stats`](@ref) method) keep
+AbstractMCMC's generic extraction, exactly as if this method were not defined.
 """
 function AbstractMCMC.ParamsWithStats(
     model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
@@ -109,9 +128,21 @@ function AbstractMCMC.ParamsWithStats(
     end
 
     bugs_model = base_bugs_model(model)
-    transition_params, transition_stats = JuliaBUGS.require_transition_params_and_stats(
-        bugs_model, sampler, transition
-    )
+    extracted = JuliaBUGS.transition_params_and_stats(bugs_model, sampler, transition)
+    if extracted === nothing
+        return invoke(
+            AbstractMCMC.ParamsWithStats,
+            Tuple{Any,Any,Any,Any},
+            model,
+            sampler,
+            transition,
+            state;
+            params=params,
+            stats=stats,
+            extras=extras,
+        )
+    end
+    transition_params, transition_stats = extracted
     evaluation_env = if params || (stats && isempty(transition_stats))
         transition_environment(bugs_model, sampler, transition, transition_params)
     else
@@ -193,7 +224,7 @@ function reconstruct_chain_values(rng::Random.AbstractRNG, model::BUGSModel, sam
     generated_vals = Vector{Any}(undef, length(samples))
     log_densities = Vector{Float64}(undef, length(samples))
     for (i, sample) in enumerate(samples)
-        evaluation_env, log_densities[i] = evaluate!!(model, sample)
+        evaluation_env, log_densities[i] = draw_environment_and_logp(model, sample)
         evaluation_env = forward_sample_generated_quantities!!(rng, model, evaluation_env)
         param_vals[i] = Any[
             _maybe_copy_chain_value(AbstractPPL.getvalue(evaluation_env, vn)) for
@@ -225,13 +256,22 @@ function stats_with_log_density(draw_stats, log_densities)
 end
 
 """
-    params_from_environment(model, evaluation_env)
+    draw_environment_and_logp(model, sample)
 
-Convert the evaluation environment produced by an environment-based sampler (`Gibbs`,
-`IndependentMH`) into the flat parameter vector that `gen_chains` consumes.
+Rebuild the evaluation environment and log joint density of one draw. Most samplers produce
+a flat parameter vector, which is pushed back through the model; environment-based samplers
+(`Gibbs`, `IndependentMH`) carry their evaluation environment through
+[`transition_params_and_stats`](@ref) whole, which keeps the values' types — an `Int`-valued
+discrete latent stays an `Int` in every output format.
 """
-function params_from_environment(model::BUGSModel, evaluation_env)
-    return getparams(Accessors.@set model.evaluation_env = evaluation_env)
+function draw_environment_and_logp(model::BUGSModel, sample::AbstractVector)
+    return evaluate!!(model, sample)
+end
+function draw_environment_and_logp(model::BUGSModel, sample::NamedTuple)
+    model_with_env = BangBang.setproperty!!(
+        model, :evaluation_env, merge(model.evaluation_env, sample)
+    )
+    return evaluate!!(model_with_env)
 end
 
 """

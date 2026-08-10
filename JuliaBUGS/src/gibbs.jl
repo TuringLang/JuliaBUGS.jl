@@ -466,11 +466,5 @@ end
 
 # The component samplers keep their own statistics, which `Gibbs` does not aggregate.
 function transition_params_and_stats(model::BUGSModel, ::Gibbs, evaluation_env::NamedTuple)
-    return Model.params_from_environment(model, evaluation_env), NamedTuple()
-end
-
-function Model.transition_environment(
-    model::BUGSModel, ::Gibbs, evaluation_env::NamedTuple, params::AbstractVector
-)
-    return merge(model.evaluation_env, evaluation_env)
+    return evaluation_env, NamedTuple()
 end

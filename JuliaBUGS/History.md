@@ -4,13 +4,13 @@
 
 ### Highlights
 
-- **`ParamsWithStats` is the default output.** `sample` without a `chain_type` returns one [`AbstractMCMC.ParamsWithStats`](https://turinglang.org/AbstractMCMC.jl/stable/callbacks/#ParamsWithStats) per draw instead of raw sampler transitions, one vector per chain with the parallel samplers. Params are keyed by `VarName`, so array variables stay whole. Stats are what the sampler reported. Convert with `AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))` or the same with `VNChain`. See the *Sampling Output Formats* page.
+- **`ParamsWithStats` is the default output.** `sample` without a `chain_type` returns one [`AbstractMCMC.ParamsWithStats`](https://turinglang.org/AbstractMCMC.jl/stable/callbacks/#ParamsWithStats) per draw instead of raw sampler transitions, one vector per chain with the parallel samplers. Params are keyed by `VarName`, so array variables stay whole and values keep their types (an `Int`-valued discrete latent stays an `Int`). Stats are what the sampler reported. Convert with `AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))` or the same with `VNChain`. See the *Sampling Output Formats* page.
 
-- **`rand([rng,] model)`** draws from the prior and returns the evaluation environment, an instance of `of(model)`. Observed variables keep their data values.
+- **`rand([rng,] model)`** draws from the prior and returns the evaluation environment, an instance of `of(model)`. Observed variables keep their data values. Each draw owns all of its arrays, and a `BUGSModelWithGradient` draws from the model it wraps.
 
 - **One method per sampler.** `JuliaBUGS.transition_params_and_stats(model, sampler, transition)` unpacks one transition into a `(params, stats)` pair, and all output formats plus the callback view are built from it.
 
-- **Callbacks name variables for every sampler.** With HMC, MH and slice they used to give unnamed `θ[i]` in unconstrained space.
+- **Callbacks name variables for every sampler.** With HMC, MH and slice they used to give unnamed `θ[i]` in unconstrained space. Samplers JuliaBUGS has no method for keep AbstractMCMC's generic extraction.
 
 - **Gibbs and IndependentMH chains carry `lp`.** `internals` was empty before.
 

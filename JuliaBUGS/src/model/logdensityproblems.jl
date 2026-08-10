@@ -165,6 +165,14 @@ function LogDensityProblems.logdensity(model::BUGSModelWithGradient, x::Abstract
     return LogDensityProblems.logdensity(model.base_model, x)
 end
 
+Base.rand(rng::Random.AbstractRNG, model::BUGSModelWithGradient) =
+    rand(rng, model.base_model)
+Base.rand(model::BUGSModelWithGradient) = rand(model.base_model)
+function Base.rand(rng::Random.AbstractRNG, model::BUGSModelWithGradient, n::Integer)
+    return rand(rng, model.base_model, n)
+end
+Base.rand(model::BUGSModelWithGradient, n::Integer) = rand(model.base_model, n)
+
 function LogDensityProblems.dimension(model::BUGSModelWithGradient)
     return LogDensityProblems.dimension(model.base_model)
 end

@@ -7,25 +7,12 @@ using JuliaBUGS: BUGSModel, BUGSModelWithGradient, OrderedDict
 using JuliaBUGS.Model:
     BUGSModelLike,
     BUGSParamsWithStats,
-    base_bugs_model,
     copy_stat_values,
     postprocess_rng,
     reconstruct_chain_values,
     stats_with_log_density
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.AbstractPPL: VarName
-
-function JuliaBUGS.gen_chains(
-    chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}},
-    model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
-    samples,
-    draw_stats;
-    kwargs...,
-)
-    return JuliaBUGS.gen_chains(
-        chain_type, base_bugs_model(model), samples, draw_stats; kwargs...
-    )
-end
 
 """
     gen_chains(

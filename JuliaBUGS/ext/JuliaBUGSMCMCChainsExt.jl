@@ -6,7 +6,6 @@ using JuliaBUGS: BUGSModel, BUGSModelWithGradient
 using JuliaBUGS.Model:
     BUGSModelLike,
     BUGSParamsWithStats,
-    base_bugs_model,
     postprocess_rng,
     reconstruct_chain_values,
     stats_with_log_density
@@ -20,18 +19,6 @@ function JuliaBUGS.gen_chains(
     kwargs...,
 )
     return JuliaBUGS.gen_chains(MCMCChains.Chains, model, samples, draw_stats; kwargs...)
-end
-
-function JuliaBUGS.gen_chains(
-    chain_type::Type{MCMCChains.Chains},
-    model::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
-    samples,
-    draw_stats;
-    kwargs...,
-)
-    return JuliaBUGS.gen_chains(
-        chain_type, base_bugs_model(model), samples, draw_stats; kwargs...
-    )
 end
 
 """
@@ -230,6 +217,7 @@ function AbstractMCMC.from_samples(
     for vn in param_keys
         append!(param_leaves, elementwise_varnames(vn, first(draws).params[vn]))
     end
+    validate_draw_shapes(draws, param_keys)
 
     stats_names, stats_values = flatten_stats([d.stats for d in vec(draws)])
     param_symbols = Symbol.(param_leaves)
@@ -307,6 +295,23 @@ function ordered_param_values(draw, param_keys)
     length(draw.params) == length(param_keys) ||
         throw(ArgumentError("draws do not all carry the same variables"))
     return (draw.params[k] for k in param_keys)
+end
+
+# The column labels are flattened from the first draw's variable shapes, so a draw whose
+# shapes differ — even when its values flatten to the same total length — would silently
+# land its values in the wrong columns. A scalar has `size` `()`, so scalars and arrays
+# compare freely. A draw with the right variable count but different keys throws a
+# `KeyError` here, just as `ordered_param_values` would.
+function validate_draw_shapes(draws, param_keys)
+    reference_shapes = [size(first(draws).params[vn]) for vn in param_keys]
+    for draw in draws
+        length(draw.params) == length(param_keys) ||
+            throw(ArgumentError("draws do not all carry the same variables"))
+        for (vn, reference) in zip(param_keys, reference_shapes)
+            size(draw.params[vn]) == reference ||
+                throw(ArgumentError("draws do not all carry the same shape for $vn"))
+        end
+    end
 end
 
 function indexed_stat_name(name, index::CartesianIndex)
