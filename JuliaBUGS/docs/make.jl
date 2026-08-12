@@ -26,6 +26,7 @@ makedocs(;
                 "Evaluation Modes" => "inference/evaluation_modes.md",
                 "Discrete Variables and Auto-Marginalization" => "inference/auto_marginalization.md",
                 "Slice Sampling" => "inference/slice_sampling.md",
+                "Sampling Output Formats" => "inference/output_formats.md",
                 "Parallel & Distributed Sampling" => "inference/parallel.md",
             ],
             "Working with Models" => [

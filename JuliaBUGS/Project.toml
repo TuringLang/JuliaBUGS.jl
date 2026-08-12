@@ -1,6 +1,6 @@
 name = "JuliaBUGS"
 uuid = "ba9fb4c0-828e-4473-b6a1-cd2560fee5bf"
-version = "0.15.0"
+version = "0.16.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -38,21 +38,19 @@ MCMCChains = "c7f686f2-ff18-58e9-bc7b-31028e88f75d"
 SliceSampling = "43f4d3e8-9711-4a8c-bd1b-03ac73a255cf"
 
 [extensions]
-JuliaBUGSAdvancedHMCExt = ["AdvancedHMC", "MCMCChains"]
-JuliaBUGSAdvancedHMCFlexiChainsExt = ["AdvancedHMC", "FlexiChains"]
-JuliaBUGSAdvancedMHExt = ["AdvancedMH", "MCMCChains"]
-JuliaBUGSAdvancedMHFlexiChainsExt = ["AdvancedMH", "FlexiChains"]
+JuliaBUGSAdvancedHMCExt = "AdvancedHMC"
+JuliaBUGSAdvancedHMCMCMCChainsExt = ["AdvancedHMC", "MCMCChains"]
+JuliaBUGSAdvancedMHExt = "AdvancedMH"
+JuliaBUGSAdvancedMHMCMCChainsExt = ["AdvancedMH", "MCMCChains"]
 JuliaBUGSFlexiChainsExt = "FlexiChains"
 JuliaBUGSGraphMakieExt = ["GraphMakie", "GLMakie"]
 JuliaBUGSGraphPlotExt = "GraphPlot"
 JuliaBUGSMCMCChainsExt = "MCMCChains"
 JuliaBUGSSliceSamplingExt = "SliceSampling"
-JuliaBUGSSliceSamplingFlexiChainsExt = ["SliceSampling", "FlexiChains"]
-JuliaBUGSSliceSamplingMCMCChainsExt = ["SliceSampling", "MCMCChains"]
 
 [compat]
 ADTypes = "1.18.0"
-AbstractMCMC = "5"
+AbstractMCMC = "5.16"
 AbstractPPL = "0.15.3"
 Accessors = "0.1"
 AdvancedHMC = "0.6, 0.7, 0.8"

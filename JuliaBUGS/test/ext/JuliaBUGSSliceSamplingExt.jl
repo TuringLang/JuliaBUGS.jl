@@ -46,7 +46,11 @@ using JuliaBUGS: Gibbs
         @test Set(FlexiChains.get_name.(FlexiChains.extras(chain))) ==
             Set([:lp, :num_proposals])
         @test all(isfinite, vec(chain[FlexiChains.Extra(:lp)]))
-        @test all(x -> isnan(x) || x >= 0, vec(chain[FlexiChains.Extra(:num_proposals)]))
+        # The initial transition reports no `num_proposals`; FlexiChains keeps that absence
+        # as `missing` rather than padding it.
+        @test all(
+            x -> ismissing(x) || x >= 0, vec(chain[FlexiChains.Extra(:num_proposals)])
+        )
     end
 
     @testset "Multivariate sampler statistics are flattened for MCMCChains" begin

@@ -107,7 +107,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
     @test mh_chain isa VNChain
     @test Set(FlexiChains.parameters(mh_chain)) ==
         Set([@varname(sigma), @varname(beta), @varname(alpha), @varname(gen_quant)])
-    @test FlexiChains.get_name.(FlexiChains.extras(mh_chain)) == [:lp]
+    @test FlexiChains.get_name.(FlexiChains.extras(mh_chain)) == [:lp, :accepted]
     mh_means = mean(mh_chain)
     @test mh_means[@varname(alpha)] ≈ 2.3 atol = 0.3
     @test mh_means[@varname(beta)] ≈ 2.1 atol = 0.3
@@ -287,7 +287,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
         )
         @test chain isa VNChain
         @test @varname(mu) in FlexiChains.parameters(chain)
-        @test FlexiChains.get_name.(FlexiChains.extras(chain)) == [:lp]
+        @test FlexiChains.get_name.(FlexiChains.extras(chain)) == [:lp, :accepted]
     end
 
     @testset "auto-marginalization with chain_type=VNChain" begin
@@ -351,4 +351,31 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
         @test length(recovered_z) == count(ismissing, z_obs)
         @test all(vn -> all(v -> v in (1, 2), vec(chain[vn])), recovered_z)
     end
+end
+
+@testset "from_samples converts ParamsWithStats draws" begin
+    model_def = @bugs begin
+        x[1:2] ~ dmnorm(m[1:2], tau[1:2, 1:2])
+        y ~ dnorm(x[1] + x[2], 1)
+        total = x[1] + x[2]
+    end
+    model = compile(model_def, (m=[0.0, 0.0], tau=[1.0 0.0; 0.0 1.0], y=0.5))
+
+    draws = Base.invokelatest(
+        AbstractMCMC.sample,
+        StableRNG(11),
+        model,
+        IndependentMH(),
+        10;
+        progress=false,
+        chain_type=Vector{AbstractMCMC.ParamsWithStats},
+    )
+    chain = AbstractMCMC.from_samples(VNChain, reshape(draws, :, 1))
+
+    @test chain isa VNChain
+    @test size(chain) == (10, 1)
+    @test Set(FlexiChains.parameters(chain)) == Set([@varname(x[1:2]), @varname(total)])
+    @test vec(chain[@varname(total)]) ≈ [d.params[@varname(total)] for d in draws]
+    # Array-valued variables survive the conversion whole.
+    @test all(v -> size(v) == (2,), vec(chain[@varname(x[1:2])]))
 end

@@ -4,46 +4,21 @@ using AbstractMCMC
 using FlexiChains: FlexiChains, Parameter, Extra
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient, OrderedDict
-using JuliaBUGS.Model: reconstruct_chain_values, param_samples_from_environments
+using JuliaBUGS.Model:
+    BUGSModelLike,
+    BUGSParamsWithStats,
+    copy_stat_values,
+    postprocess_rng,
+    reconstruct_chain_values,
+    stats_with_log_density
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.AbstractPPL: VarName
-using Random: default_rng
-
-function JuliaBUGS.gen_chains(
-    chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}},
-    model::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    samples,
-    stats_names,
-    stats_values;
-    kwargs...,
-)
-    # Extract BUGSModel and delegate
-    return JuliaBUGS.gen_chains(
-        chain_type, model.logdensity, samples, stats_names, stats_values; kwargs...
-    )
-end
-
-function JuliaBUGS.gen_chains(
-    chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}},
-    model::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
-    samples,
-    stats_names,
-    stats_values;
-    kwargs...,
-)
-    # Extract BUGSModel from gradient wrapper
-    bugs_model = model.logdensity.base_model
-
-    return JuliaBUGS.gen_chains(
-        chain_type, bugs_model, samples, stats_names, stats_values; kwargs...
-    )
-end
 
 """
     gen_chains(
         chain_type::Type{<:FlexiChains.FlexiChain{<:VarName}}, model::BUGSModel,
-        samples, stats_names, stats_values;
-        rng=default_rng(), discard_initial=0, thinning=1, kwargs...
+        samples, draw_stats;
+        rng=nothing, discard_initial=0, thinning=1, kwargs...
     )
 
 Convert parameter samples to a `FlexiChains.FlexiChain{VarName}` (`VNChain`).
@@ -54,15 +29,15 @@ This function:
    marginalized discrete latents recovered, generated quantities forward-sampled)
 2. Stores parameters and generated quantities keyed by their `VarName` (array-valued
    variables are kept whole instead of being flattened into scalar columns)
-3. Stores sampler statistics as `FlexiChains.Extra` entries
+3. Stores each draw's sampler statistics as `FlexiChains.Extra` entries
 """
 function JuliaBUGS.gen_chains(
     ::Type{<:FlexiChains.FlexiChain{<:VarName}},
     model::BUGSModel,
     samples,
-    stats_names,
-    stats_values;
-    rng=default_rng(),
+    draw_stats;
+    rng=nothing,
+    chain_number=nothing,
     discard_initial=0,
     thinning=1,
     kwargs...,
@@ -71,9 +46,10 @@ function JuliaBUGS.gen_chains(
     # quantities, with marginalized discrete latents recovered) via the shared helper used
     # by both chain-output extensions. `reconstruct_chain_values` already copies array
     # values, so they can be stored directly.
-    param_vars, generated_vars, param_vals, generated_vals = reconstruct_chain_values(
-        rng, model, samples
+    param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
+        postprocess_rng(rng, samples, chain_number), model, samples
     )
+    draw_stats = stats_with_log_density(draw_stats, log_densities)
 
     niters = length(samples)
     dicts = Vector{OrderedDict{FlexiChains.ParameterOrExtra{<:VarName},Any}}(undef, niters)
@@ -85,10 +61,8 @@ function JuliaBUGS.gen_chains(
         for (j, vn) in enumerate(generated_vars)
             d[Parameter(vn)] = generated_vals[i][j]
         end
-        if !isempty(stats_values)
-            for (j, name) in enumerate(stats_names)
-                d[Extra(Symbol(name))] = stats_values[i][j]
-            end
+        for (name, value) in pairs(copy_stat_values(draw_stats[i]))
+            d[Extra(name)] = value
         end
         dicts[i] = d
     end
@@ -102,41 +76,51 @@ function JuliaBUGS.gen_chains(
 end
 
 function AbstractMCMC.bundle_samples(
-    samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::JuliaBUGS.Gibbs,
-    states,
+    ts::Vector,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler,
+    state,
     chain_type::Type{FlexiChains.VNChain};
-    discard_initial=0,
     kwargs...,
 )
-    param_samples = param_samples_from_environments(logdensitymodel.logdensity, samples)
-
-    # No statistics for Gibbs sampler itself
-    return JuliaBUGS.gen_chains(
-        chain_type,
-        logdensitymodel,
-        param_samples,
-        Symbol[],
-        [];
-        discard_initial=discard_initial,
-        kwargs...,
-    )
+    return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
 end
 
-function AbstractMCMC.bundle_samples(
-    samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::JuliaBUGS.IndependentMH,
-    state,  # Final state only (AbstractMCMC interface)
-    chain_type::Type{FlexiChains.VNChain};
-    kwargs...,
-)
-    param_samples = param_samples_from_environments(logdensitymodel.logdensity, samples)
+"""
+    AbstractMCMC.from_samples(
+        ::Type{<:FlexiChains.FlexiChain{<:VarName}},
+        draws::AbstractMatrix{<:BUGSParamsWithStats};
+        start=1,
+        thin=1,
+    )
 
-    # No per-sample log probabilities available since AbstractMCMC only passes final state
-    return JuliaBUGS.gen_chains(
-        chain_type, logdensitymodel, param_samples, Symbol[], []; kwargs...
+Convert draws sampled with `chain_type = Vector{AbstractMCMC.ParamsWithStats}` into a
+`FlexiChains.FlexiChain{VarName}`, keeping array-valued variables whole and storing sampler
+statistics as `FlexiChains.Extra` entries. Rows are iterations and columns are chains, so a
+single run needs `reshape(draws, :, 1)`.
+
+A plain vector of draws carries no iteration indices, so pass `start` and `thin` to restore
+the ones the sampling run had (`start = discard_initial + 1`).
+"""
+function AbstractMCMC.from_samples(
+    ::Type{<:FlexiChains.FlexiChain{<:VarName}},
+    draws::AbstractMatrix{<:BUGSParamsWithStats};
+    start::Int=1,
+    thin::Int=1,
+)
+    dicts = map(draws) do draw
+        d = OrderedDict{FlexiChains.ParameterOrExtra{<:VarName},Any}()
+        for (vn, value) in pairs(draw.params)
+            d[Parameter(vn)] = value
+        end
+        for (name, value) in pairs(draw.stats)
+            d[Extra(name)] = value
+        end
+        d
+    end
+    niters = size(draws, 1)
+    return FlexiChains.FlexiChain{VarName}(
+        niters, size(draws, 2), dicts; iter_indices=range(start; step=thin, length=niters)
     )
 end
 

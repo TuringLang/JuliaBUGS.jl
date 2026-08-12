@@ -238,7 +238,10 @@ using StatsBase: mode
 
             @test chain isa AbstractMCMC.AbstractChains
             @test size(chain, 1) == 100  # Number of samples
-            @test size(chain, 2) == 7    # Number of parameters (μ, τ, θ[1:5])
+            @test size(chain, 2) == 8    # μ, τ, θ[1:5], and lp
+            # `Gibbs` reports no statistics of its own, so the model's log density stands in.
+            @test chain.name_map[:internals] == [:lp]
+            @test all(isfinite, vec(chain[:lp].data))
         end
     end
 
@@ -638,7 +641,7 @@ using StatsBase: mode
 
             @test chain isa AbstractMCMC.AbstractChains
             @test size(chain, 1) == 1000  # discard_initial is handled in post-processing
-            @test size(chain, 2) == 3  # μ, log_σ, k
+            @test size(chain, 2) == 4  # μ, log_σ, k, lp
 
             # Check that discrete parameter takes valid values
             k_samples = Int.(vec(chain[:k].data))
@@ -683,7 +686,7 @@ using StatsBase: mode
 
         @test chain isa AbstractMCMC.AbstractChains
         @test size(chain, 1) == 1000
-        @test size(chain, 2) == 2  # α and β
+        @test size(chain, 2) == 3  # α, β and lp
 
         # Check bounds for α (should be in [0, 1])
         α_samples = vec(chain[:α].data)
@@ -720,7 +723,7 @@ using StatsBase: mode
 
         @test chain isa AbstractMCMC.AbstractChains
         @test size(chain, 1) == 200
-        @test size(chain, 2) == 2  # μ and σ
+        @test size(chain, 2) == 3  # μ, σ and lp
 
         # Just check that samples are reasonable
         μ_samples = vec(chain[:μ].data)

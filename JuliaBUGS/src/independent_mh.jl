@@ -105,6 +105,14 @@ function AbstractMCMC.step(
     end
 end
 
+# The transition carries no statistics of its own; the log density is recovered from the
+# model when a caller asks for it.
+function transition_params_and_stats(
+    model::BUGSModel, ::IndependentMH, evaluation_env::NamedTuple
+)
+    return evaluation_env, NamedTuple()
+end
+
 # For use within Gibbs sampling
 """
     gibbs_internal(rng, cond_model, ::IndependentMH, state)

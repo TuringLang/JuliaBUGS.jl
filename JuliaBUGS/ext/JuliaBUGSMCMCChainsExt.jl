@@ -3,35 +3,22 @@ module JuliaBUGSMCMCChainsExt
 using AbstractMCMC
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient
-using JuliaBUGS.Model: reconstruct_chain_values, param_samples_from_environments
+using JuliaBUGS.Model:
+    BUGSModelLike,
+    BUGSParamsWithStats,
+    postprocess_rng,
+    reconstruct_chain_values,
+    stats_with_log_density
 using JuliaBUGS.AbstractPPL
 using MCMCChains
-using Random: default_rng
 
 function JuliaBUGS.gen_chains(
-    model::AbstractMCMC.LogDensityModel{<:BUGSModel},
+    model::Union{BUGSModelLike,AbstractMCMC.LogDensityModel{<:BUGSModelLike}},
     samples,
-    stats_names,
-    stats_values;
+    draw_stats;
     kwargs...,
 )
-    # Extract BUGSModel and delegate
-    return JuliaBUGS.gen_chains(
-        model.logdensity, samples, stats_names, stats_values; kwargs...
-    )
-end
-
-function JuliaBUGS.gen_chains(
-    model::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
-    samples,
-    stats_names,
-    stats_values;
-    kwargs...,
-)
-    # Extract BUGSModel from gradient wrapper
-    bugs_model = model.logdensity.base_model
-
-    return JuliaBUGS.gen_chains(bugs_model, samples, stats_names, stats_values; kwargs...)
+    return JuliaBUGS.gen_chains(MCMCChains.Chains, model, samples, draw_stats; kwargs...)
 end
 
 """
@@ -105,7 +92,7 @@ end
 """
     gen_chains(
         model::BUGSModel,
-        samples, stats_names, stats_values;
+        samples, draw_stats;
         discard_initial=0, thinning=1, kwargs...
     )
 
@@ -118,11 +105,12 @@ This function:
 4. Creates a properly formatted Chains object
 """
 function JuliaBUGS.gen_chains(
+    ::Type{MCMCChains.Chains},
     model::BUGSModel,
     samples,
-    stats_names,
-    stats_values;
-    rng=default_rng(),
+    draw_stats;
+    rng=nothing,
+    chain_number=nothing,
     discard_initial=0,
     thinning=1,
     kwargs...,
@@ -130,8 +118,11 @@ function JuliaBUGS.gen_chains(
     # Reconstruct the per-draw values (model parameters plus forward-sampled generated
     # quantities, with marginalized discrete latents recovered) via the shared helper used
     # by both chain-output extensions.
-    param_vars, generated_vars, param_vals, generated_vals = reconstruct_chain_values(
-        rng, model, samples
+    param_vars, generated_vars, param_vals, generated_vals, log_densities = reconstruct_chain_values(
+        postprocess_rng(rng, samples, chain_number), model, samples
+    )
+    stats_names, stats_values = flatten_stats(
+        stats_with_log_density(draw_stats, log_densities)
     )
 
     # Flatten variable names for array parameters
@@ -188,34 +179,156 @@ function JuliaBUGS.gen_chains(
 end
 
 function AbstractMCMC.bundle_samples(
-    samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::JuliaBUGS.Gibbs,
-    states,
-    ::Type{MCMCChains.Chains};
-    discard_initial=0,
+    ts::Vector,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler,
+    state,
+    chain_type::Type{MCMCChains.Chains};
     kwargs...,
 )
-    param_samples = param_samples_from_environments(logdensitymodel.logdensity, samples)
+    return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
+end
 
-    # No statistics for Gibbs sampler itself
-    return JuliaBUGS.gen_chains(
-        logdensitymodel, param_samples, [], []; discard_initial=discard_initial, kwargs...
+"""
+    AbstractMCMC.from_samples(
+        ::Type{MCMCChains.Chains},
+        draws::AbstractMatrix{<:BUGSParamsWithStats};
+        start=1,
+        thin=1,
+    )
+
+Convert draws sampled with `chain_type = Vector{AbstractMCMC.ParamsWithStats}` into an
+`MCMCChains.Chains`, flattening array-valued variables into scalar columns. Rows are
+iterations and columns are chains, so a single run needs `reshape(draws, :, 1)`.
+
+A plain vector of draws carries no iteration indices, so pass `start` and `thin` to restore
+the ones the sampling run had (`start = discard_initial + 1`).
+"""
+function AbstractMCMC.from_samples(
+    ::Type{MCMCChains.Chains},
+    draws::AbstractMatrix{<:BUGSParamsWithStats};
+    start::Int=1,
+    thin::Int=1,
+)
+    isempty(draws) && throw(ArgumentError("cannot build a chain from zero draws"))
+
+    param_keys = collect(keys(first(draws).params))
+    param_leaves = JuliaBUGS.VarName[]
+    for vn in param_keys
+        append!(param_leaves, elementwise_varnames(vn, first(draws).params[vn]))
+    end
+    validate_draw_shapes(draws, param_keys)
+
+    stats_names, stats_values = flatten_stats([d.stats for d in vec(draws)])
+    param_symbols = Symbol.(param_leaves)
+
+    niters, nchains = size(draws)
+    vals = [
+        vcat(
+            collect(Iterators.flatten(ordered_param_values(draws[i, j], param_keys))),
+            stats_values[(j - 1) * niters + i],
+        ) for i in 1:niters, j in 1:nchains
+    ]
+    ncols = length(param_symbols) + length(stats_names)
+    all(row -> length(row) == ncols, vals) ||
+        throw(ArgumentError("draws do not all carry the same variable shapes"))
+
+    # `Chains` wants a concretely typed array; rows may mix Float64, Int and Bool.
+    T = mapreduce(
+        row -> mapreduce(typeof, promote_type, row; init=Union{}),
+        promote_type,
+        vals;
+        init=Union{},
+    )
+    data = Array{T}(undef, niters, ncols, nchains)
+    for j in 1:nchains, i in 1:niters
+        data[i, :, j] = vals[i, j]
+    end
+
+    return MCMCChains.Chains(
+        data,
+        vcat(param_symbols, stats_names),
+        (parameters=param_symbols, internals=stats_names);
+        start=start,
+        thin=thin,
     )
 end
 
-function AbstractMCMC.bundle_samples(
-    samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::JuliaBUGS.IndependentMH,
-    state,  # Final state only (AbstractMCMC interface)
-    ::Type{MCMCChains.Chains};
-    kwargs...,
-)
-    param_samples = param_samples_from_environments(logdensitymodel.logdensity, samples)
+"""
+    flatten_stats(stats)
 
-    # No per-sample log probabilities available since AbstractMCMC only passes final state
-    return JuliaBUGS.gen_chains(logdensitymodel, param_samples, [], []; kwargs...)
+Lay out the per-draw statistics `NamedTuple`s as scalar columns, since
+`MCMCChains.Chains` stores scalars only. Columns are the union of the `(key, index)` pairs
+seen across draws, in first-seen order, with numeric array statistics expanded to one column
+per element (`key[i,j]`). Draws that do not report a column get `NaN`. Statistics that are
+never real numbers get no column at all.
+"""
+function flatten_stats(stats)
+    specs = Any[]
+    seen = Set{Tuple{Symbol,Any}}()
+    for draw in stats, (key, value) in pairs(draw)
+        if value isa Real
+            id = (key, nothing)
+            if !(id in seen)
+                push!(seen, id)
+                push!(specs, (name=Symbol(key), key=key, index=nothing))
+            end
+        elseif value isa AbstractArray{<:Real}
+            for index in CartesianIndices(value)
+                id = (key, index)
+                if !(id in seen)
+                    push!(seen, id)
+                    push!(specs, (name=indexed_stat_name(key, index), key=key, index=index))
+                end
+            end
+        end
+    end
+
+    names = Symbol[spec.name for spec in specs]
+    values = [[stat_value(draw, spec) for spec in specs] for draw in stats]
+    return names, values
+end
+
+# Values are looked up by the first draw's keys, so draws whose dicts iterate in a
+# different order still land in the right columns. A missing key throws a `KeyError`.
+function ordered_param_values(draw, param_keys)
+    length(draw.params) == length(param_keys) ||
+        throw(ArgumentError("draws do not all carry the same variables"))
+    return (draw.params[k] for k in param_keys)
+end
+
+# The column labels are flattened from the first draw's variable shapes, so a draw whose
+# shapes differ — even when its values flatten to the same total length — would silently
+# land its values in the wrong columns. A scalar has `size` `()`, so scalars and arrays
+# compare freely. A draw with the right variable count but different keys throws a
+# `KeyError` here, just as `ordered_param_values` would.
+function validate_draw_shapes(draws, param_keys)
+    reference_shapes = [size(first(draws).params[vn]) for vn in param_keys]
+    for draw in draws
+        length(draw.params) == length(param_keys) ||
+            throw(ArgumentError("draws do not all carry the same variables"))
+        for (vn, reference) in zip(param_keys, reference_shapes)
+            size(draw.params[vn]) == reference ||
+                throw(ArgumentError("draws do not all carry the same shape for $vn"))
+        end
+    end
+end
+
+function indexed_stat_name(name, index::CartesianIndex)
+    return Symbol(string(name), "[", join(Tuple(index), ","), "]")
+end
+
+function stat_value(draw, spec)
+    haskey(draw, spec.key) || return NaN
+    value = draw[spec.key]
+    if spec.index === nothing
+        return value isa Real ? value : NaN
+    elseif value isa AbstractArray && spec.index in CartesianIndices(value)
+        element = value[spec.index]
+        return element isa Real ? element : NaN
+    else
+        return NaN
+    end
 end
 
 end

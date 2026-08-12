@@ -563,3 +563,36 @@ end
         end
     end
 end
+
+@testset "rand draws from the prior" begin
+    model_def = @bugs begin
+        mu ~ dnorm(0, 1)
+        for i in 1:N
+            y[i] ~ dnorm(mu, 1)
+        end
+        doubled = 2 * mu
+    end
+    model = compile(model_def, (N=3, y=[1.2, 0.8, 1.5]), (; mu=0.0))
+
+    draw = rand(StableRNG(7), model)
+    @test draw isa NamedTuple
+    @test keys(draw) == keys(model.evaluation_env)
+
+    # Observed data stays fixed, deterministic nodes are recomputed from the draw.
+    @test draw.y == [1.2, 0.8, 1.5]
+    @test draw.doubled == 2 * draw.mu
+
+    @test rand(StableRNG(7), model).mu == draw.mu
+    @test rand(StableRNG(8), model).mu != draw.mu
+    @test rand(model) isa NamedTuple
+
+    # Draws are independent copies, not views into the model's environment.
+    a, b = rand(StableRNG(1), model), rand(StableRNG(2), model)
+    @test a.mu != b.mu
+    @test model.evaluation_env.mu == 0.0
+
+    many = rand(StableRNG(3), model, 5)
+    @test many isa Vector
+    @test length(many) == 5
+    @test allunique(d.mu for d in many)
+end

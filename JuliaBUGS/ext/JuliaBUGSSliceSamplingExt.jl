@@ -37,4 +37,10 @@ function JuliaBUGS.gibbs_internal(
     return updated_model.evaluation_env, s
 end
 
+function JuliaBUGS.transition_params_and_stats(
+    ::BUGSModel, ::SliceSampling.AbstractSliceSampling, t::SliceSampling.Transition
+)
+    return t.params, merge((; lp=t.lp), t.info)
+end
+
 end

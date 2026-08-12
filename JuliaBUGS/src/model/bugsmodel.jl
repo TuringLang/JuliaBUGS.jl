@@ -526,6 +526,38 @@ Return a vector of `VarName` containing the names of all the variables in the mo
 """
 variables(model::BUGSModel) = collect(labels(model.g))
 
+"""
+    Base.rand([rng::Random.AbstractRNG,] model::BUGSModel[, n::Integer])
+
+Draw from the prior by ancestral sampling. A single draw is the resulting evaluation
+environment, a `NamedTuple` that is an instance of `of(model)`; with `n` a `Vector` of `n`
+such draws is returned. Observed variables keep their data values; every unobserved
+stochastic variable is sampled and every deterministic variable is recomputed. Each draw
+owns all of its arrays, so mutating one never writes through to the model's data or to a
+sibling draw. A `BUGSModelWithGradient` draws from the `BUGSModel` it wraps.
+
+```julia
+draw = rand(model)
+draw.mu
+draws = rand(model, 1000)
+```
+"""
+function Base.rand(rng::Random.AbstractRNG, model::BUGSModel)
+    # The log density is discarded, so skip the transformed-space bookkeeping; the values
+    # drawn (and the RNG stream) do not depend on it.
+    evaluation_env = first(evaluate_with_rng!!(rng, model; transformed=false))
+    # The evaluation copies only the fields it may write; the rest (the observed data) still
+    # alias the model's own environment, and a draw must own all of its containers.
+    return smart_copy_evaluation_env(
+        evaluation_env, setdiff(Set(keys(evaluation_env)), model.mutable_symbols)
+    )
+end
+Base.rand(model::BUGSModel) = rand(Random.default_rng(), model)
+function Base.rand(rng::Random.AbstractRNG, model::BUGSModel, n::Integer)
+    return [rand(rng, model) for _ in 1:n]
+end
+Base.rand(model::BUGSModel, n::Integer) = rand(Random.default_rng(), model, n)
+
 const AllowedArray{T} = AbstractArray{T} where {T<:Union{Int,Float64,Missing}}
 const AllowedValue = Union{Int,Float64,Missing,AllowedArray}
 
