@@ -1,5 +1,13 @@
 # JuliaBUGS Changelog
 
+## 0.16.1
+
+### Bug Fixes
+
+- BUGS programs using truncation or censoring, `x ~ dnorm(0, 1)T(0, )` or `C(, c)`, compile out of the box. The string parser rewrites these to `truncated(...)` / `censored(...)`, which were missing from the default function allowlist, so `compile` rejected them unless the user registered both with `@bugs_primitive` first.
+- `dweib(a, b)` follows the BUGS parameterization, density `a b x^(a-1) exp(-b x^a)`, i.e. `Weibull(a, b^(-1/a))`. It previously built `Weibull(a, 1/b)`, which agrees only when `a = 1`. Posteriors of models with a Weibull likelihood and shape other than one (Mice, Kidney) change accordingly.
+- `x ~ dt(μ, τ, ν)` with a non-standard location or scale compiles without initial values: `TDistShiftedScaled` now implements `rand`, `minimum`, and `maximum`, which model construction and the unconstraining transform need.
+
 ## 0.16.0
 
 ### Highlights

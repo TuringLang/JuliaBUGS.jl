@@ -41,7 +41,9 @@ This struct allows for a shift (determined by ``μ``) and a scale (determined by
 Student's t-distribution provided by the [Distributions.jl](https://github.com/JuliaStats/Distributions.jl) 
 package. 
 
-Only `pdf` and `logpdf` are implemented for this distribution.
+`pdf`, `logpdf`, `rand`, `minimum`, and `maximum` are implemented for this distribution; the
+last three are what a model needs to initialize a parameter with this prior and to transform it
+to unconstrained space.
 
 # See Also
 [TDist](https://juliastats.org/Distributions.jl/stable/univariate/#Distributions.TDist)
@@ -54,9 +56,15 @@ struct TDistShiftedScaled <: Distributions.ContinuousUnivariateDistribution
     TDistShiftedScaled(ν::Real, μ::Real, σ::Real) = new(ν, μ, σ)
 end
 
+Distributions.minimum(::TDistShiftedScaled) = -Inf
+Distributions.maximum(::TDistShiftedScaled) = Inf
+
 Distributions.pdf(d::TDistShiftedScaled, x::Real) = pdf(TDist(d.ν), (x - d.μ) / d.σ) / d.σ
 function Distributions.logpdf(d::TDistShiftedScaled, x::Real)
     return logpdf(TDist(d.ν), (x - d.μ) / d.σ) - log(d.σ)
+end
+function Base.rand(rng::Random.AbstractRNG, d::TDistShiftedScaled)
+    return d.μ + d.σ * rand(rng, TDist(d.ν))
 end
 
 """
@@ -220,7 +228,12 @@ end
     dweib(a, b)
 
 Returns an instance of [Weibull](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Weibull) 
-distribution object with shape parameter ``a`` and scale parameter ``\\frac{1}{b}``.
+distribution object with shape parameter ``a`` and scale parameter ``b^{-1/a}``.
+
+BUGS parameterizes the Weibull by shape ``a`` and "rate-like" ``b`` (the density below), whereas
+`Distributions.Weibull(α, θ)` uses shape ``α`` and scale ``θ`` with density
+``\\frac{α}{θ} (x/θ)^{α-1} e^{-(x/θ)^α}``. Matching the two gives ``θ = b^{-1/a}``; the
+two agree with ``θ = 1/b`` only when ``a = 1``.
 
 The Weibull distribution is a common model for event times. The hazard or instantaneous risk of the event 
 is ``abx^{a-1}``. For ``a < 1`` the hazard decreases with ``x``; for ``a > 1`` it increases. 
@@ -231,7 +244,7 @@ p(x|a,b) = abx^{a-1}e^{-b x^a}
 ```
 """
 function dweib(a, b)
-    return Weibull(a, 1 / b)
+    return Weibull(a, b^(-1 / a))
 end
 
 """

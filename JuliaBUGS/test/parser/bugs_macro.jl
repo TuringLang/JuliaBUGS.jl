@@ -245,6 +245,23 @@ end
         @test model isa JuliaBUGS.BUGSModel
     end
 
+    @testset "BUGS `T(,)` and `C(,)` compile without manual registration" begin
+        # The string parser rewrites `T(l, u)` / `C(l, u)` to `truncated` / `censored`;
+        # both must be in the default allowlist, or no program using them compiles.
+        @test :truncated in JuliaBUGS.BUGS_ALLOWED_FUNCTIONS
+        @test :censored in JuliaBUGS.BUGS_ALLOWED_FUNCTIONS
+
+        truncated_def = @bugs("model { x ~ dnorm(0, 1)T(0, ) }")
+        model = compile(truncated_def, NamedTuple())
+        @test model isa JuliaBUGS.BUGSModel
+        @test model.evaluation_env.x > 0
+
+        censored_def = @bugs("model { y ~ dnorm(0, 1)C(, c) }")
+        model = compile(censored_def, (c=0.5,))
+        @test model isa JuliaBUGS.BUGSModel
+        @test model.evaluation_env.y <= 0.5
+    end
+
     @testset "Qualified names in @bugs" begin
         # Test that qualified names are rejected in @bugs
         bugs_expr = @bugs begin
