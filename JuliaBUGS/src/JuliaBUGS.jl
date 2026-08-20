@@ -590,6 +590,12 @@ function __init__()
         push!(BUGS_ALLOWED_FUNCTIONS, func)
     end
 
+    # The string parser rewrites BUGS `T(l, u)` and `C(l, u)` to `truncated(...)` and
+    # `censored(...)`, so those must be allowed for such programs to compile.
+    for func in [:truncated, :censored]
+        push!(BUGS_ALLOWED_FUNCTIONS, func)
+    end
+
     # Add basic operators
     for op in [:+, :-, :*, :/, :^, :~, :>, :<, :>=, :<=, :(==), :!, :(:)]
         push!(BUGS_ALLOWED_FUNCTIONS, op)
