@@ -1,6 +1,6 @@
 # JuliaBUGS Changelog
 
-## Unreleased
+## 0.16.1
 
 ### Bug Fixes
 
