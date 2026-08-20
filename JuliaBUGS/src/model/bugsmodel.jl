@@ -130,7 +130,7 @@ struct GraphEvaluationData{TNF,TV}
 end
 
 """
-    GraphEvaluationData(g::BUGSGraph, [sorted_nodes], [active_parameters]; [generated_quantities], [fixed_parameters])
+    GraphEvaluationData(g::BUGSGraph, [sorted_nodes], [active_parameters]; [generated_quantities], [fixed_parameters], [free_parameters])
 
 Create a `GraphEvaluationData` from a `BUGSGraph`, extracting and caching node information
 for efficient evaluation.
@@ -150,6 +150,15 @@ existing model.
 are removed from parameter lists and target-density scoring. Target-closure discovery
 treats them as barriers, so ancestors needed only to explain fixed variables can become
 generated quantities.
+
+`free_parameters`, when provided, conditions the evaluation data on every model parameter
+*not* in it: an unobserved stochastic node outside `free_parameters` that is neither a
+generated quantity nor a fixed parameter is recorded as observed, so evaluation scores it
+at its current environment value instead of reading it from the parameter vector. The
+resulting `model_parameters` are exactly the members of `free_parameters` found in
+`sorted_nodes`. This is the same classification `AbstractPPL.condition` produces, but
+without copying the graph, and its cost is proportional to `length(free_parameters)`
+rather than to the number of variables conditioned on.
 """
 function GraphEvaluationData(
     g::BUGSGraph,
@@ -159,6 +168,7 @@ function GraphEvaluationData(
     active_parameters::Union{Nothing,Vector{<:VarName}}=nothing;
     generated_quantities::Union{Nothing,Set{<:VarName}}=nothing,
     fixed_parameters::Set{<:VarName}=Set{VarName}(),
+    free_parameters::Union{Nothing,AbstractSet{<:VarName}}=nothing,
 )
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
@@ -201,6 +211,15 @@ function GraphEvaluationData(
 
     for (i, vn) in enumerate(sorted_nodes)
         (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
+        if free_parameters !== nothing &&
+            is_stochastic &&
+            !is_observed &&
+            vn ∉ free_parameters &&
+            vn ∉ fixed_parameter_vars &&
+            vn ∉ generated_quantity_vars
+            # Conditioned on: scored as an observation at its environment value.
+            is_observed = true
+        end
         is_stochastic_vals[i] = is_stochastic
         is_observed_vals[i] = is_observed
         node_function_vals[i] = node_function

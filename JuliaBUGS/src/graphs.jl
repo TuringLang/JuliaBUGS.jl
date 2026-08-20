@@ -168,3 +168,56 @@ function dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
 
     return stochastic_neighbors, deterministic_variables_en_route
 end
+
+"""
+    full_conditional_nodes(g, vs)
+
+Return the set of nodes needed to evaluate the log full conditional density of the
+stochastic variables `vs` given every other variable in graph `g`, up to an additive
+constant.
+
+The log full conditional of `vs` is the sum of the log densities of `vs` themselves and of
+their stochastic children (the nodes whose distributions read `vs`, possibly through
+deterministic intermediates). Every other factor of the joint density is constant in `vs`.
+The returned set therefore contains `vs`, those stochastic children, and the deterministic
+nodes on the paths from `vs` to them — the nodes whose values or density terms change when
+`vs` changes. Parents and co-parents are read from the evaluation environment but are not
+included, since their densities do not depend on `vs`; this is the subset of
+[`markov_blanket`](@ref) that actually has to be evaluated.
+
+`vs` may be a single `VarName` or a collection of `VarName`s. For a collection, the search
+is run once with all of `vs` as sources, so a member of `vs` that is a child of another
+member is still only included once.
+"""
+function full_conditional_nodes(
+    g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, vs::Union{AbstractVector{<:L},Tuple{Vararg{L}}}
+) where {L,VD}
+    for v in vs
+        if !is_stochastic(g, v)
+            throw(ArgumentError("Variable $v is logical, so it has no full conditional."))
+        end
+    end
+
+    nodes = Set{L}(vs)
+    # Walk forward from every source through deterministic nodes, stopping at the first
+    # stochastic node on each path. Sources start out visited: a source that is also a
+    # child of another source is already in `nodes` and on the stack.
+    visited = Set{L}(vs)
+    stack = L[v for v in vs]
+    while !isempty(stack)
+        current = pop!(stack)
+        for child in MetaGraphsNext.outneighbor_labels(g, current)
+            child in visited && continue
+            push!(visited, child)
+            push!(nodes, child)
+            if is_deterministic(g, child)
+                push!(stack, child)
+            end
+        end
+    end
+    return nodes
+end
+
+function full_conditional_nodes(g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L) where {L,VD}
+    return full_conditional_nodes(g, (v,))
+end

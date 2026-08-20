@@ -808,6 +808,78 @@ function _create_modified_model(
     return BUGSModel(model; kwargs...)
 end
 
+"""
+    full_conditional_model(model::BUGSModel, variables; node_positions)
+
+Build the model whose log density is the log full conditional of `variables` given every
+other variable of `model`, up to an additive constant.
+
+The returned model conditions on all model parameters outside `variables` (its
+`model_parameters` are exactly `variables`, in `model`'s evaluation order), but unlike
+`AbstractPPL.condition` it evaluates only the nodes that the full conditional depends on:
+`variables`, their stochastic children, and the deterministic nodes on the paths between
+them (see [`JuliaBUGS.full_conditional_nodes`](@ref)). Every other node of the graph is
+neither evaluated nor scored, so the cost of one evaluation is proportional to the size of
+that set rather than to the size of the model. Generated quantities and fixed parameters
+are excluded, as they never contribute to the target density.
+
+Because parents and co-parents are read from the evaluation environment rather than
+recomputed, the environment must hold current values for them; this is the invariant that
+Gibbs sampling maintains by threading the updated environment through every update.
+
+`node_positions` maps each node of `model` to its index in
+`model.graph_evaluation_data.sorted_nodes`; pass a precomputed one when building many such
+models so that the total cost stays proportional to the summed set sizes. The
+`evaluation_mode` of the result is always `UseGraph()`.
+"""
+function full_conditional_model(
+    model::BUGSModel,
+    variables::AbstractVector{<:VarName};
+    node_positions::Dict{<:VarName,Int}=_node_positions(model),
+)
+    gd = model.graph_evaluation_data
+    for vn in variables
+        vn in gd.model_parameters ||
+            throw(ArgumentError("$vn is not a model parameter of the model"))
+    end
+
+    nodes = JuliaBUGS.full_conditional_nodes(model.g, variables)
+    filter!(nodes) do vn
+        variable_type = gd.variable_types[node_positions[vn]]
+        variable_type != GeneratedQuantity && variable_type != FixedParameter
+    end
+    sorted_nodes = sort!(collect(nodes); by=vn -> node_positions[vn])
+
+    new_graph_evaluation_data = GraphEvaluationData(
+        model.g,
+        sorted_nodes;
+        generated_quantities=Set{VarName}(gd.generated_quantities),
+        fixed_parameters=Set{VarName}(gd.fixed_parameters),
+        free_parameters=Set{VarName}(variables),
+    )
+    untransformed_param_length, transformed_param_length = _calculate_param_lengths(
+        model, new_graph_evaluation_data.model_parameters
+    )
+
+    return BUGSModel(
+        model;
+        untransformed_param_length=untransformed_param_length,
+        transformed_param_length=transformed_param_length,
+        graph_evaluation_data=new_graph_evaluation_data,
+        mutable_symbols=get_mutable_symbols(new_graph_evaluation_data),
+        base_model=isnothing(model.base_model) ? model : model.base_model,
+        # The restricted node list is only valid for graph evaluation.
+        evaluation_mode=UseGraph(),
+        log_density_computation_function=nothing,
+        marginalization_cache=nothing,
+    )
+end
+
+function _node_positions(model::BUGSModel)
+    sorted_nodes = model.graph_evaluation_data.sorted_nodes
+    return Dict{VarName,Int}(vn => i for (i, vn) in enumerate(sorted_nodes))
+end
+
 # Common helper function to regenerate log density function
 function _regenerate_log_density_function(
     model_def::Expr,

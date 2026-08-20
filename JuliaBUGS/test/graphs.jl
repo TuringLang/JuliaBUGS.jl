@@ -1,5 +1,6 @@
 using JuliaBUGS:
     markov_blanket,
+    full_conditional_nodes,
     dfs_find_stochastic_boundary_and_deterministic_variables_en_route,
     find_generated_quantities_variables
 
@@ -101,6 +102,21 @@ end # module GraphsTest
         # - Deterministic nodes: f
         c = @varname c
         @test Set(Symbol.(markov_blanket(model.g, c))) == Set([:c, :l, :a, :b, :f])
+
+        # The full conditional of a node only needs the node, its stochastic children, and
+        # the deterministic nodes in between: parents (b via f, c) and co-parents (i) are
+        # read from the environment but not scored.
+        @test Set(Symbol.(full_conditional_nodes(g, a))) == Set([:a, :g, :d, :h, :e])
+        @test Set(Symbol.(full_conditional_nodes(g, c))) == Set([:c, :a])
+        # Leaf nodes only need themselves.
+        @test Set(Symbol.(full_conditional_nodes(g, @varname(d)))) == Set([:d])
+        # For a group, a member that is a child of another member is included once and its
+        # own children are still followed.
+        @test Set(Symbol.(full_conditional_nodes(g, [c, a]))) ==
+            Set([:c, :a, :g, :d, :h, :e])
+        @test Set(Symbol.(full_conditional_nodes(g, [a, l]))) ==
+            Set([:a, :g, :d, :h, :e, :l, :c])
+        @test_throws ArgumentError full_conditional_nodes(g, @varname(f))
     end
 
     @testset "Array variables and auxiliary nodes" begin

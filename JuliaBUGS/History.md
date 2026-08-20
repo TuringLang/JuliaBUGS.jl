@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## Unreleased
+
+### Improvements
+
+- **Gibbs updates are local to the Markov blanket.** The per-group model that `Gibbs` caches now evaluates only the nodes the group's full conditional depends on — the group, its stochastic children, and the deterministic nodes in between — instead of walking the whole graph with every other parameter conditioned on. Each update costs time proportional to the size of that set rather than to the size of the model; single-site sweeps over the Rats, Seeds and Epil examples run 5–20× faster with `IndependentMH` and up to 3× faster with slice sampling (whose own per-site overhead dominates on small models), and setup no longer copies the graph once per group. Conditionals are unchanged up to an additive constant, and gradients are identical. The building blocks are `JuliaBUGS.full_conditional_nodes(g, vs)` and `JuliaBUGS.Model.full_conditional_model(model, vs)`; `GraphEvaluationData` gained a `free_parameters` keyword that conditions on every other model parameter without copying the graph.
+
 ## 0.16.1
 
 ### Bug Fixes

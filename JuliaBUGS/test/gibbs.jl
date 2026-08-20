@@ -8,6 +8,9 @@ using Random
 using OrderedCollections: OrderedDict
 using MCMCChains: Chains
 using ReverseDiff
+using AbstractPPL
+using DifferentiationInterface
+using LogDensityProblems
 using Statistics
 using StatsBase: mode
 
@@ -479,6 +482,100 @@ using StatsBase: mode
                     env2.b != initial_params.b ||
                     env2.c != initial_params.c
             end
+        end
+
+        @testset "Full conditional models evaluate only the relevant nodes" begin
+            # The cached per-group models used by Gibbs are restricted to the group, its
+            # stochastic children, and the deterministic nodes in between. They must agree
+            # with conditioning the whole model up to an additive constant in the log
+            # density, and exactly in gradient, parameter layout, and updated environment.
+            (; model_def, data, inits) = JuliaBUGS.BUGSExamples.rats
+            model = compile(model_def, data, inits)
+            gd = model.graph_evaluation_data
+            node_positions = JuliaBUGS.Model._node_positions(model)
+            rng = Random.MersenneTwister(1)
+
+            groups = [
+                [@varname(alpha[7])],
+                [@varname(var"tau.c")],
+                [@varname(alpha[3]), @varname(beta[3])],
+                [@varname(var"alpha.c"), @varname(var"alpha.tau")],
+            ]
+            # alpha[7]: itself, mu[7, 1:5], Y[7, 1:5]
+            expected_sizes = [11, 1 + 150, 12, 2 + 30]
+            for (group, expected_size) in zip(groups, expected_sizes)
+                whole = AbstractPPL.condition(model, setdiff(gd.model_parameters, group))
+                sub = JuliaBUGS.Model.full_conditional_model(
+                    model, group; node_positions=node_positions
+                )
+                sub_gd = sub.graph_evaluation_data
+
+                @test length(sub_gd.sorted_nodes) == expected_size
+                # Parameters keep the model's evaluation order, not the group's order.
+                @test Set(sub_gd.model_parameters) == Set(group)
+                @test sub_gd.model_parameters ==
+                    whole.graph_evaluation_data.model_parameters
+                @test LogDensityProblems.dimension(sub) ==
+                    LogDensityProblems.dimension(whole)
+                @test isempty(sub_gd.generated_quantities)
+                @test sub.evaluation_mode isa JuliaBUGS.UseGraph
+                @test sub.base_model === model
+
+                θ0 = JuliaBUGS.getparams(sub)
+                @test θ0 == JuliaBUGS.getparams(whole)
+
+                # Same conditional up to an additive constant (the dropped factors).
+                offsets = map(1:5) do _
+                    θ = θ0 .+ randn(rng, length(θ0))
+                    LogDensityProblems.logdensity(whole, θ) -
+                    LogDensityProblems.logdensity(sub, θ)
+                end
+                @test all(o -> isapprox(o, offsets[1]; atol=1e-8), offsets)
+
+                # Identical gradients.
+                θ = θ0 .+ 0.1 .* randn(rng, length(θ0))
+                grad_whole = LogDensityProblems.logdensity_and_gradient(
+                    JuliaBUGS.BUGSModelWithGradient(whole, AutoReverseDiff()), θ
+                )[2]
+                grad_sub = LogDensityProblems.logdensity_and_gradient(
+                    JuliaBUGS.BUGSModelWithGradient(sub, AutoReverseDiff()), θ
+                )[2]
+                @test grad_sub ≈ grad_whole
+
+                # Writing parameters back leaves every variable of the model at the same
+                # value as the whole-graph conditioned model does.
+                env_whole = JuliaBUGS.initialize!(whole, θ).evaluation_env
+                env_sub = JuliaBUGS.initialize!(sub, θ).evaluation_env
+                for vn in gd.sorted_nodes
+                    @test AbstractPPL.getvalue(env_sub, vn) ≈
+                        AbstractPPL.getvalue(env_whole, vn)
+                end
+            end
+
+            @test_throws ArgumentError JuliaBUGS.Model.full_conditional_model(
+                model, [@varname(mu[1, 1])]
+            )
+            @test_throws ArgumentError JuliaBUGS.Model.full_conditional_model(
+                model, [@varname(Y[1, 1])]
+            )
+
+            # The Gibbs initial step caches exactly these restricted models.
+            gibbs = Gibbs(
+                model,
+                OrderedDict(
+                    [@varname(alpha[7])] => IndependentMH(),
+                    setdiff(gd.model_parameters, [@varname(alpha[7])]) => IndependentMH(),
+                ),
+            )
+            _, state = Base.invokelatest(
+                AbstractMCMC.step,
+                Random.MersenneTwister(2),
+                AbstractMCMC.LogDensityModel(model),
+                gibbs,
+            )
+            cached = state.cached_conditioned_models[[@varname(alpha[7])]]
+            @test length(cached.graph_evaluation_data.sorted_nodes) == 11
+            @test cached.graph_evaluation_data.model_parameters == [@varname(alpha[7])]
         end
     end
 

@@ -346,7 +346,8 @@ Initial step of the Gibbs sampler.
 
 This function initializes the Gibbs sampler by:
 1. Verifying the sampler map covers all parameters
-2. Creating conditioned models for each parameter group
+2. Creating the full-conditional model for each parameter group
+   (see [`JuliaBUGS.Model.full_conditional_model`](@ref))
 3. Initializing the sampler state
 
 # Returns
@@ -364,15 +365,16 @@ function AbstractMCMC.step(
     verify_sampler_map(model, sampler.sampler_map)
 
     cached_conditioned_models = OrderedDict()
-    model_parameters = model.graph_evaluation_data.model_parameters
+    node_positions = Model._node_positions(model)
 
     for variables_to_update in keys(sampler.sampler_map)
-        # Variables to condition on are all parameters except those we're updating
-        variables_to_condition_on = setdiff(model_parameters, variables_to_update)
-
-        # Create conditioned model
-        conditioned_model = AbstractPPL.condition(model, variables_to_condition_on)
-        cached_conditioned_models[variables_to_update] = conditioned_model
+        # The full conditional of the group given all other parameters. This conditions on
+        # every other parameter but only evaluates the nodes the conditional depends on
+        # (the group, its stochastic children, and the deterministic nodes in between), so
+        # an update costs O(size of that set) rather than O(size of the model).
+        cached_conditioned_models[variables_to_update] = Model.full_conditional_model(
+            model, variables_to_update; node_positions=node_positions
+        )
     end
     # Initialize sub_states as empty Dict
     sub_states = Dict{Any,Any}()
