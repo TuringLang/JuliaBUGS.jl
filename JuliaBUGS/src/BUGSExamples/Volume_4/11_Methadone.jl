@@ -49,10 +49,9 @@ model_def = @bugs begin
 end
 
 data_dict = JSON.parsefile(joinpath(@__DIR__, "11_Methadone_data.json"))
-data = NamedTuple{Tuple([Symbol(key) for key in keys(data_dict)])}(Tuple([map(identity,
-                                                                              val)
-                                                                          for val in
-                                                                              values(data_dict)]))
+# `map(identity, ...)` narrows the Vector{Any} that JSON.jl produces to a concrete
+# element type, which the compiler needs.
+data = (; (Symbol(k) => map(identity, v) for (k, v) in data_dict)...)
 
 inits = (
     lambda = 0,

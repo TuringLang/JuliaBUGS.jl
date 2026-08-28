@@ -156,7 +156,8 @@ Print every registered example, grouped by volume.
 """
 function list(io::IO = stdout)
     for (vol, examples) in pairs(volumes())
-        println(io, replace(titlecase(string(vol)), "_" => " "), " (", length(examples), ")")
+        println(
+            io, replace(titlecase(string(vol)), "_" => " "), " (", length(examples), ")")
         for (key, ex) in pairs(examples)
             println(io, "  ", rpad(key, 26), ex.name)
         end

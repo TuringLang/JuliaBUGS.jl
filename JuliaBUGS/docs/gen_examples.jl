@@ -20,12 +20,16 @@ const SRC = joinpath(@__DIR__, "src", "examples")
 const GENERATE = (:volume_2, :volume_3)
 
 const VOLUME_LABEL = Dict(
-    :volume_1 => "Volume 1", :volume_2 => "Volume 2",
-    :volume_3 => "Volume 3", :volume_4 => "Volume 4",
+    :volume_1 => "Volume 1",
+    :volume_2 => "Volume 2",
+    :volume_3 => "Volume 3",
+    :volume_4 => "Volume 4",
 )
 const VOLUME_CONST = Dict(
-    :volume_1 => "VOLUME_1", :volume_2 => "VOLUME_2",
-    :volume_3 => "VOLUME_3", :volume_4 => "VOLUME_4",
+    :volume_1 => "VOLUME_1",
+    :volume_2 => "VOLUME_2",
+    :volume_3 => "VOLUME_3",
+    :volume_4 => "VOLUME_4",
 )
 const VOLUME_UPSTREAM = Dict(
     :volume_1 => "https://www.multibugs.org/examples/latest/VolumeI.html",
@@ -37,9 +41,17 @@ const VOLUME_UPSTREAM = Dict(
 # Examples whose graph ships inside the doodleppl npm package, keyed by the
 # widget's own model name. Anything absent here renders without a graph.
 const BUNDLED_GRAPHS = Dict{Symbol,String}(
-    :rats => "rats", :pumps => "pumps", :seeds => "seeds", :dyes => "dyes",
-    :epil => "epil", :equiv => "equiv", :kidney => "kidney", :mice => "mice",
-    :oxford => "oxford", :salm => "salm", :blockers => "blockers",
+    :rats => "rats",
+    :pumps => "pumps",
+    :seeds => "seeds",
+    :dyes => "dyes",
+    :epil => "epil",
+    :equiv => "equiv",
+    :kidney => "kidney",
+    :mice => "mice",
+    :oxford => "oxford",
+    :salm => "salm",
+    :blockers => "blockers",
     :surgical_realistic => "surgical",
 )
 
@@ -84,14 +96,27 @@ function render_page(vol::Symbol, key::Symbol, ex, cerr)
     io = IOBuffer()
     println(io, "# ", page_title(ex))
     println(io)
-    println(io, "<!-- PROSE: replace this line with a description of the model and its data. -->")
-    println(io, "This example is part of ", VOLUME_LABEL[vol],
+    println(
+        io,
+        "<!-- PROSE: replace this line with a description of the model and its data. -->",
+    )
+    println(
+        io,
+        "This example is part of ",
+        VOLUME_LABEL[vol],
         " of the classic BUGS examples; the original write-up is on the [MultiBUGS examples page](",
-        VOLUME_UPSTREAM[vol], ").")
+        VOLUME_UPSTREAM[vol],
+        ").",
+    )
     println(io)
-    println(io, "The model definition, data, initial values",
+    println(
+        io,
+        "The model definition, data, initial values",
         hasref ? ", and published reference results" : "",
-        " shown here all come from `", accessor, "`, which ships with the package.")
+        " shown here all come from `",
+        accessor,
+        "`, which ships with the package.",
+    )
     println(io)
 
     println(io, "## Model")
@@ -127,14 +152,19 @@ function render_page(vol::Symbol, key::Symbol, ex, cerr)
         println(io, "model = JuliaBUGS.compile(example.model_def, example.data)")
         println(io, "```")
         println(io)
-        println(io, "Initial values for the sampler are bundled too, as `example.inits`",
-            " (a second set is available as `example.inits_alternative`).")
+        println(
+            io,
+            "Initial values for the sampler are bundled too, as `example.inits`",
+            " (a second set is available as `example.inits_alternative`).",
+        )
     else
         println(io, "!!! warning \"Not yet supported\"")
         println(io, "    JuliaBUGS cannot compile this model yet:")
         println(io, "    `", cerr, "`.")
         println(io, "    The model definition and data above are correct and ship with the")
-        println(io, "    package; only the compile step below is blocked. The block is shown")
+        println(
+            io, "    package; only the compile step below is blocked. The block is shown"
+        )
         println(io, "    but not executed.")
         println(io)
         println(io, "```julia")
@@ -151,11 +181,17 @@ function render_page(vol::Symbol, key::Symbol, ex, cerr)
     println(io, "build stays fast; run it locally to reproduce the numbers below.")
     println(io)
     println(io, "```julia")
-    println(io, "using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, MCMCChains, LogDensityProblems")
+    println(
+        io,
+        "using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, MCMCChains, LogDensityProblems",
+    )
     println(io)
     println(io, "model = JuliaBUGS.compile(example.model_def, example.data)")
     println(io, "model = JuliaBUGS.initialize!(model, example.inits)")
-    println(io, "ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))")
+    println(
+        io,
+        "ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))",
+    )
     println(io)
     println(io, "n_samples, n_adapts = 2000, 1000")
     println(io, "chain = AbstractMCMC.sample(")
@@ -169,7 +205,9 @@ function render_page(vol::Symbol, key::Symbol, ex, cerr)
     if hasref
         println(io, "## Reference results")
         println(io)
-        println(io, "The posterior summaries published with the original example. A converged")
+        println(
+            io, "The posterior summaries published with the original example. A converged"
+        )
         println(io, "chain should reproduce these up to Monte Carlo error.")
         println(io)
         println(io, "```@example ", blk)
@@ -210,7 +248,8 @@ function main()
         for (key, ex) in pairs(vols[vol])
             path = joinpath(dir, string(key, ".md"))
             if isfile(path) && !is_generated(path)
-                push!(skipped, relpath(path, SRC)); continue
+                push!(skipped, relpath(path, SRC))
+                continue
             end
             write(path, render_page(vol, key, ex, compile_error(ex)))
             push!(written, relpath(path, SRC))
@@ -220,16 +259,30 @@ function main()
         io = IOBuffer()
         println(io, "# ", VOLUME_LABEL[vol])
         println(io)
-        println(io, "The ", VOLUME_LABEL[vol], " examples that JuliaBUGS can currently compile. ",
-            "The original write-ups are on the [MultiBUGS examples page](", VOLUME_UPSTREAM[vol], ").")
+        println(
+            io,
+            "The ",
+            VOLUME_LABEL[vol],
+            " examples that JuliaBUGS can currently compile. ",
+            "The original write-ups are on the [MultiBUGS examples page](",
+            VOLUME_UPSTREAM[vol],
+            ").",
+        )
         println(io)
-        println(io, "Every example on these pages is available in the package as ",
-            "`JuliaBUGS.BUGSExamples.", VOLUME_CONST[vol], ".<key>`.")
+        println(
+            io,
+            "Every example on these pages is available in the package as ",
+            "`JuliaBUGS.BUGSExamples.",
+            VOLUME_CONST[vol],
+            ".<key>`.",
+        )
         println(io)
         println(io, "| Example | Key | Model |")
         println(io, "|---|---|---|")
         for (key, ex) in pairs(vols[vol])
-            println(io, "| [", page_title(ex), "](", key, ".md) | `", key, "` | ", ex.name, " |")
+            println(
+                io, "| [", page_title(ex), "](", key, ".md) | `", key, "` | ", ex.name, " |"
+            )
         end
         idx = joinpath(dir, "index.md")
         write(idx, String(take!(io)))
