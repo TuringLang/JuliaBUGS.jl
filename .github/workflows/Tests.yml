@@ -35,6 +35,7 @@ jobs:
           - "elementary"
           - "frontend"
           - "graphs"
+          - "bugsexamples"
           - "compilation_model"
           - "compilation_source_gen"
           - "log_density"
