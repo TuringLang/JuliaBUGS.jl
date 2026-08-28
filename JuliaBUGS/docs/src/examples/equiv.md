@@ -45,6 +45,21 @@ equiv = @bugs begin
 end
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit
+the model and watch the generated BUGS code change with it.
+
+```@raw html
+<div class="doodleppl-embed">
+  <doodle-ppl model="equiv" height="560px"></doodle-ppl>
+  <div class="doodleppl-fallback">
+    The interactive graph could not be loaded, which usually means this page is being
+    read offline. The model definition above is the authoritative version.
+  </div>
+</div>
+```
+
 ## Data
 
 The data record the `N = 10` subjects and `P = 2` periods, the response matrix `Y`, the treatment-order indicator `group`, and the sign vector `sign` used to flip the treatment and period contributions. We supply everything as a `NamedTuple` and construct the model by calling the model definition with it:

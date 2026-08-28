@@ -49,6 +49,21 @@ end
 
 The names `var"t.cen"`, `var"veh.control"`, `var"test.sub"`, and `var"pos.control"` are R-style dotted names carried over verbatim from the original BUGS program; Julia allows such non-standard identifiers through its `var"..."` syntax.
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit
+the model and watch the generated BUGS code change with it.
+
+```@raw html
+<div class="doodleppl-embed">
+  <doodle-ppl model="mice" height="560px"></doodle-ppl>
+  <div class="doodleppl-fallback">
+    The interactive graph could not be loaded, which usually means this page is being
+    read offline. The model definition above is the authoritative version.
+  </div>
+</div>
+```
+
 ## Data
 
 The data hold the survival times and censoring information for the `M = 4` groups of `N = 20` mice each. In the `t` matrix, a `missing` entry marks an animal whose survival time was censored; the corresponding entry of `var"t.cen"` gives the time at which that animal was last known to be alive (a value of `0` means the animal's survival time was observed exactly).

@@ -46,6 +46,21 @@ seeds = @bugs begin
 end
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit
+the model and watch the generated BUGS code change with it.
+
+```@raw html
+<div class="doodleppl-embed">
+  <doodle-ppl model="seeds" height="560px"></doodle-ppl>
+  <div class="doodleppl-fallback">
+    The interactive graph could not be loaded, which usually means this page is being
+    read offline. The model definition above is the authoritative version.
+  </div>
+</div>
+```
+
 ## Data
 
 The data are supplied as a `NamedTuple`. `r` and `n` are the germinated and total seed counts on each of the `N = 21` plates, while `x1` and `x2` are the (0/1) indicators for seed type and root extract.

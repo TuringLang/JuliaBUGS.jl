@@ -33,6 +33,21 @@ pumps = @bugs begin
 end
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit
+the model and watch the generated BUGS code change with it.
+
+```@raw html
+<div class="doodleppl-embed">
+  <doodle-ppl model="pumps" height="560px"></doodle-ppl>
+  <div class="doodleppl-fallback">
+    The interactive graph could not be loaded, which usually means this page is being
+    read offline. The model definition above is the authoritative version.
+  </div>
+</div>
+```
+
 ## Data
 
 The data are a `NamedTuple` with the operation times `t` (thousands of hours), the observed failure counts `x`, and the number of pumps `N`. Calling the model definition with the data builds the model:

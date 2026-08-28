@@ -39,6 +39,21 @@ oxford = @bugs begin
 end
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit
+the model and watch the generated BUGS code change with it.
+
+```@raw html
+<div class="doodleppl-embed">
+  <doodle-ppl model="oxford" height="560px"></doodle-ppl>
+  <div class="doodleppl-fallback">
+    The interactive graph could not be loaded, which usually means this page is being
+    read offline. The model definition above is the authoritative version.
+  </div>
+</div>
+```
+
 ## Data
 
 The data are supplied as a `NamedTuple` with the number of strata `K`, the centred birth year `year` of each stratum, and the exposure counts among cases (`r1` out of `n1`) and among controls (`r0` out of `n0`).

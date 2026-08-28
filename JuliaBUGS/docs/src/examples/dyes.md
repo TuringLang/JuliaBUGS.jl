@@ -37,6 +37,21 @@ end
 
 Names such as `var"tau.btw"` are the R-style dotted names from the original BUGS program (`tau.btw`), written with Julia's `var"..."` syntax so the dot can be kept in the variable name.
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit
+the model and watch the generated BUGS code change with it.
+
+```@raw html
+<div class="doodleppl-embed">
+  <doodle-ppl model="dyes" height="560px"></doodle-ppl>
+  <div class="doodleppl-fallback">
+    The interactive graph could not be loaded, which usually means this page is being
+    read offline. The model definition above is the authoritative version.
+  </div>
+</div>
+```
+
 ## Data
 
 The data are the 30 yield measurements (in grams of standard colour), arranged as a 6 × 5 matrix with one row per batch.

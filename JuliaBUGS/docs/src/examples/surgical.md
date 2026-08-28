@@ -59,6 +59,21 @@ surgical_realistic = @bugs begin
 end
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit
+the model and watch the generated BUGS code change with it.
+
+```@raw html
+<div class="doodleppl-embed">
+  <doodle-ppl model="surgical" height="560px"></doodle-ppl>
+  <div class="doodleppl-fallback">
+    The interactive graph could not be loaded, which usually means this page is being
+    read offline. The model definition above is the authoritative version.
+  </div>
+</div>
+```
+
 ## Data
 
 Both models use the same data: the number of operations `n` and the number of deaths `r` in each of the `N = 12` hospitals. Compiling the independent model is a single call with the data as a `NamedTuple`:

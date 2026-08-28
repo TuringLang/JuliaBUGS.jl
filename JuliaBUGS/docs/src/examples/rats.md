@@ -40,6 +40,21 @@ end
 
 Names such as `var"tau.c"` are the R-style dotted variable names from the original BUGS program, written with Julia's `var"..."` syntax so they can be kept exactly as they appear in the classic example.
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit
+the model and watch the generated BUGS code change with it.
+
+```@raw html
+<div class="doodleppl-embed">
+  <doodle-ppl model="rats" height="560px"></doodle-ppl>
+  <div class="doodleppl-fallback">
+    The interactive graph could not be loaded, which usually means this page is being
+    read offline. The model definition above is the authoritative version.
+  </div>
+</div>
+```
+
 ## Data
 
 The data are supplied as a `NamedTuple`: the measurement ages `x`, their mean `xbar`, the number of rats `N`, the number of measurement occasions `T`, and the 30-by-5 matrix `Y` of weights.

@@ -1,0 +1,51 @@
+/* Layout for embedded DoodlePPL graphs in the example pages. */
+
+.doodleppl-embed {
+  margin: 1.5rem 0;
+  border: 1px solid #dbdbdb;
+  border-radius: 4px;
+  overflow: hidden;
+  /* Reserve the height the widget will take so the page does not jump when the
+     4.2 MB bundle finishes loading. */
+  min-height: 560px;
+  position: relative;
+}
+
+html.theme--documenter-dark .doodleppl-embed {
+  border-color: #5e6d6f;
+}
+
+.doodleppl-embed doodle-ppl {
+  display: block;
+  width: 100%;
+}
+
+/* Shown only when the loader gives up on the CDN, e.g. an offline build. */
+.doodleppl-embed .doodleppl-fallback {
+  display: none;
+  padding: 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.doodleppl-embed.doodleppl-unavailable {
+  min-height: 0;
+}
+
+.doodleppl-embed.doodleppl-unavailable doodle-ppl {
+  display: none;
+}
+
+.doodleppl-embed.doodleppl-unavailable .doodleppl-fallback {
+  display: block;
+}
+
+.doodleppl-caption {
+  font-size: 0.85rem;
+  color: #6b6b6b;
+  margin: -1rem 0 1.5rem;
+}
+
+html.theme--documenter-dark .doodleppl-caption {
+  color: #9db2b5;
+}

@@ -73,6 +73,21 @@ epil = @bugs begin
 end
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit
+the model and watch the generated BUGS code change with it.
+
+```@raw html
+<div class="doodleppl-embed">
+  <doodle-ppl model="epil" height="560px"></doodle-ppl>
+  <div class="doodleppl-fallback">
+    The interactive graph could not be loaded, which usually means this page is being
+    read offline. The model definition above is the authoritative version.
+  </div>
+</div>
+```
+
 ## Data
 
 The data set is too large to display comfortably here, so we load it from the copy that ships with JuliaBUGS. It contains `N = 59` patients and `T = 4` visits, the `59 × 4` matrix `y` of seizure counts, the treatment indicator `Trt` (0 = placebo, 1 = active treatment), the baseline seizure count `Base`, each patient's `Age` in years, and `V4`, an indicator that equals 1 only at the fourth visit.

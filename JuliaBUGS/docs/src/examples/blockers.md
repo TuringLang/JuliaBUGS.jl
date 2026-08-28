@@ -41,6 +41,21 @@ end
 
 The original BUGS program uses the R-style dotted name `delta.new`; in Julia such names are written with the `var"delta.new"` syntax, and they refer to exactly the same variable.
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit
+the model and watch the generated BUGS code change with it.
+
+```@raw html
+<div class="doodleppl-embed">
+  <doodle-ppl model="blockers" height="560px"></doodle-ppl>
+  <div class="doodleppl-fallback">
+    The interactive graph could not be loaded, which usually means this page is being
+    read offline. The model definition above is the authoritative version.
+  </div>
+</div>
+```
+
 ## Data
 
 The data are a `NamedTuple` with, for each of the 22 trials, the deaths and patient counts in the treated arm (`rt`, `nt`) and in the control arm (`rc`, `nc`), plus the number of trials `Num`. Calling the model definition with the data builds the model:
