@@ -338,4 +338,4 @@ reference_results_me = (
 )
 
 hepatitis_me = Example(
-    name, model_def, original, data, inits, inits_alternative, reference_results)
+    name, model_def, original, data, inits, inits_alternative, reference_results_me)
