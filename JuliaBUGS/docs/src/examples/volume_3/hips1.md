@@ -41,7 +41,6 @@ example.data
 model = JuliaBUGS.compile(example.model_def, example.data)
 ```
 
-Initial values for the sampler are bundled too, as `example.inits` (a second set is available as `example.inits_alternative`).
 
 ## Sampling
 

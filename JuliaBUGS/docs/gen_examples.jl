@@ -87,7 +87,7 @@ edit the model and watch the generated BUGS change.
 """
 end
 
-function render_page(vol::Symbol, key::Symbol, ex, cerr)
+function render_page(vol::Symbol, key::Symbol, ex, plan)
     blk = block_name(vol, key)
     vconst = VOLUME_CONST[vol]
     accessor = "JuliaBUGS.BUGSExamples.$vconst.$key"
@@ -145,22 +145,29 @@ function render_page(vol::Symbol, key::Symbol, ex, cerr)
     println(io, "```")
     println(io)
 
+    call = plan.call
+    cerr = plan.error
+
     println(io, "## Compiling the model")
     println(io)
     if cerr === nothing
         println(io, "```@example ", blk)
-        println(io, "model = JuliaBUGS.compile(example.model_def, example.data)")
+        println(io, call)
         println(io, "```")
         println(io)
-        println(
-            io,
-            "Initial values for the sampler are bundled too, as `example.inits`",
-            " (a second set is available as `example.inits_alternative`).",
-        )
-    else
+        if plan.uses_inits
+            println(
+                io,
+                "The example's own initial values are passed in here. Several of these",
+                " models fail from random starting values, so `example.inits` is not",
+                " optional in practice; a second set is available as",
+                " `example.inits_alternative`.",
+            )
+        end
+    elseif cerr.always
         println(io, "!!! warning \"Not yet supported\"")
         println(io, "    JuliaBUGS cannot compile this model yet:")
-        println(io, "    `", cerr, "`.")
+        println(io, "    `", cerr.message, "`.")
         println(io, "    The model definition and data above are correct and ship with the")
         println(
             io, "    package; only the compile step below is blocked. The block is shown"
@@ -168,7 +175,23 @@ function render_page(vol::Symbol, key::Symbol, ex, cerr)
         println(io, "    but not executed.")
         println(io)
         println(io, "```julia")
-        println(io, "model = JuliaBUGS.compile(example.model_def, example.data)")
+        println(io, call)
+        println(io, "```")
+    else
+        println(io, "!!! warning \"Compiles unreliably\"")
+        println(
+            io, "    Compilation of this model succeeds from some random starting values"
+        )
+        println(
+            io, "    and throws `", cerr.message, "` from others, so the block below is"
+        )
+        println(io, "    shown but not executed as part of the documentation build. Run it")
+        println(
+            io, "    yourself and retry, or supply `example.inits`, if you hit the error."
+        )
+        println(io)
+        println(io, "```julia")
+        println(io, call)
         println(io, "```")
     end
     println(io)
@@ -220,17 +243,50 @@ function render_page(vol::Symbol, key::Symbol, ex, cerr)
 end
 
 """
-Try to compile an example, returning `nothing` on success or the error message.
-Some examples in the registry use language features JuliaBUGS does not support
-yet; their pages show the model but do not execute a compile block.
+    compile_plan(ex; attempts = 8)
+
+Decide how an example's page should compile it, by trying each way `attempts`
+times and taking the first that never fails.
+
+Two different failure modes make a single probe useless. Some models throw a
+`DomainError` from random starting values and succeed from the example's own
+initial values: `endo`, `alligators`, and the Volume 1 survival models are all in
+this group, and the hand-written pages have always passed inits for exactly this
+reason. Others go the other way, notably `biopsies`, whose initial values leave
+`missing` in the upper triangle of `error`, which `Multinomial` rejects, even
+though it compiles happily without them.
+
+Returns `(; call, error)` where `call` is the Julia source the page should show,
+and `error` is `nothing` if that call is reliable, or `(; message, always)`
+describing the failure when neither way works.
 """
-function compile_error(ex)
-    try
-        JuliaBUGS.compile(ex.model_def, ex.data)
-        return nothing
-    catch e
-        return first(split(sprint(showerror, e), "\n"), 1)[1]
+function compile_plan(ex; attempts=8)
+    bare = "model = JuliaBUGS.compile(example.model_def, example.data)"
+    with_inits = "model = JuliaBUGS.compile(example.model_def, example.data, example.inits)"
+
+    function probe(f)
+        failures = 0
+        message = nothing
+        for _ in 1:attempts
+            try
+                f()
+            catch e
+                failures += 1
+                if message === nothing
+                    message = first(split(sprint(showerror, e), "\n"), 1)[1]
+                end
+            end
+        end
+        return message === nothing ? nothing : (; message, always=failures == attempts)
     end
+
+    if !isempty(ex.inits)
+        err = probe(() -> JuliaBUGS.compile(ex.model_def, ex.data, ex.inits))
+        err === nothing && return (; call=with_inits, error=nothing, uses_inits=true)
+    end
+
+    err = probe(() -> JuliaBUGS.compile(ex.model_def, ex.data))
+    return (; call=bare, error=err, uses_inits=false)
 end
 
 "True when a page still carries the untouched PROSE marker."
@@ -251,7 +307,7 @@ function main()
                 push!(skipped, relpath(path, SRC))
                 continue
             end
-            write(path, render_page(vol, key, ex, compile_error(ex)))
+            write(path, render_page(vol, key, ex, compile_plan(ex)))
             push!(written, relpath(path, SRC))
         end
 

@@ -32,10 +32,10 @@ example.data
 ## Compiling the model
 
 ```@example volume_2_asia
-model = JuliaBUGS.compile(example.model_def, example.data)
+model = JuliaBUGS.compile(example.model_def, example.data, example.inits)
 ```
 
-Initial values for the sampler are bundled too, as `example.inits` (a second set is available as `example.inits_alternative`).
+The example's own initial values are passed in here. Several of these models fail from random starting values, so `example.inits` is not optional in practice; a second set is available as `example.inits_alternative`.
 
 ## Sampling
 
