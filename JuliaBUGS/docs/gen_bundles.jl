@@ -8,8 +8,9 @@
 # This script itself has no dependency on mcmcjs: it only writes files. Fitting all
 # of the examples takes hours, so it is deliberately a two-step process, run by hand:
 #
-#     julia --project=. gen_bundles.jl out/          # write model, data, and run.sh
-#     julia --project=. gen_bundles.jl out/ rats     # or just one example
+#     julia --project=. gen_bundles.jl out/            # every volume
+#     julia --project=. gen_bundles.jl out/ volume_1   # one volume
+#     julia --project=. gen_bundles.jl out/ rats       # one example
 #     sh out/run.sh                                  # fit and export (slow)
 #
 # Sampler settings follow what the OpenBUGS documentation reports for these examples,
@@ -28,9 +29,22 @@ const WARMUP = 1000
 const UPDATES = 10_000
 const KEEP = 1000
 
-length(ARGS) >= 1 || error("usage: gen_bundles.jl <out-dir> [example-key]")
+length(ARGS) >= 1 ||
+    error("usage: gen_bundles.jl <out-dir> [volume_1|volume_2|volume_3|all|<example-key>]")
 const OUT = abspath(ARGS[1])
-const ONLY = length(ARGS) >= 2 ? Symbol(ARGS[2]) : nothing
+
+# The second argument selects either a whole volume or a single example. Fitting
+# everything takes hours, so a volume at a time is the usual way to run this.
+const SELECT = length(ARGS) >= 2 && !isempty(ARGS[2]) ? Symbol(ARGS[2]) : :all
+const VOLUMES = (:volume_1, :volume_2, :volume_3)
+const WANT_VOL = if SELECT === :all
+    VOLUMES
+elseif SELECT in VOLUMES
+    (SELECT,)
+else
+    VOLUMES
+end
+const WANT_KEY = SELECT === :all || SELECT in VOLUMES ? nothing : SELECT
 
 """
 The driver rebuilds matrices with `stack(elems; dims = 1)`, so every inner JSON array
@@ -73,12 +87,13 @@ function main()
     written = Symbol[]
 
     for (vol, examples) in pairs(BE.volumes()), (key, ex) in pairs(examples)
-        ONLY === nothing || key === ONLY || continue
+        vol in WANT_VOL || continue
+        WANT_KEY === nothing || key === WANT_KEY || continue
         write_example(OUT, vol, key, ex)
         push!(written, key)
     end
 
-    isempty(written) && error("no example matched $(ONLY)")
+    isempty(written) && error("nothing matched $(SELECT)")
 
     open(joinpath(OUT, "run.sh"), "w") do io
         println(io, "#!/bin/sh")
@@ -86,12 +101,16 @@ function main()
             io, "# Fits every emitted example and exports one bundle each. Slow: hours for"
         )
         println(io, "# the full set. Re-running skips a fit whose inputs have not changed.")
-        println(io, "set -e")
+        println(io, "#")
+        println(io, "# A model that fails is reported and skipped rather than stopping the")
+        println(io, "# sweep, because losing an hour of finished fits to one bad model is")
+        println(io, "# worse than an incomplete set. The exit status counts the failures.")
         println(io, "cd \"\$(dirname \"\$0\")\"")
+        println(io, "failed=0")
         println(io)
         for key in written
             println(io, "echo \"== $key\"")
-            println(
+            print(
                 io,
                 "mcmc run $key.jl --data $key.data.json",
                 " --chains ",
@@ -104,9 +123,13 @@ function main()
                 UPDATES ÷ KEEP,
                 " --seed 42",
             )
-            println(io, "mcmc export bundle -o bundles/$key.json --force")
+            println(io, " \\")
+            println(io, "  && mcmc export bundle -o bundles/$key.json --force \\")
+            println(io, "  || { echo \"   $key FAILED\"; failed=\$((failed + 1)); }")
             println(io)
         end
+        println(io, "echo \"\$failed example(s) failed\"")
+        println(io, "exit \$failed")
     end
     mkpath(joinpath(OUT, "bundles"))
 
