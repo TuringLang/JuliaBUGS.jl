@@ -126,14 +126,19 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 ## Results
 
-The published reference posterior summaries for this example are:
+The table below puts the summaries published with the original example beside a JuliaBUGS run of it.
+That run used the settings the original documents, a 1000 update burn in followed by a further 10000 updates over two chains, and is [published as a run bundle](https://mcmcjs.github.io/bugs-examples/rats.json).
 
-| Parameter | Mean  | Std    |
-|-----------|-------|--------|
-| `alpha0`  | 106.6 | 3.66   |
-| `beta.c`  | 6.186 | 0.1086 |
-| `sigma`   | 6.093 | 0.4643 |
+| Parameter | Published mean | Run mean | Published std | Run std |
+|-----------|---------------:|---------:|--------------:|--------:|
+| `alpha0`  | 106.6          | 106.6    | 3.66          | 3.602   |
+| `beta.c`  | 6.186          | 6.186    | 0.1086        | 0.1069  |
+| `sigma`   | 6.093          | 6.079    | 0.4643        | 0.4526  |
 
-A correctly converged chain's `summarystats` should reproduce these values up to Monte Carlo error.
+[Open the full report](https://mcmcjs.github.io/report/#bundle=https://mcmcjs.github.io/bugs-examples/rats.json) for trace plots, densities, and per-parameter diagnostics over all 65 parameters.
+
+Two things to keep in mind when comparing the columns.
+JuliaBUGS samples with NUTS where the original used Gibbs, so the posterior agrees but the Monte Carlo error does not.
+The bundle also writes the dotted BUGS names with underscores, so `beta.c` appears there as `beta_c`.
 
 See also: the [example gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
