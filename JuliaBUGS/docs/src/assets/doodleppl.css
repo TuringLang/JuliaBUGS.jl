@@ -39,13 +39,3 @@ html.theme--documenter-dark .doodleppl-embed {
 .doodleppl-embed.doodleppl-unavailable .doodleppl-fallback {
   display: block;
 }
-
-.doodleppl-caption {
-  font-size: 0.85rem;
-  color: #6b6b6b;
-  margin: -1rem 0 1.5rem;
-}
-
-html.theme--documenter-dark .doodleppl-caption {
-  color: #9db2b5;
-}

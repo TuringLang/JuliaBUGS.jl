@@ -119,7 +119,7 @@ include("Volume_3/09_Hips4.jl")
 include("Volume_3/11_PigWeights.jl")
 include("Volume_3/12_Pines.jl")
 # Not included: 01_Camel (partially observed multivariate node), 03_Fire (dloglik),
-# 10_Jama and 13_St_Veit (interp.lin). See notes.md.
+# 10_Jama and 13_St_Veit (interp.lin). See Volume_3/notes.md.
 
 vol_3 = (
     eye_tracking = eye_tracking,

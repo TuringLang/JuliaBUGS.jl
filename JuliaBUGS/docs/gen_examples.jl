@@ -1,15 +1,20 @@
 #!/usr/bin/env julia
 #
-# Generates one Markdown page per registered example for the volumes that do not
-# have hand-written pages yet, plus a per-volume index.
+# Generates the Volume 2 and Volume 3 example pages, plus a per-volume index.
 #
-# The pages deliberately hold no copy of the model, data, or initial values: they
-# pull those from `JuliaBUGS.BUGSExamples` at build time so there is exactly one
-# source of truth. Prose is the part a human adds afterwards, in the marked block
-# near the top of each page, and this script never overwrites a page that already
-# has prose (it skips any file whose PROSE marker has been filled in).
+# The pages hold no copy of the model, data, or initial values: they pull those from
+# `JuliaBUGS.BUGSExamples` at build time, so there is one source of truth and a page
+# cannot drift from the registry.
 #
-# Run from the docs directory:  julia --project=. gen_examples.jl
+# Prose is written by hand, above the `## Model` heading. A page is regenerated only
+# while it still carries the `<!-- PROSE:` marker, so once prose is written the script
+# leaves that page alone; to refresh the mechanical part of a page that already has
+# prose, keep everything above `## Model` and replace the rest.
+#
+# Nothing runs this automatically. It is a maintenance script, invoked by hand when the
+# registry changes:
+#
+#     julia --project=. gen_examples.jl
 
 using JuliaBUGS
 
@@ -19,82 +24,75 @@ const SRC = joinpath(@__DIR__, "src", "examples")
 # Volume 1 pages are hand-written and must never be clobbered.
 const GENERATE = (:volume_2, :volume_3)
 
-const VOLUME_LABEL = Dict(
-    :volume_1 => "Volume 1",
-    :volume_2 => "Volume 2",
-    :volume_3 => "Volume 3",
-    :volume_4 => "Volume 4",
-)
-const VOLUME_CONST = Dict(
-    :volume_1 => "VOLUME_1",
-    :volume_2 => "VOLUME_2",
-    :volume_3 => "VOLUME_3",
-    :volume_4 => "VOLUME_4",
-)
+const VOLUME_LABEL = Dict(:volume_2 => "Volume 2", :volume_3 => "Volume 3")
+const VOLUME_CONST = Dict(:volume_2 => "VOLUME_2", :volume_3 => "VOLUME_3")
 const VOLUME_UPSTREAM = Dict(
-    :volume_1 => "https://www.multibugs.org/examples/latest/VolumeI.html",
     :volume_2 => "https://www.multibugs.org/examples/latest/VolumeII.html",
     :volume_3 => "https://www.multibugs.org/examples/latest/VolumeIII.html",
-    :volume_4 => "https://www.multibugs.org/examples/latest/VolumeIV.html",
 )
-
-# Examples whose graph ships inside the doodleppl npm package, keyed by the
-# widget's own model name. Anything absent here renders without a graph.
-const BUNDLED_GRAPHS = Dict{Symbol,String}(
-    :rats => "rats",
-    :pumps => "pumps",
-    :seeds => "seeds",
-    :dyes => "dyes",
-    :epil => "epil",
-    :equiv => "equiv",
-    :kidney => "kidney",
-    :mice => "mice",
-    :oxford => "oxford",
-    :salm => "salm",
-    :blockers => "blockers",
-    :surgical_realistic => "surgical",
-)
-
-"The title line for a page: the example's own name, tidied up."
-function page_title(ex)
-    t = strip(ex.name)
-    endswith(t, ")") && occursin("(", t) || return t
-    return t
-end
 
 "A stable anchor name for Documenter `@example` blocks."
 block_name(vol, key) = string(vol, "_", key)
 
-function graph_section(key::Symbol)
-    haskey(BUNDLED_GRAPHS, key) || return ""
-    model = BUNDLED_GRAPHS[key]
-    return """
-## Graph
-
-The directed graph below is live: drag a node to rearrange it, or use the pencil to
-edit the model and watch the generated BUGS change.
-
-```@raw html
-<div class="doodleppl-embed">
-  <doodle-ppl model="$model" height="560px"></doodle-ppl>
-  <div class="doodleppl-fallback">
-    The interactive graph could not be loaded, which usually means this page is being
-    read offline. The model definition above is the authoritative version.
-  </div>
-</div>
-```
+"Whether a field carries anything worth rendering a section for."
+present(x) = !isnothing(x) && !isempty(x)
 
 """
+    compile_plan(ex)
+
+Decide how an example's page should compile it, by trying each way several times and
+taking the first that never fails.
+
+Two failure modes make a single attempt useless. Some models throw a `DomainError` from
+random starting values and succeed from the example's own initial values: `endo`,
+`alligators`, and the Volume 1 survival models are all in this group, which is why the
+hand-written pages have always passed inits. Others go the other way, notably `biopsies`,
+whose initial values leave `missing` in the upper triangle of `error`, which `Multinomial`
+rejects, even though it compiles happily without them.
+
+Returns `(; call, error, uses_inits)`. `call` is the Julia source the page should show,
+and `error` is `nothing` when that call is reliable, or the message when neither way works.
+"""
+function compile_plan(ex)
+    # Repeats catch the models that fail only from some random starting values. The time
+    # budget keeps the big ones honest: hips2 has 720 parameters, and eight compiles of it
+    # cost more than the check is worth.
+    attempts = 8
+    budget_seconds = 20.0
+    bare = "model = JuliaBUGS.compile(example.model_def, example.data)"
+    with_inits = "model = JuliaBUGS.compile(example.model_def, example.data, example.inits)"
+
+    function probe(f)
+        started = time()
+        for _ in 1:attempts
+            try
+                f()
+            catch e
+                return first(split(sprint(showerror, e), "\n"))
+            end
+            time() - started > budget_seconds && break
+        end
+        return nothing
+    end
+
+    if present(ex.inits)
+        if probe(() -> JuliaBUGS.compile(ex.model_def, ex.data, ex.inits)) === nothing
+            return (; call=with_inits, error=nothing, uses_inits=true)
+        end
+    end
+
+    err = probe(() -> JuliaBUGS.compile(ex.model_def, ex.data))
+    return (; call=bare, error=err, uses_inits=false)
 end
 
 function render_page(vol::Symbol, key::Symbol, ex, plan)
     blk = block_name(vol, key)
-    vconst = VOLUME_CONST[vol]
-    accessor = "JuliaBUGS.BUGSExamples.$vconst.$key"
-    hasref = ex.reference_results !== nothing
+    accessor = "JuliaBUGS.BUGSExamples.$(VOLUME_CONST[vol]).$key"
+    hasref = present(ex.reference_results)
+    hasdata = present(ex.data)
 
     io = IOBuffer()
-    println(io, "# ", page_title(ex))
+    println(io, "# ", strip(ex.name))
     println(io)
     println(
         io,
@@ -111,7 +109,9 @@ function render_page(vol::Symbol, key::Symbol, ex, plan)
     println(io)
     println(
         io,
-        "The model definition, data, initial values",
+        "The model definition",
+        hasdata ? ", data" : "",
+        ", initial values",
         hasref ? ", and published reference results" : "",
         " shown here all come from `",
         accessor,
@@ -136,23 +136,20 @@ function render_page(vol::Symbol, key::Symbol, ex, plan)
     println(io, "```")
     println(io)
 
-    print(io, graph_section(key))
-
-    println(io, "## Data")
-    println(io)
-    println(io, "```@example ", blk)
-    println(io, "example.data")
-    println(io, "```")
-    println(io)
-
-    call = plan.call
-    cerr = plan.error
+    if hasdata
+        println(io, "## Data")
+        println(io)
+        println(io, "```@example ", blk)
+        println(io, "example.data")
+        println(io, "```")
+        println(io)
+    end
 
     println(io, "## Compiling the model")
     println(io)
-    if cerr === nothing
+    if plan.error === nothing
         println(io, "```@example ", blk)
-        println(io, call)
+        println(io, plan.call)
         println(io, "```")
         println(io)
         if plan.uses_inits
@@ -163,134 +160,73 @@ function render_page(vol::Symbol, key::Symbol, ex, plan)
                 " optional in practice; a second set is available as",
                 " `example.inits_alternative`.",
             )
+            println(io)
         end
-    elseif cerr.always
-        println(io, "!!! warning \"Not yet supported\"")
-        println(io, "    JuliaBUGS cannot compile this model yet:")
-        println(io, "    `", cerr.message, "`.")
-        println(io, "    The model definition and data above are correct and ship with the")
-        println(
-            io, "    package; only the compile step below is blocked. The block is shown"
-        )
-        println(io, "    but not executed.")
-        println(io)
-        println(io, "```julia")
-        println(io, call)
-        println(io, "```")
     else
-        println(io, "!!! warning \"Compiles unreliably\"")
-        println(
-            io, "    Compilation of this model succeeds from some random starting values"
-        )
-        println(
-            io, "    and throws `", cerr.message, "` from others, so the block below is"
-        )
-        println(io, "    shown but not executed as part of the documentation build. Run it")
-        println(
-            io, "    yourself and retry, or supply `example.inits`, if you hit the error."
-        )
+        println(io, "!!! warning \"Does not compile\"")
+        println(io, "    JuliaBUGS cannot compile this model: `", plan.error, "`.")
+        println(io, "    The model and data above are correct and ship with the package;")
+        println(io, "    only the compile step is blocked, so it is shown but not run.")
         println(io)
         println(io, "```julia")
-        println(io, call)
+        println(io, plan.call)
         println(io, "```")
+        println(io)
     end
-    println(io)
 
-    cerr === nothing || return String(take!(io))
-
-    println(io, "## Sampling")
-    println(io)
-    println(io, "This block is not executed when the documentation is built, so that the")
-    println(io, "build stays fast; run it locally to reproduce the numbers below.")
-    println(io)
-    println(io, "```julia")
     println(
         io,
-        "using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, MCMCChains, LogDensityProblems",
+        "See [Getting Started](../../getting_started.md) for the recipe that takes a",
+        " compiled model to posterior samples.",
     )
-    println(io)
-    println(io, "model = JuliaBUGS.compile(example.model_def, example.data)")
-    println(io, "model = JuliaBUGS.initialize!(model, example.inits)")
-    println(
-        io,
-        "ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))",
-    )
-    println(io)
-    println(io, "n_samples, n_adapts = 2000, 1000")
-    println(io, "chain = AbstractMCMC.sample(")
-    println(io, "    ad_model, NUTS(0.8), n_samples;")
-    println(io, "    chain_type=Chains, n_adapts=n_adapts, discard_initial=n_adapts,")
-    println(io, ")")
-    println(io, "summarystats(chain)")
-    println(io, "```")
     println(io)
 
     if hasref
         println(io, "## Reference results")
         println(io)
-        println(
-            io, "The posterior summaries published with the original example. A converged"
-        )
-        println(io, "chain should reproduce these up to Monte Carlo error.")
+        println(io, "The posterior summaries published with the original example. A")
+        println(io, "converged chain should reproduce these up to Monte Carlo error.")
         println(io)
         println(io, "```@example ", blk)
         println(io, "example.reference_results")
         println(io, "```")
-        println(io)
     end
 
-    return String(take!(io))
+    return rstrip(String(take!(io))) * "\n"
 end
 
-"""
-    compile_plan(ex; attempts = 8)
-
-Decide how an example's page should compile it, by trying each way `attempts`
-times and taking the first that never fails.
-
-Two different failure modes make a single probe useless. Some models throw a
-`DomainError` from random starting values and succeed from the example's own
-initial values: `endo`, `alligators`, and the Volume 1 survival models are all in
-this group, and the hand-written pages have always passed inits for exactly this
-reason. Others go the other way, notably `biopsies`, whose initial values leave
-`missing` in the upper triangle of `error`, which `Multinomial` rejects, even
-though it compiles happily without them.
-
-Returns `(; call, error)` where `call` is the Julia source the page should show,
-and `error` is `nothing` if that call is reliable, or `(; message, always)`
-describing the failure when neither way works.
-"""
-function compile_plan(ex; attempts=8)
-    bare = "model = JuliaBUGS.compile(example.model_def, example.data)"
-    with_inits = "model = JuliaBUGS.compile(example.model_def, example.data, example.inits)"
-
-    function probe(f)
-        failures = 0
-        message = nothing
-        for _ in 1:attempts
-            try
-                f()
-            catch e
-                failures += 1
-                if message === nothing
-                    message = first(split(sprint(showerror, e), "\n"), 1)[1]
-                end
-            end
-        end
-        return message === nothing ? nothing : (; message, always=failures == attempts)
-    end
-
-    if !isempty(ex.inits)
-        err = probe(() -> JuliaBUGS.compile(ex.model_def, ex.data, ex.inits))
-        err === nothing && return (; call=with_inits, error=nothing, uses_inits=true)
-    end
-
-    err = probe(() -> JuliaBUGS.compile(ex.model_def, ex.data))
-    return (; call=bare, error=err, uses_inits=false)
-end
-
-"True when a page still carries the untouched PROSE marker."
+"True while a page still carries the untouched PROSE marker."
 is_generated(path) = isfile(path) && occursin("<!-- PROSE:", read(path, String))
+
+function render_index(vol::Symbol, examples)
+    io = IOBuffer()
+    println(io, "# ", VOLUME_LABEL[vol])
+    println(io)
+    println(
+        io,
+        "The ",
+        VOLUME_LABEL[vol],
+        " examples that JuliaBUGS can currently compile. The original write-ups are on",
+        " the [MultiBUGS examples page](",
+        VOLUME_UPSTREAM[vol],
+        ").",
+    )
+    println(io)
+    println(
+        io,
+        "Every example on these pages is available in the package as ",
+        "`JuliaBUGS.BUGSExamples.",
+        VOLUME_CONST[vol],
+        ".<key>`.",
+    )
+    println(io)
+    println(io, "| Example | Key |")
+    println(io, "|---|---|")
+    for (key, ex) in pairs(examples)
+        println(io, "| [", strip(ex.name), "](", key, ".md) | `", key, "` |")
+    end
+    return rstrip(String(take!(io))) * "\n"
+end
 
 function main()
     mkpath(SRC)
@@ -311,37 +247,8 @@ function main()
             push!(written, relpath(path, SRC))
         end
 
-        # Per-volume index.
-        io = IOBuffer()
-        println(io, "# ", VOLUME_LABEL[vol])
-        println(io)
-        println(
-            io,
-            "The ",
-            VOLUME_LABEL[vol],
-            " examples that JuliaBUGS can currently compile. ",
-            "The original write-ups are on the [MultiBUGS examples page](",
-            VOLUME_UPSTREAM[vol],
-            ").",
-        )
-        println(io)
-        println(
-            io,
-            "Every example on these pages is available in the package as ",
-            "`JuliaBUGS.BUGSExamples.",
-            VOLUME_CONST[vol],
-            ".<key>`.",
-        )
-        println(io)
-        println(io, "| Example | Key | Model |")
-        println(io, "|---|---|---|")
-        for (key, ex) in pairs(vols[vol])
-            println(
-                io, "| [", page_title(ex), "](", key, ".md) | `", key, "` | ", ex.name, " |"
-            )
-        end
         idx = joinpath(dir, "index.md")
-        write(idx, String(take!(io)))
+        write(idx, render_index(vol, vols[vol]))
         push!(written, relpath(idx, SRC))
     end
 

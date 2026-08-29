@@ -41,33 +41,4 @@ example.data
 model = JuliaBUGS.compile(example.model_def, example.data)
 ```
 
-
-## Sampling
-
-This block is not executed when the documentation is built, so that the
-build stays fast; run it locally to reproduce the numbers below.
-
-```julia
-using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, MCMCChains, LogDensityProblems
-
-model = JuliaBUGS.compile(example.model_def, example.data)
-model = JuliaBUGS.initialize!(model, example.inits)
-ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
-
-n_samples, n_adapts = 2000, 1000
-chain = AbstractMCMC.sample(
-    ad_model, NUTS(0.8), n_samples;
-    chain_type=Chains, n_adapts=n_adapts, discard_initial=n_adapts,
-)
-summarystats(chain)
-```
-
-## Reference results
-
-The posterior summaries published with the original example. A converged
-chain should reproduce these up to Monte Carlo error.
-
-```@example volume_3_hips1
-example.reference_results
-```
-
+See [Getting Started](../../getting_started.md) for the recipe that takes a compiled model to posterior samples.

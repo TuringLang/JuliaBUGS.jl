@@ -12,7 +12,7 @@ x_i &\sim \text{Poisson}(\theta_{S_i}), \qquad S_i \sim \text{Categorical}(\pi) 
 \end{aligned}
 ```
 
-The number of components actually used is recovered as a derived quantity rather than being fixed in advance: `SC[i, j]` indicates that subject `i` was assigned to component `j`, `sumSC[j]` is the resulting size of component `j`, `cl[j]` is 1 when that component is occupied, and `K` is their sum. One caveat about the reference summaries shown further down: the source ships two published sets, and `example.reference_results`, the set rendered below, is the run in which $A$ and $B$ were held fixed. The model as coded samples them, and the matching figures for that version are in `example.reference_results_variable`, where $K$ averages 7.35 rather than 6.92. This example is part of Volume 3 of the classic BUGS examples; see the [MultiBUGS examples page](https://www.multibugs.org/examples/latest/VolumeIII.html) and the [OpenBUGS Eyetracking page](https://chjackson.github.io/openbugsdoc/Examples/Eyetracking.html).
+The number of components actually used is recovered as a derived quantity rather than being fixed in advance: `SC[i, j]` indicates that subject `i` was assigned to component `j`, `sumSC[j]` is the resulting size of component `j`, `cl[j]` is 1 when that component is occupied, and `K` is their sum. One caveat about the reference summaries shown further down: the source ships two published sets, and `example.reference_results`, the set rendered below, is the run in which $A$ and $B$ were held fixed. The model as coded samples them, and the matching figures for that version are recorded as `reference_results_variable` in the example's source file, `src/BUGSExamples/Volume_3/02_Eye_Tracking.jl`, where $K$ averages 7.35 rather than 6.92. This example is part of Volume 3 of the classic BUGS examples; see the [MultiBUGS examples page](https://www.multibugs.org/examples/latest/VolumeIII.html) and the [OpenBUGS Eyetracking page](https://chjackson.github.io/openbugsdoc/Examples/Eyetracking.html).
 
 The model definition, data, initial values, and published reference results shown here all come from `JuliaBUGS.BUGSExamples.VOLUME_3.eye_tracking`, which ships with the package.
 
@@ -43,33 +43,13 @@ example.data
 model = JuliaBUGS.compile(example.model_def, example.data)
 ```
 
-
-## Sampling
-
-This block is not executed when the documentation is built, so that the
-build stays fast; run it locally to reproduce the numbers below.
-
-```julia
-using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, MCMCChains, LogDensityProblems
-
-model = JuliaBUGS.compile(example.model_def, example.data)
-model = JuliaBUGS.initialize!(model, example.inits)
-ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
-
-n_samples, n_adapts = 2000, 1000
-chain = AbstractMCMC.sample(
-    ad_model, NUTS(0.8), n_samples;
-    chain_type=Chains, n_adapts=n_adapts, discard_initial=n_adapts,
-)
-summarystats(chain)
-```
+See [Getting Started](../../getting_started.md) for the recipe that takes a compiled model to posterior samples.
 
 ## Reference results
 
-The posterior summaries published with the original example. A converged
-chain should reproduce these up to Monte Carlo error.
+The posterior summaries published with the original example. A
+converged chain should reproduce these up to Monte Carlo error.
 
 ```@example volume_3_eye_tracking
 example.reference_results
 ```
-

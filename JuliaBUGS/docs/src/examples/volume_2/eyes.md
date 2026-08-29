@@ -46,32 +46,13 @@ model = JuliaBUGS.compile(example.model_def, example.data, example.inits)
 
 The example's own initial values are passed in here. Several of these models fail from random starting values, so `example.inits` is not optional in practice; a second set is available as `example.inits_alternative`.
 
-## Sampling
-
-This block is not executed when the documentation is built, so that the
-build stays fast; run it locally to reproduce the numbers below.
-
-```julia
-using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, MCMCChains, LogDensityProblems
-
-model = JuliaBUGS.compile(example.model_def, example.data)
-model = JuliaBUGS.initialize!(model, example.inits)
-ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
-
-n_samples, n_adapts = 2000, 1000
-chain = AbstractMCMC.sample(
-    ad_model, NUTS(0.8), n_samples;
-    chain_type=Chains, n_adapts=n_adapts, discard_initial=n_adapts,
-)
-summarystats(chain)
-```
+See [Getting Started](../../getting_started.md) for the recipe that takes a compiled model to posterior samples.
 
 ## Reference results
 
-The posterior summaries published with the original example. A converged
-chain should reproduce these up to Monte Carlo error.
+The posterior summaries published with the original example. A
+converged chain should reproduce these up to Monte Carlo error.
 
 ```@example volume_2_eyes
 example.reference_results
 ```
-
