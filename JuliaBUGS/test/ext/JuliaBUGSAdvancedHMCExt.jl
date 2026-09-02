@@ -10,7 +10,9 @@
         function run_sampling(args...)
             model = normal_location_hmc((; y=[1.2, 0.9, 1.4]), 1.0, 3)
             callback_models = Any[]
-            function callback(_, sampled_model, _, _, _, _; kwargs...)
+            function callback(
+                rng, sampled_model, sampler, transition, state, iteration; kwargs...
+            )
                 return push!(callback_models, sampled_model.logdensity)
             end
             draws = AbstractMCMC.sample(
