@@ -5,7 +5,7 @@
 ### Breaking Changes
 
 - `IndependentMH` has been removed. Use `AdvancedMH.RWMH` or `AdvancedMH.StaticMH`; AdvancedMH is now a direct dependency.
-- Finite discrete Gibbs blocks are sampled exactly from their enumerated full conditional.
+- `EnumeratedSampler` samples finite discrete Gibbs blocks exactly from their enumerated full conditional.
 
 ## 0.16.1
 
