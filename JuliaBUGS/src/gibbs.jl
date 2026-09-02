@@ -43,7 +43,7 @@ continuous vs discrete, or different dimensionalities).
 - `sampler_map::OrderedDict{N,S}`: Maps variable groups to their respective samplers
 
 # See Also
-- [`IndependentMH`](@ref): A simple Metropolis-Hastings sampler
+- `AdvancedMH`: Metropolis-Hastings samplers
 - Gradient-based samplers: Use tuples `(sampler, ad_backend)` to specify AD backends
 """
 struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
@@ -55,6 +55,60 @@ struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
 end
 
 """
+    EnumeratedSampler()
+
+Update a finite discrete Gibbs block exactly from its full conditional distribution.
+
+`Gibbs` selects this kernel automatically when every variable in a block has finite
+discrete support. Specify it explicitly in a sampler map to make that choice visible.
+"""
+struct EnumeratedSampler <: AbstractMCMC.AbstractSampler end
+
+validate_gibbs_component(::BUGSModel, _variables, _sampler) = nothing
+
+function _gibbs_component_node_types(model::BUGSModel, variables)
+    node_types = Model._compute_node_types(model)
+    sorted_nodes = model.graph_evaluation_data.sorted_nodes
+    return map(variables) do variable
+        return node_types[findfirst(==(variable), sorted_nodes)]
+    end
+end
+
+function _select_gibbs_component_sampler(model::BUGSModel, variables, sampler)
+    node_types = _gibbs_component_node_types(model, variables)
+    finite_discrete = node_types .=== :discrete_finite
+    if all(finite_discrete)
+        return EnumeratedSampler()
+    elseif any(finite_discrete)
+        throw(
+            ArgumentError(
+                "Finite discrete variables must form a separate Gibbs block so that " *
+                "they can be sampled exactly from their full conditional.",
+            ),
+        )
+    elseif sampler isa EnumeratedSampler
+        throw(ArgumentError("EnumeratedSampler requires a finite discrete Gibbs block."))
+    end
+    return sampler
+end
+
+function _require_continuous_gibbs_component(model::BUGSModel, variables, sampler_name)
+    node_types = _gibbs_component_node_types(model, variables)
+    discrete_variables = [
+        variable for (variable, node_type) in zip(variables, node_types) if
+        node_type === :discrete_finite || node_type === :discrete_infinite
+    ]
+    isempty(discrete_variables) || throw(
+        ArgumentError(
+            "$sampler_name cannot update discrete Gibbs variables: " *
+            join(discrete_variables, ", ") *
+            ". Use AdvancedMH with a discrete proposal.",
+        ),
+    )
+    return nothing
+end
+
+"""
     Gibbs(model::BUGSModel, sampler_map::OrderedDict)
 
 Construct a Gibbs sampler with different samplers for different parameter groups.
@@ -62,7 +116,8 @@ Construct a Gibbs sampler with different samplers for different parameter groups
 This constructor creates a Gibbs sampler that updates different groups of parameters
 using potentially different sampling algorithms. It automatically handles variable
 expansion for array parameters and ensures gradient-based samplers have explicit
-AD backends.
+AD backends. A block consisting only of finite discrete variables is always updated
+exactly with `EnumeratedSampler`, irrespective of the sampler supplied for that block.
 
 # Arguments
 - `model`: The BUGSModel to sample from
@@ -84,7 +139,7 @@ using DifferentiationInterface, ReverseDiff, ForwardDiff
 sampler_map = OrderedDict(
     @varname(μ) => (HMC(0.01, 10), AutoMooncake()),
     @varname(σ) => (NUTS(0.65), AutoMooncake()),
-    @varname(k) => IndependentMH()  # Good for discrete parameters
+    @varname(k) => EnumeratedSampler()
 )
 gibbs = Gibbs(model, sampler_map)
 
@@ -97,7 +152,7 @@ gibbs = Gibbs(model, sampler_map)
 
 # Array variables are automatically expanded
 sampler_map = OrderedDict(
-    @varname(x) => IndependentMH(),  # Updates all x[1], x[2], ..., x[n]
+    @varname(x) => RWMH(MvNormal(zeros(n), 0.1 * I)),
     @varname(μ) => (HMC(0.01, 10), AutoForwardDiff())  # Must specify AD backend
 )
 gibbs = Gibbs(model, sampler_map)
@@ -115,7 +170,9 @@ function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
         variable_group_vec =
             (variable_group isa VarName) ? [variable_group] : variable_group
         expanded_vars = expand_variables(variable_group_vec, model_parameters)
-        expanded_sampler_map[expanded_vars] = sampler
+        selected_sampler = _select_gibbs_component_sampler(model, expanded_vars, sampler)
+        validate_gibbs_component(model, expanded_vars, selected_sampler)
+        expanded_sampler_map[expanded_vars] = selected_sampler
     end
     return Gibbs{eltype(keys(expanded_sampler_map)),eltype(values(expanded_sampler_map))}(
         expanded_sampler_map
@@ -123,7 +180,7 @@ function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
 end
 
 """
-    Gibbs(model::BUGSModel, sampler::AbstractMCMC.AbstractSampler)
+    Gibbs(model::BUGSModel, sampler)
 
 Construct a Gibbs sampler using the same sampler for all parameters.
 
@@ -140,8 +197,8 @@ single-site Gibbs sampling.
 using ADTypes: AutoMooncake
 using Mooncake
 
-# Use IndependentMH for all parameters
-gibbs = Gibbs(model, IndependentMH())
+# Use random-walk MH for all scalar parameters
+gibbs = Gibbs(model, RWMH([Normal(0, 0.1)]))
 
 # Use HMC for all parameters (each updated individually)
 gibbs = Gibbs(model, (HMC(0.01, 10), AutoMooncake()))
@@ -152,10 +209,15 @@ gibbs = Gibbs(model, (HMC(0.01, 10), AutoMooncake()))
 For better performance with continuous parameters, consider grouping related
 parameters and using the OrderedDict constructor instead.
 """
-function Gibbs(model::BUGSModel, s::AbstractMCMC.AbstractSampler)
-    # Use the sampler as-is for all parameters
+function Gibbs(
+    model::BUGSModel,
+    sampler::Union{
+        AbstractMCMC.AbstractSampler,
+        Tuple{<:AbstractMCMC.AbstractSampler,<:ADTypes.AbstractADType},
+    },
+)
     sampler_map = OrderedDict([
-        v => s for v in model.graph_evaluation_data.model_parameters
+        variable => sampler for variable in model.graph_evaluation_data.model_parameters
     ])
     return Gibbs(model, sampler_map)
 end
@@ -195,6 +257,32 @@ struct GibbsState{E<:NamedTuple,C,T} <: AbstractGibbsState
     evaluation_env::E
     cached_conditioned_models::C
     sub_states::T  # States from sub-samplers (HMC, NUTS, etc.)
+end
+
+function gibbs_internal(
+    rng::Random.AbstractRNG, cond_model::BUGSModel, ::EnumeratedSampler, _state=nothing
+)
+    evaluation_env = Model._sample_discrete_latents!!(
+        rng, cond_model, cond_model.evaluation_env
+    )
+    return evaluation_env, nothing
+end
+
+# MH and slice initialization does not move; a Gibbs sweep must advance the block.
+function _step_gibbs_component_after_initialization(
+    rng::Random.AbstractRNG,
+    logdensitymodel::AbstractMCMC.LogDensityModel,
+    sampler,
+    state;
+    initial_params,
+    kwargs...,
+)
+    if isnothing(state)
+        _, state = AbstractMCMC.step(
+            rng, logdensitymodel, sampler; initial_params, kwargs...
+        )
+    end
+    return AbstractMCMC.step(rng, logdensitymodel, sampler, state; kwargs...)
 end
 
 """
@@ -269,13 +357,13 @@ specifying just `x` in the sampler map will cover all of them.
 model = compile(...)
 # Case 1: Individual variables
 sampler_map = OrderedDict(
-    [@varname(α)] => IndependentMH(),
+    [@varname(α)] => RWMH([Normal(0, 0.1)]),
     [@varname(β), @varname(γ)] => HMC(0.01, 10)
 )
 
 # Case 2: Subsuming - x covers x[1], x[2], etc.
 sampler_map = OrderedDict(
-    [@varname(x)] => IndependentMH(),  # Covers all x[i]
+    [@varname(x)] => RWMH(MvNormal(zeros(n), 0.1 * I)),
     [@varname(β)] => HMC(0.01, 10)
 )
 verify_sampler_map(model, sampler_map)  # Throws if invalid
@@ -360,21 +448,25 @@ function AbstractMCMC.step(
     model=l_model.logdensity,
     kwargs...,
 ) where {N,S}
-    # Verify sampler map on first step
     verify_sampler_map(model, sampler.sampler_map)
 
     cached_conditioned_models = OrderedDict()
     model_parameters = model.graph_evaluation_data.model_parameters
 
     for variables_to_update in keys(sampler.sampler_map)
-        # Variables to condition on are all parameters except those we're updating
         variables_to_condition_on = setdiff(model_parameters, variables_to_update)
-
-        # Create conditioned model
         conditioned_model = AbstractPPL.condition(model, variables_to_condition_on)
+        if sampler.sampler_map[variables_to_update] isa EnumeratedSampler
+            conditioned_model = set_evaluation_mode(
+                conditioned_model, UseAutoMarginalization()
+            )
+            conditioned_model.evaluation_mode isa UseAutoMarginalization || error(
+                "Could not construct the exact conditional for finite discrete Gibbs block " *
+                "$(variables_to_update).",
+            )
+        end
         cached_conditioned_models[variables_to_update] = conditioned_model
     end
-    # Initialize sub_states as empty Dict
     sub_states = Dict{Any,Any}()
     return model.evaluation_env,
     GibbsState(model.evaluation_env, cached_conditioned_models, sub_states)
@@ -402,60 +494,42 @@ For each group:
 """
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
-    l_model::AbstractMCMC.LogDensityModel{<:BUGSModel},
+    ::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::Gibbs,
     state::AbstractGibbsState;
-    model=l_model.logdensity,
     kwargs...,
 )
     evaluation_env = state.evaluation_env
     for variables_to_update in keys(state.cached_conditioned_models)
-        # Update model with current evaluation environment
-        model = BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
-
-        # Retrieve cached conditioned model and update its evaluation environment
         cond_model = BangBang.setproperty!!(
             state.cached_conditioned_models[variables_to_update],
             :evaluation_env,
             evaluation_env,
         )
 
-        # gibbs_internal returns the updated evaluation_env and optional sampler state
         sub_sampler = sampler.sampler_map[variables_to_update]
-
-        # Get the sub-state for this sampler (if it exists)
         sub_state = get(state.sub_states, variables_to_update, nothing)
 
-        # Update the state to reflect changes from other samplers
         if !isnothing(sub_state)
-            # Get updated parameters from the conditioned model
             θ_new = getparams(cond_model)
 
-            # Create appropriate log density model based on sampler type
             if sub_sampler isa
                 Tuple{<:AbstractMCMC.AbstractSampler,<:ADTypes.AbstractADType}
-                # For gradient-based samplers, wrap with AD
                 _, ad_backend = sub_sampler
                 logdensitymodel = AbstractMCMC.LogDensityModel(
                     Model.BUGSModelWithGradient(cond_model, ad_backend)
                 )
             else
-                # For non-gradient samplers, use model directly
                 logdensitymodel = AbstractMCMC.LogDensityModel(cond_model)
             end
 
-            # Update state using AbstractMCMC interface
             sub_state = AbstractMCMC.setparams!!(logdensitymodel, sub_state, θ_new)
         end
 
-        # Take a step with the sampler
-        # gibbs_internal is implemented by each sampler type (IndependentMH, HMC extensions, etc.)
-        # It returns the updated evaluation_env and optional sampler state
         evaluation_env, new_sub_state = gibbs_internal(
             rng, cond_model, sub_sampler, sub_state
         )
 
-        # Store the new sub-state if returned
         if !isnothing(new_sub_state)
             state.sub_states[variables_to_update] = new_sub_state
         end
@@ -465,6 +539,6 @@ function AbstractMCMC.step(
 end
 
 # The component samplers keep their own statistics, which `Gibbs` does not aggregate.
-function transition_params_and_stats(model::BUGSModel, ::Gibbs, evaluation_env::NamedTuple)
+function transition_params_and_stats(::BUGSModel, ::Gibbs, evaluation_env::NamedTuple)
     return evaluation_env, NamedTuple()
 end

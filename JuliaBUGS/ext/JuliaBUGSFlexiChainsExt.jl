@@ -76,7 +76,7 @@ function JuliaBUGS.gen_chains(
 end
 
 function AbstractMCMC.bundle_samples(
-    ts::Vector,
+    ts::Vector{<:AbstractMCMC.ParamsWithStats},
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     sampler::AbstractMCMC.AbstractSampler,
     state,

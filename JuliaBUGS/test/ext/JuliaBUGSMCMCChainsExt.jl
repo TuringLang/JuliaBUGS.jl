@@ -227,7 +227,7 @@ end
         AbstractMCMC.sample,
         StableRNG(11),
         model,
-        JuliaBUGS.IndependentMH(),
+        RWMH(2),
         10;
         progress=false,
         chain_type=Vector{AbstractMCMC.ParamsWithStats},
@@ -235,9 +235,9 @@ end
     chn = AbstractMCMC.from_samples(Chains, reshape(draws, :, 1))
 
     @test chn isa Chains
-    # Two parameter columns, one generated quantity, and `lp`.
-    @test size(chn) == (10, 4, 1)
-    @test chn.name_map[:internals] == [:lp]
+    # Two parameter columns, one generated quantity, and two sampler statistics.
+    @test size(chn) == (10, 5, 1)
+    @test chn.name_map[:internals] == [:lp, :accepted]
     # Array-valued variables are flattened into one column per element, named after the
     # leaf `VarName` exactly as `gen_chains` names them.
     @test Set(chn.name_map[:parameters]) ==
@@ -292,7 +292,7 @@ end
         AbstractMCMC.sample,
         StableRNG(77),
         model,
-        JuliaBUGS.IndependentMH(),
+        RWMH(1),
         15;
         progress=false,
         chain_type=Chains,
@@ -303,7 +303,7 @@ end
         AbstractMCMC.sample,
         StableRNG(77),
         model,
-        JuliaBUGS.IndependentMH(),
+        RWMH(1),
         15;
         progress=false,
         chain_type=Vector{AbstractMCMC.ParamsWithStats},
@@ -330,7 +330,7 @@ end
         AbstractMCMC.sample,
         StableRNG(55),
         model,
-        JuliaBUGS.IndependentMH(),
+        RWMH(1),
         MCMCSerial(),
         8,
         3;
@@ -339,7 +339,8 @@ end
     )
     chn = AbstractMCMC.from_samples(Chains, reduce(hcat, chains))
 
-    @test size(chn) == (8, 2, 3)
+    @test size(chn) == (8, 3, 3)
+    @test chn.name_map[:internals] == [:lp, :accepted]
     @test vec(chn[:mu].data[:, 2]) ≈ [d.params[@varname(mu)] for d in chains[2]]
 end
 

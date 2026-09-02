@@ -47,6 +47,102 @@ An `AbstractMCMC.ParamsWithStats` holding a [`ParamsDict`](@ref), as produced by
 """
 const BUGSParamsWithStats = AbstractMCMC.ParamsWithStats{ParamsDict}
 
+function normalize_transition(params, stats::NamedTuple)
+    extras = NamedTuple()
+    # Keep vectors positional; the public constructor assigns them `θ[i]` names.
+    return AbstractMCMC.ParamsWithStats{typeof(params),typeof(stats),typeof(extras)}(
+        params, stats, extras
+    )
+end
+
+function normalize_transition(model::BUGSModel, sampler, transition)
+    params, stats = JuliaBUGS.require_transition_params_and_stats(
+        model, sampler, transition
+    )
+    return normalize_transition(params, stats)
+end
+
+function JuliaBUGS.transition_params_and_stats(
+    ::BUGSModel, ::Any, draw::AbstractMCMC.ParamsWithStats
+)
+    return draw.params, draw.stats
+end
+
+function AbstractMCMC.samples(
+    transition,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler,
+    N::Integer;
+    kwargs...,
+)
+    model = base_bugs_model(logdensitymodel)
+    extracted = JuliaBUGS.transition_params_and_stats(model, sampler, transition)
+    if extracted === nothing
+        return invoke(
+            AbstractMCMC.samples,
+            Tuple{Any,AbstractMCMC.AbstractModel,AbstractMCMC.AbstractSampler,Integer},
+            transition,
+            logdensitymodel,
+            sampler,
+            N;
+            kwargs...,
+        )
+    end
+    draw = normalize_transition(extracted...)
+    draws = Vector{typeof(draw)}()
+    sizehint!(draws, N)
+    return draws
+end
+
+function AbstractMCMC.samples(
+    transition,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler;
+    kwargs...,
+)
+    model = base_bugs_model(logdensitymodel)
+    extracted = JuliaBUGS.transition_params_and_stats(model, sampler, transition)
+    if extracted === nothing
+        return invoke(
+            AbstractMCMC.samples,
+            Tuple{Any,AbstractMCMC.AbstractModel,AbstractMCMC.AbstractSampler},
+            transition,
+            logdensitymodel,
+            sampler;
+            kwargs...,
+        )
+    end
+    draw = normalize_transition(extracted...)
+    return Vector{typeof(draw)}()
+end
+
+function AbstractMCMC.save!!(
+    draws::Vector{<:AbstractMCMC.ParamsWithStats},
+    transition,
+    iteration::Integer,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler,
+    N::Integer;
+    kwargs...,
+)
+    draw = normalize_transition(base_bugs_model(logdensitymodel), sampler, transition)
+    draws′ = BangBang.push!!(draws, draw)
+    draws′ !== draws && sizehint!(draws′, N)
+    return draws′
+end
+
+function AbstractMCMC.save!!(
+    draws::Vector{<:AbstractMCMC.ParamsWithStats},
+    transition,
+    iteration::Integer,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler;
+    kwargs...,
+)
+    draw = normalize_transition(base_bugs_model(logdensitymodel), sampler, transition)
+    return BangBang.push!!(draws, draw)
+end
+
 """
     sampled_parameters(model::BUGSModel)
 
@@ -78,8 +174,8 @@ end
 """
     transition_environment(model, sampler, transition, params)
 
-Recover the evaluation environment a draw corresponds to. Environment-based samplers
-(`Gibbs`, `IndependentMH`) pass their evaluation environment through
+Recover the evaluation environment a draw corresponds to. The environment-based sampler
+`Gibbs` passes its evaluation environment through
 [`transition_params_and_stats`](@ref) whole, so it only needs completing against the model's
 own environment; the flat parameter vector other samplers produce is pushed back through the
 model, which also returns it to the model's own parameter space.
@@ -259,8 +355,8 @@ end
     draw_environment_and_logp(model, sample)
 
 Rebuild the evaluation environment and log joint density of one draw. Most samplers produce
-a flat parameter vector, which is pushed back through the model; environment-based samplers
-(`Gibbs`, `IndependentMH`) carry their evaluation environment through
+a flat parameter vector, which is pushed back through the model; the environment-based sampler
+`Gibbs` carries its evaluation environment through
 [`transition_params_and_stats`](@ref) whole, which keeps the values' types — an `Int`-valued
 discrete latent stays an `Int` in every output format.
 """

@@ -1,4 +1,5 @@
-using JuliaBUGS: Gibbs, IndependentMH
+using AdvancedMH: RWMH
+using JuliaBUGS: Gibbs
 using JuliaBUGS.Model: ParamsDict, set_evaluation_mode, settrans, UseAutoMarginalization
 
 const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
@@ -14,12 +15,12 @@ const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
     data = (N=3, y=[1.2, 0.8, 1.5])
     model = compile(model_def, data, (; alpha=0.0))
 
-    @testset "IndependentMH reports parameters and generated quantities" begin
+    @testset "AdvancedMH reports parameters and generated quantities" begin
         draws = Base.invokelatest(
             AbstractMCMC.sample,
             StableRNG(1234),
             model,
-            IndependentMH(),
+            RWMH(1),
             20;
             progress=false,
             chain_type=PWSVector,
@@ -31,8 +32,7 @@ const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
         @test Set(keys(draws[1].params)) == Set([@varname(alpha), @varname(doubled)])
         @test draws[1].params[@varname(alpha)] isa Real
         @test draws[1].params[@varname(doubled)] ≈ 2 * draws[1].params[@varname(alpha)]
-        # The sampler reports no statistics of its own, so the model's log density stands in.
-        @test keys(draws[1].stats) == (:lp,)
+        @test keys(draws[1].stats) == (:lp, :accepted)
         @test all(d -> isfinite(d.stats.lp), draws)
     end
 
@@ -41,18 +41,18 @@ const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
             AbstractMCMC.sample,
             StableRNG(2468),
             model,
-            IndependentMH(),
+            RWMH(1),
             5;
             progress=false,
             chain_type=PWSVector,
         )
 
         names = [first(p) for p in Base.pairs(draws[1])]
-        @test Set(names) == Set([@varname(alpha), @varname(doubled), :lp])
+        @test Set(names) == Set([@varname(alpha), @varname(doubled), :lp, :accepted])
     end
 
     @testset "Gibbs reports parameters" begin
-        sampler_map = OrderedDict(@varname(alpha) => IndependentMH())
+        sampler_map = OrderedDict(@varname(alpha) => RWMH(1))
         draws = Base.invokelatest(
             AbstractMCMC.sample,
             StableRNG(1357),
@@ -102,7 +102,7 @@ const PWSVector = Vector{AbstractMCMC.ParamsWithStats}
             AbstractMCMC.sample,
             StableRNG(4321),
             multivariate_model,
-            IndependentMH(),
+            RWMH(2),
             10;
             progress=false,
             chain_type=PWSVector,
@@ -147,7 +147,7 @@ end
         AbstractMCMC.sample,
         StableRNG(7),
         gq_model,
-        IndependentMH(),
+        RWMH(1),
         20;
         progress=false,
         chain_type=PWSVector,
@@ -159,7 +159,7 @@ end
         AbstractMCMC.sample,
         StableRNG(7),
         gq_model,
-        IndependentMH(),
+        RWMH(1),
         MCMCSerial(),
         20,
         3;
@@ -197,12 +197,12 @@ end
 
     @testset "draws come back as ParamsWithStats" begin
         draws = Base.invokelatest(
-            AbstractMCMC.sample, StableRNG(1), model, IndependentMH(), 10; progress=false
+            AbstractMCMC.sample, StableRNG(1), model, RWMH(1), 10; progress=false
         )
         @test draws isa Vector{<:AbstractMCMC.ParamsWithStats}
         @test haskey(draws[1].params, @varname(mu))
         @test haskey(draws[1].params, @varname(doubled))
-        @test keys(draws[1].stats) == (:lp,)
+        @test keys(draws[1].stats) == (:lp, :accepted)
     end
 
     @testset "multiple chains give one vector per chain" begin
@@ -210,7 +210,7 @@ end
             AbstractMCMC.sample,
             StableRNG(2),
             model,
-            IndependentMH(),
+            RWMH(1),
             MCMCSerial(),
             8,
             3;
@@ -226,6 +226,17 @@ end
             AbstractMCMC.sample, StableRNG(3), model, OpaqueSampler(), 5; progress=false
         )
         @test raw isa Vector{OpaqueTransition}
+
+        raw_with_chains = Base.invokelatest(
+            AbstractMCMC.sample,
+            StableRNG(3),
+            model,
+            OpaqueSampler(),
+            5;
+            progress=false,
+            chain_type=MCMCChains.Chains,
+        )
+        @test raw_with_chains isa Vector{OpaqueTransition}
 
         # Asking for a specific format names the method to implement.
         err = try

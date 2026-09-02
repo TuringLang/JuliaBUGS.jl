@@ -7,6 +7,7 @@ quantities, and the sampler's own statistics.
 ```@example output
 using JuliaBUGS
 using AbstractMCMC
+using AdvancedMH
 using MCMCChains
 
 model_def = @bugs begin
@@ -28,7 +29,7 @@ since `AbstractMCMC` is already a dependency. It is not the most compact: a chai
 array, whereas this repeats the `VarName` keys for every draw.
 
 ```@example output
-draws = AbstractMCMC.sample(model, JuliaBUGS.IndependentMH(), 500; progress = false)
+draws = AbstractMCMC.sample(model, RWMH(1), 500; progress = false)
 draws[1]
 ```
 
@@ -66,7 +67,7 @@ iteration numbers the run actually used.
 Multiple chains come back as one vector per chain:
 
 ```julia
-chains = AbstractMCMC.sample(model, JuliaBUGS.IndependentMH(), MCMCThreads(), 500, 4)
+chains = AbstractMCMC.sample(model, RWMH(1), MCMCThreads(), 500, 4)
 length(chains)     # 4
 length(chains[1])  # 500
 ```
@@ -137,7 +138,7 @@ quantities, and under auto-marginalization the marginalized discrete latents, ar
 reconstructed once at the end of a run, so they appear only in the sampling output.
 
 For samplers whose transitions do not already carry the model's variables, which is every
-sampler except `Gibbs` and `IndependentMH`, naming a draw costs one model evaluation per
+sampler except `Gibbs`, naming a draw costs one model evaluation per
 iteration. That is worth knowing when a callback runs on every step of a long chain.
 
 ## Supporting a new sampler

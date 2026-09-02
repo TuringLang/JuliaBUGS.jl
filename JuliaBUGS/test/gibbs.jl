@@ -1,7 +1,6 @@
 using Test
 using JuliaBUGS
-using JuliaBUGS:
-    @bugs, compile, @varname, Gibbs, IndependentMH, verify_sampler_map, expand_variables
+using JuliaBUGS: @bugs, compile, @varname, Gibbs, verify_sampler_map, expand_variables
 using ADTypes
 using AbstractMCMC
 using Random
@@ -24,42 +23,36 @@ using StatsBase: mode
 
         @testset "Valid sampler maps" begin
             # All parameters covered with single sampler
-            sampler_map = OrderedDict(
-                [@varname(α), @varname(β), @varname(γ)] => IndependentMH()
-            )
+            sampler_map = OrderedDict([@varname(α), @varname(β), @varname(γ)] => RWMH(3))
             @test verify_sampler_map(model, sampler_map)
 
             # Different samplers for different parameters
             sampler_map = OrderedDict(
-                [@varname(α)] => IndependentMH(),
-                [@varname(β), @varname(γ)] => IndependentMH(),
+                [@varname(α)] => RWMH(1), [@varname(β), @varname(γ)] => RWMH(2)
             )
             @test verify_sampler_map(model, sampler_map)
 
             # Each parameter with its own sampler
             sampler_map = OrderedDict(
-                @varname(α) => IndependentMH(),
-                @varname(β) => IndependentMH(),
-                @varname(γ) => IndependentMH(),
+                @varname(α) => RWMH(1), @varname(β) => RWMH(1), @varname(γ) => RWMH(1)
             )
             @test verify_sampler_map(model, sampler_map)
         end
 
         @testset "Invalid sampler maps" begin
             # Missing parameter
-            sampler_map = OrderedDict([@varname(α), @varname(β)] => IndependentMH())
+            sampler_map = OrderedDict([@varname(α), @varname(β)] => RWMH(2))
             @test_throws ArgumentError verify_sampler_map(model, sampler_map)
 
             # Extra parameter not in model
             sampler_map = OrderedDict(
-                [@varname(α), @varname(β), @varname(γ), @varname(δ)] => IndependentMH()
+                [@varname(α), @varname(β), @varname(γ), @varname(δ)] => RWMH(4)
             )
             @test_throws ArgumentError verify_sampler_map(model, sampler_map)
 
             # Duplicate coverage
             sampler_map = OrderedDict(
-                [@varname(α), @varname(β)] => IndependentMH(),
-                [@varname(β), @varname(γ)] => IndependentMH(),
+                [@varname(α), @varname(β)] => RWMH(2), [@varname(β), @varname(γ)] => RWMH(2)
             )
             @test_throws ArgumentError verify_sampler_map(model, sampler_map)
         end
@@ -105,31 +98,26 @@ using StatsBase: mode
 
         @testset "Subsuming in verify_sampler_map" begin
             # Valid: x covers x[1], x[2], x[3]
-            sampler_map = OrderedDict(
-                @varname(x) => IndependentMH(), @varname(μ) => IndependentMH()
-            )
+            sampler_map = OrderedDict(@varname(x) => RWMH(3), @varname(μ) => RWMH(1))
             @test verify_sampler_map(model, sampler_map)
 
             # Valid: explicit indexing
             sampler_map = OrderedDict(
-                [@varname(x[1]), @varname(x[2]), @varname(x[3])] => IndependentMH(),
-                @varname(μ) => IndependentMH(),
+                [@varname(x[1]), @varname(x[2]), @varname(x[3])] => RWMH(3),
+                @varname(μ) => RWMH(1),
             )
             @test verify_sampler_map(model, sampler_map)
 
             # Invalid: mixing subsuming and explicit (duplicate coverage)
             sampler_map = OrderedDict(
-                @varname(x) => IndependentMH(),
-                @varname(x[1]) => IndependentMH(),
-                @varname(μ) => IndependentMH(),
+                @varname(x) => RWMH(3), @varname(x[1]) => RWMH(1), @varname(μ) => RWMH(1)
             )
             @test_throws ArgumentError verify_sampler_map(model, sampler_map)
 
             # Invalid: partial coverage with subsuming
             # (x[1] and x[2] but not x[3])
             sampler_map = OrderedDict(
-                [@varname(x[1]), @varname(x[2])] => IndependentMH(),
-                @varname(μ) => IndependentMH(),
+                [@varname(x[1]), @varname(x[2])] => RWMH(2), @varname(μ) => RWMH(1)
             )
             @test_throws ArgumentError verify_sampler_map(model, sampler_map)
         end
@@ -169,7 +157,7 @@ using StatsBase: mode
             AbstractMCMC.step,
             Random.default_rng(),
             AbstractMCMC.LogDensityModel(model),
-            Gibbs(model, IndependentMH()),
+            Gibbs(model, RWMH(1)),
         )
 
         # following step
@@ -177,7 +165,7 @@ using StatsBase: mode
             AbstractMCMC.step,
             Random.default_rng(),
             AbstractMCMC.LogDensityModel(model),
-            Gibbs(model, IndependentMH()),
+            Gibbs(model, RWMH(1)),
             st_init,
         )
 
@@ -207,15 +195,15 @@ using StatsBase: mode
 
         @testset "Basic Gibbs construction" begin
             # Using same sampler for all parameters
-            gibbs = Gibbs(model, IndependentMH())
+            gibbs = Gibbs(model, RWMH(1))
             @test length(gibbs.sampler_map) ==
                 length(model.graph_evaluation_data.sorted_parameters)
 
             # Using specific sampler map
             sampler_map = OrderedDict(
-                @varname(μ) => IndependentMH(),
-                @varname(τ) => IndependentMH(),
-                @varname(θ) => IndependentMH(),  # Subsumes θ[1], ..., θ[5]
+                @varname(μ) => RWMH(1),
+                @varname(τ) => RWMH(1),
+                @varname(θ) => RWMH(5),  # Subsumes θ[1], ..., θ[5]
             )
             gibbs = Gibbs(model, sampler_map)
             @test gibbs isa Gibbs
@@ -224,9 +212,7 @@ using StatsBase: mode
 
         @testset "Gibbs sampling runs" begin
             sampler_map = OrderedDict(
-                @varname(μ) => IndependentMH(),
-                @varname(τ) => IndependentMH(),
-                @varname(θ) => IndependentMH(),
+                @varname(μ) => RWMH(1), @varname(τ) => RWMH(1), @varname(θ) => RWMH(5)
             )
             gibbs = Gibbs(model, sampler_map)
 
@@ -257,11 +243,8 @@ using StatsBase: mode
             y_obs = 2.0
             model = compile(model_def, (; y=y_obs))
 
-            # Sample with Gibbs
-            # Note: IndependentMH can be inefficient for continuous parameters
-            # especially in a single-parameter model where Gibbs reduces to plain MH
             rng = Random.MersenneTwister(42)
-            gibbs = Gibbs(model, IndependentMH())
+            gibbs = Gibbs(model, RWMH(1))
             chain = Base.invokelatest(
                 sample,
                 rng,
@@ -281,7 +264,6 @@ using StatsBase: mode
             posterior_std = 1 / sqrt(2)
 
             # Test convergence to correct posterior
-            # IndependentMH may require many samples for good mixing
             @test mean(μ_samples) ≈ posterior_mean atol = 0.4
             @test std(μ_samples) ≈ posterior_std atol = 0.2
         end
@@ -317,9 +299,8 @@ using StatsBase: mode
             inits = (; alpha=0.0, beta=0.0, tau=1.0)
             model = compile(model_def, data, inits)
 
-            # Sample with Gibbs - need more samples for IndependentMH
             rng = Random.MersenneTwister(42)
-            gibbs = Gibbs(model, IndependentMH())
+            gibbs = Gibbs(model, RWMH(1))
             chain = Base.invokelatest(
                 sample,
                 rng,
@@ -332,7 +313,6 @@ using StatsBase: mode
             )
 
             # Test convergence to approximate true parameters
-            # IndependentMH may not be very efficient, so use looser tolerances
             @test mean(chain[:alpha]) ≈ true_alpha atol = 0.5
             @test mean(chain[:beta]) ≈ true_beta atol = 0.3
             @test mean(1 ./ sqrt.(chain[:tau])) ≈ true_sigma atol = 0.3
@@ -358,7 +338,7 @@ using StatsBase: mode
 
             # Sample with Gibbs
             rng1 = Random.MersenneTwister(789)
-            gibbs = Gibbs(model, IndependentMH())
+            gibbs = Gibbs(model, RWMH(1))
             chain_gibbs = Base.invokelatest(
                 sample,
                 rng1,
@@ -409,10 +389,9 @@ using StatsBase: mode
 
             model = compile(model_def, (; N=N, y=y_data, probs=probs))
 
-            # Use IndependentMH for discrete k, could use HMC for continuous params
             sampler_map = OrderedDict(
-                @varname(k) => IndependentMH(),
-                [@varname(μ), @varname(σ)] => IndependentMH(),
+                @varname(k) => JuliaBUGS.EnumeratedSampler(),
+                [@varname(μ), @varname(σ)] => RWMH(2),
             )
             gibbs = Gibbs(model, sampler_map)
 
@@ -448,8 +427,7 @@ using StatsBase: mode
             # Test different conditioning patterns
             @testset "Update only a" begin
                 sampler_map = OrderedDict(
-                    @varname(a) => IndependentMH(),
-                    [@varname(b), @varname(c)] => IndependentMH(),
+                    @varname(a) => RWMH(1), [@varname(b), @varname(c)] => RWMH(2)
                 )
                 gibbs = Gibbs(model, sampler_map)
 
@@ -513,15 +491,13 @@ using StatsBase: mode
             # α and β are generated quantities (unused in the likelihood) and are
             # correctly excluded from model_parameters, so they don't need samplers.
             # Test various ways to specify the sampler map
-            sampler_map1 = OrderedDict(
-                @varname(μ) => IndependentMH(), @varname(θ) => IndependentMH()
-            )
+            sampler_map1 = OrderedDict(@varname(μ) => RWMH(3), @varname(θ) => RWMH(N))
             @test verify_sampler_map(model, sampler_map1)
 
             # More granular specification
             sampler_map2 = OrderedDict(
-                [@varname(μ[1]), @varname(μ[2]), @varname(μ[3])] => IndependentMH(),
-                [@varname(θ[i]) for i in 1:N] => IndependentMH(),
+                [@varname(μ[1]), @varname(μ[2]), @varname(μ[3])] => RWMH(3),
+                [@varname(θ[i]) for i in 1:N] => RWMH(N),
             )
             @test verify_sampler_map(model, sampler_map2)
         end
@@ -546,27 +522,17 @@ using StatsBase: mode
             model = compile(model_def, (; N=N, y=y_data))
 
             @testset "HMC/NUTS requires explicit AD backend" begin
-                # Test that using HMC/NUTS without AD backend throws an error
                 sampler_map_invalid = OrderedDict(
                     @varname(μ) => HMC(0.01, 10),  # Missing AD backend
-                    @varname(σ) => IndependentMH(),
+                    @varname(σ) => RWMH(1),
                 )
-                gibbs_invalid = Gibbs(model, sampler_map_invalid)
+                @test_throws ArgumentError Gibbs(model, sampler_map_invalid)
 
-                rng = Random.MersenneTwister(123)
-                @test_throws ErrorException Base.invokelatest(
-                    sample, rng, model, gibbs_invalid, 10; progress=false, chain_type=Chains
-                )
-
-                # Also test with NUTS
                 sampler_map_nuts = OrderedDict(
                     @varname(μ) => NUTS(0.65),  # Missing AD backend
-                    @varname(σ) => IndependentMH(),
+                    @varname(σ) => RWMH(1),
                 )
-                gibbs_nuts = Gibbs(model, sampler_map_nuts)
-                @test_throws ErrorException Base.invokelatest(
-                    sample, rng, model, gibbs_nuts, 10; progress=false, chain_type=Chains
-                )
+                @test_throws ArgumentError Gibbs(model, sampler_map_nuts)
             end
 
             @testset "Different AD backends" begin
@@ -576,6 +542,9 @@ using StatsBase: mode
                     @varname(σ) => (NUTS(0.65), ADTypes.AutoReverseDiff()),
                 )
                 gibbs2 = Gibbs(model, sampler_map2)
+                single_site_gibbs = Gibbs(model, (HMC(0.01, 10), ADTypes.AutoForwardDiff()))
+                @test length(single_site_gibbs.sampler_map) ==
+                    length(model.graph_evaluation_data.model_parameters)
 
                 rng = Random.MersenneTwister(456)
                 chain2 = Base.invokelatest(
@@ -594,7 +563,7 @@ using StatsBase: mode
             end
         end
 
-        @testset "Mixed samplers (HMC + IndependentMH)" begin
+        @testset "Mixed samplers (HMC + AdvancedMH)" begin
             # Model with continuous and discrete parameters
             model_def = @bugs begin
                 # Continuous parameters
@@ -616,10 +585,9 @@ using StatsBase: mode
             y_data = randn(N) .+ 1.5
             model = compile(model_def, (; N=N, p=p_data, y=y_data))
 
-            # Use HMC for continuous, IndependentMH for discrete
             sampler_map = OrderedDict(
                 [@varname(μ), @varname(log_σ)] => (HMC(0.1, 10), ADTypes.AutoReverseDiff()),  # Larger step size
-                @varname(k) => IndependentMH(),
+                @varname(k) => JuliaBUGS.EnumeratedSampler(),
             )
             gibbs = Gibbs(model, sampler_map)
 
@@ -654,6 +622,46 @@ using StatsBase: mode
             @test mean(μ_samples) > -1 && mean(μ_samples) < 4  # Wider range for μ
             @test mean(exp.(log_σ_samples)) > 0.1 && mean(exp.(log_σ_samples)) < 3  # Wider range for σ
         end
+
+        @testset "Continuous blocks target their full conditionals" begin
+            model_def = @bugs begin
+                x ~ Normal(0, 1)
+                y ~ Normal(x, 1)
+                z ~ Normal(y, 1)
+            end
+            model = compile(model_def, (; z=1.0), (; x=0.0, y=0.0))
+            gibbs = Gibbs(
+                model,
+                OrderedDict(
+                    @varname(x) => (HMC(0.2, 5), ADTypes.AutoForwardDiff()),
+                    @varname(y) => RWMH([Normal(0, 0.8)]),
+                ),
+            )
+            chain = sample(
+                StableRNG(24601),
+                model,
+                gibbs,
+                8_000;
+                discard_initial=1_000,
+                chain_type=Chains,
+                progress=false,
+            )
+
+            @test mean(chain[:x]) ≈ 1 / 3 atol = 0.06
+            @test mean(chain[:y]) ≈ 2 / 3 atol = 0.06
+        end
+
+        @testset "Finite discrete blocks use exact Gibbs updates" begin
+            model_def = @bugs begin
+                k ~ Bernoulli(0.5)
+                y ~ Bernoulli(0.1 + 0.8 * k)
+            end
+            model = compile(model_def, (; y=1), (; k=0))
+            gibbs = Gibbs(
+                model, OrderedDict(@varname(k) => (HMC(0.1, 5), ADTypes.AutoForwardDiff()))
+            )
+            @test only(values(gibbs.sampler_map)) isa JuliaBUGS.EnumeratedSampler
+        end
     end
 
     @testset "AdvancedMH samplers" begin
@@ -674,7 +682,7 @@ using StatsBase: mode
         # For scalar parameters, we need to use StaticMH with vectorized proposal
         # to work with LogDensityProblems interface
         sampler_map = OrderedDict(
-            @varname(α) => IndependentMH(),  # α is constrained to [0,1], so use prior
+            @varname(α) => RWMH(1),
             @varname(β) => StaticMH([Normal(0, 0.1)]),  # Single scalar proposal
         )
         gibbs = Gibbs(model, sampler_map)
@@ -691,8 +699,7 @@ using StatsBase: mode
         # Check bounds for α (should be in [0, 1])
         α_samples = vec(chain[:α].data)
         @test all(0 .<= α_samples .<= 1)
-        # IndependentMH might not converge well in 500 samples
-        # Just check that samples are in reasonable ranges
+        # This is a short integration run, so only check a broad posterior range.
         @test mean(α_samples) > 0.2 && mean(α_samples) < 0.8
     end
 
@@ -778,7 +785,7 @@ using StatsBase: mode
         @testset "NUTS within Gibbs" begin
             sampler_map = OrderedDict(
                 [@varname(μ), @varname(τ)] => (NUTS(0.65), ADTypes.AutoReverseDiff()),
-                @varname(θ) => IndependentMH(),  # Use MH for group means
+                @varname(θ) => RWMH(J),
             )
             gibbs = Gibbs(model, sampler_map)
 
@@ -807,7 +814,6 @@ using StatsBase: mode
             @test mean(μ_samples) ≈ true_μ atol = 1.0
             @test mean(σ_samples) ≈ true_σ atol = 1.0
 
-            # Check θ values - with IndependentMH the convergence is slower
             for j in 1:J
                 θj_samples = vec(chain[Symbol("θ[$j]")].data)
                 # Should be close to group means
@@ -840,7 +846,7 @@ using StatsBase: mode
         # Create a custom Gibbs state to inspect sub_states
         sampler_map = OrderedDict(
             @varname(α) => (HMC(0.01, 5), ADTypes.AutoReverseDiff()),
-            @varname(β) => IndependentMH(),
+            @varname(β) => RWMH(1),
             @varname(γ) => (HMC(0.01, 5), ADTypes.AutoReverseDiff()),
         )
         gibbs = Gibbs(model, sampler_map)
@@ -849,17 +855,20 @@ using StatsBase: mode
 
         # Manually step through to inspect states
         logdensitymodel = AbstractMCMC.LogDensityModel(model)
-        val, state = Base.invokelatest(
-            AbstractMCMC.step, rng, logdensitymodel, gibbs; model=model
-        )
+        val, state = Base.invokelatest(AbstractMCMC.step, rng, logdensitymodel, gibbs)
 
         # Initial state should have empty sub_states
         @test isempty(state.sub_states)
 
-        # Step a few times
-        for i in 1:3
+        val, state = Base.invokelatest(
+            AbstractMCMC.step, rng, logdensitymodel, gibbs, state
+        )
+        @test state.sub_states[[@varname(α)]].i == 1
+        @test state.sub_states[[@varname(γ)]].i == 1
+
+        for _ in 1:2
             val, state = Base.invokelatest(
-                AbstractMCMC.step, rng, logdensitymodel, gibbs, state; model=model
+                AbstractMCMC.step, rng, logdensitymodel, gibbs, state
             )
         end
 
@@ -867,8 +876,7 @@ using StatsBase: mode
         # Check that gradient-based samplers (α and γ) have preserved states
         @test haskey(state.sub_states, [@varname(α)])
         @test haskey(state.sub_states, [@varname(γ)])
-        # IndependentMH (β) doesn't return state in our implementation, so it won't be there
-        @test !haskey(state.sub_states, [@varname(β)])
+        @test haskey(state.sub_states, [@varname(β)])
 
         # Verify that the sampler still works correctly
         chain = Base.invokelatest(sample, rng, model, gibbs, 100; progress=false)

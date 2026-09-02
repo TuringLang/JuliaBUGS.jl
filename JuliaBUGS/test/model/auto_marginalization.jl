@@ -744,7 +744,7 @@ using JuliaBUGS.Model:
         @test isapprox(grad[1], fd_grad; atol=1e-6)
     end
 
-    @testset "Efficiency smoke: AutoMarg+NUTS vs Graph+IndependentMH" begin
+    @testset "Efficiency smoke: AutoMarg+NUTS vs Graph+AdvancedMH" begin
         # Minimal smoke test to ensure both pipelines run (not a benchmark)
         mixture_def = @bugs begin
             w[1] = 0.3
@@ -764,11 +764,15 @@ using JuliaBUGS.Model:
         y_data = vcat(rand(rng, Normal(-2, 1), 50), rand(rng, Normal(2, 1), 50))
         data = (N=100, y=y_data)
 
-        # Graph model with IndependentMH (quick smoke run)
+        # Graph model with continuous MH and exact finite-discrete Gibbs updates.
         model_graph = (m -> (m -> set_evaluation_mode(m, UseGraph()))(settrans(m, true)))(
             compile(mixture_def, data)
         )
-        gibbs = JuliaBUGS.Gibbs(model_graph, JuliaBUGS.IndependentMH())
+        sampler_map = OrderedDict(
+            [@varname(mu), @varname(sigma)] => RWMH(4),
+            @varname(z) => JuliaBUGS.EnumeratedSampler(),
+        )
+        gibbs = JuliaBUGS.Gibbs(model_graph, sampler_map)
         chn_graph = AbstractMCMC.sample(
             rng, model_graph, gibbs, 10; progress=false, chain_type=MCMCChains.Chains
         )

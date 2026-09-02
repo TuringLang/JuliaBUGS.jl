@@ -41,6 +41,11 @@ JuliaBUGS compiles `@bugs` programs and `@model` functions into graphs compatibl
   frontier cache against explicit enumeration on a minimal model.
 - Conditioning, fixing, or graph changes must invalidate dependent classification,
   parameter-layout, source-generation, and marginalization data.
+- Each Gibbs block targets its full conditional given the latest values of all other blocks,
+  including updates earlier in the same sweep. This constrains the target, not the proposal.
+- Samplers should use tractable full conditionals directly when available: enumerate finite
+  discrete conditionals and sample recognized families, such as Normal, without a generic
+  Metropolis-Hastings or slice transition.
 - Preserve types, shapes, and absent statistics through flat vectors, `ParamsWithStats`, MCMCChains, and FlexiChains.
 
 ## Front ends and review
