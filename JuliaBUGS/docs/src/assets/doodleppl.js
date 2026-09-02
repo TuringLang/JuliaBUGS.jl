@@ -1,77 +1,53 @@
-// Loads the DoodlePPL editor for pages that embed a graph, and keeps the widget's
-// theme in step with Documenter's.
+// Two small jobs for the example pages.
 //
-// The bundle is 4.2 MB, so it is injected only on pages that actually contain a
-// <doodle-ppl> element. Documenter signals its theme by putting a "theme--<name>"
-// class on <html>, and themeswap.js rewrites that class whenever the reader flips
-// the toggle, so a MutationObserver on <html> is the reliable hook.
-(function () {
-  "use strict";
+// An <img> loads an SVG as its own document, so the page's CSS variables never
+// reach it and a published plot would stay light on a dark page. Fetching the
+// same file and inlining it lets --mcmc-fg and --mcmc-bg apply.
+//
+// The theme sync is temporary. doodleppl gains a `theme-from` attribute in 0.9.0
+// that does this itself; delete syncWidgets and its observer once the pages pin
+// that release.
+(() => {
+  const isDark = () => /theme--.*dark/.test(document.documentElement.className);
 
-  var VERSION = "0.8.2";
-  var BUNDLE = "https://unpkg.com/doodleppl@" + VERSION + "/dist/doodleppl.global.js";
-  var SRI = "sha384-kP+vVZySDxyhSPr7b4TeR0Y3PFMHerujbh0TlRq8CIlA3+n/Dyx6WH+nxfnDApHd";
-  var TIMEOUT_MS = 15000;
-
-  function embeds() {
-    return document.querySelectorAll("doodle-ppl");
+  async function inlinePlots() {
+    const targets = document.querySelectorAll("img[data-inline-svg]");
+    await Promise.all(
+      Array.from(targets, async (img) => {
+        try {
+          const response = await fetch(img.src);
+          if (!response.ok) return;
+          const holder = document.createElement("div");
+          holder.className = "mcmc-plot";
+          holder.innerHTML = await response.text();
+          const svg = holder.querySelector("svg");
+          if (!svg) return;
+          svg.setAttribute("role", "img");
+          svg.removeAttribute("width");
+          const label = img.getAttribute("alt");
+          if (label) svg.setAttribute("aria-label", label);
+          img.replaceWith(holder);
+        } catch {
+          // Leave the <img> in place; it still renders, just without the theme.
+        }
+      }),
+    );
   }
 
-  function isDark() {
-    var cls = document.documentElement.className || "";
-    return /theme--.*dark/.test(cls);
-  }
-
-  function applyTheme() {
-    var mode = isDark() ? "dark" : "light";
-    var nodes = embeds();
-    var i;
-    for (i = 0; i < nodes.length; i++) {
-      if (nodes[i].getAttribute("theme-mode") !== mode) {
-        nodes[i].setAttribute("theme-mode", mode);
-      }
-    }
-  }
-
-  // Shown when the CDN is unreachable, which is the normal case for offline docs.
-  function degrade() {
-    var wrappers = document.querySelectorAll(".doodleppl-embed");
-    var i;
-    for (i = 0; i < wrappers.length; i++) {
-      wrappers[i].classList.add("doodleppl-unavailable");
+  function syncWidgets() {
+    const mode = isDark() ? "dark" : "light";
+    for (const el of document.querySelectorAll("doodle-ppl")) {
+      if (el.getAttribute("theme-mode") !== mode) el.setAttribute("theme-mode", mode);
     }
   }
 
   function boot() {
-    if (embeds().length === 0) return;
-
-    applyTheme();
-    new MutationObserver(applyTheme).observe(document.documentElement, {
+    void inlinePlots();
+    syncWidgets();
+    new MutationObserver(syncWidgets).observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["class"],
     });
-
-    var script = document.createElement("script");
-    script.src = BUNDLE;
-    script.integrity = SRI;
-    script.crossOrigin = "anonymous";
-    script.defer = true;
-
-    var timer = setTimeout(function () {
-      if (!window.customElements || !window.customElements.get("doodle-ppl")) degrade();
-    }, TIMEOUT_MS);
-
-    script.addEventListener("error", function () {
-      clearTimeout(timer);
-      degrade();
-    });
-    script.addEventListener("load", function () {
-      clearTimeout(timer);
-      // The widget reads theme-mode when it upgrades, so re-assert after definition.
-      applyTheme();
-    });
-
-    document.head.appendChild(script);
   }
 
   if (document.readyState === "loading") {

@@ -46,13 +46,9 @@ The model as a directed graph. Drag a node to rearrange it, or use the pencil to
 the model and watch the generated BUGS code change with it.
 
 ```@raw html
-<div class="doodleppl-embed">
-  <doodle-ppl model="rats" height="560px"></doodle-ppl>
-  <div class="doodleppl-fallback">
-    The interactive graph could not be loaded, which usually means this page is being
-    read offline. The model definition above is the authoritative version.
-  </div>
-</div>
+<script src="https://unpkg.com/doodleppl@0.8.2/dist/doodleppl.global.js" defer></script>
+<doodle-ppl class="doodleppl-embed" model="rats" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
 ```
 
 ## Data
@@ -137,9 +133,12 @@ That run used the settings the original documents, a 1000 update burn in followe
 
 Both chains for those three parameters, and the posterior each one settles on:
 
-![Trace of alpha0, beta.c and sigma over 1000 draws in each of two chains](https://mcmcjs.github.io/bugs-examples/rats-trace.svg)
-
-![Posterior density of alpha0, beta.c and sigma, one curve per chain](https://mcmcjs.github.io/bugs-examples/rats-density.svg)
+```@raw html
+<img data-inline-svg src="https://mcmcjs.github.io/bugs-examples/rats-trace.svg"
+     alt="Trace of alpha0, beta.c and sigma over 1000 draws in each of two chains">
+<img data-inline-svg src="https://mcmcjs.github.io/bugs-examples/rats-density.svg"
+     alt="Posterior density of alpha0, beta.c and sigma, one curve per chain">
+```
 
 [Open the full report](https://mcmcjs.github.io/report/#bundle=https://mcmcjs.github.io/bugs-examples/rats.json) to explore all 65 parameters interactively.
 

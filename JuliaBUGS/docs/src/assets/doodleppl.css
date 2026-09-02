@@ -1,41 +1,34 @@
-/* Layout for embedded DoodlePPL graphs in the example pages. */
+/* The published plots read these; inlining the SVG is what lets them apply. */
+:root {
+  --mcmc-fg: #333;
+  --mcmc-bg: #ffffff;
+}
 
-.doodleppl-embed {
+html.theme--documenter-dark {
+  --mcmc-fg: #dbdee0;
+  --mcmc-bg: #282f2f;
+}
+
+doodle-ppl.doodleppl-embed {
+  display: block;
+  width: 100%;
   margin: 1.5rem 0;
   border: 1px solid #dbdbdb;
   border-radius: 4px;
-  overflow: hidden;
-  /* Reserve the height the widget will take so the page does not jump when the
-     4.2 MB bundle finishes loading. */
+  /* Reserve the height so the page does not jump when the bundle arrives. */
   min-height: 560px;
-  position: relative;
 }
 
-html.theme--documenter-dark .doodleppl-embed {
+html.theme--documenter-dark doodle-ppl.doodleppl-embed {
   border-color: #5e6d6f;
 }
 
-.doodleppl-embed doodle-ppl {
+.mcmc-plot {
+  margin: 1.5rem 0;
+}
+
+.mcmc-plot svg {
   display: block;
   width: 100%;
-}
-
-/* Shown only when the loader gives up on the CDN, e.g. an offline build. */
-.doodleppl-embed .doodleppl-fallback {
-  display: none;
-  padding: 1.25rem;
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-.doodleppl-embed.doodleppl-unavailable {
-  min-height: 0;
-}
-
-.doodleppl-embed.doodleppl-unavailable doodle-ppl {
-  display: none;
-}
-
-.doodleppl-embed.doodleppl-unavailable .doodleppl-fallback {
-  display: block;
+  height: auto;
 }

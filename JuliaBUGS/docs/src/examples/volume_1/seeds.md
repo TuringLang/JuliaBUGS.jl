@@ -52,13 +52,9 @@ The model as a directed graph. Drag a node to rearrange it, or use the pencil to
 the model and watch the generated BUGS code change with it.
 
 ```@raw html
-<div class="doodleppl-embed">
-  <doodle-ppl model="seeds" height="560px"></doodle-ppl>
-  <div class="doodleppl-fallback">
-    The interactive graph could not be loaded, which usually means this page is being
-    read offline. The model definition above is the authoritative version.
-  </div>
-</div>
+<script src="https://unpkg.com/doodleppl@0.8.2/dist/doodleppl.global.js" defer></script>
+<doodle-ppl class="doodleppl-embed" model="seeds" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
 ```
 
 ## Data
