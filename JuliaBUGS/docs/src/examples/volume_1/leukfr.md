@@ -132,4 +132,4 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 The source file ships `reference_results = nothing` for this example, so there is no tabulated reference posterior summary bundled with the package to reproduce here. For published numerical summaries of the treatment effect `beta` and the frailty standard deviation `sigma` (obtained after a 1,000-iteration burn-in followed by 10,000 further updates), see the [OpenBUGS Leukfr page](https://chjackson.github.io/openbugsdoc/Examples/Leukfr.html). A correctly converged chain's `summarystats` output should match those published values up to Monte Carlo error.
 
-See also: the [gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: the [gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

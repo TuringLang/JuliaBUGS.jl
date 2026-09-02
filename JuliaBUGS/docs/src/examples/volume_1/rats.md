@@ -141,4 +141,4 @@ Two things to keep in mind when comparing the columns.
 JuliaBUGS samples with NUTS where the original used Gibbs, so the posterior agrees but the Monte Carlo error does not.
 The bundle also writes the dotted BUGS names with underscores, so `beta.c` appears there as `beta_c`.
 
-See also: the [example gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

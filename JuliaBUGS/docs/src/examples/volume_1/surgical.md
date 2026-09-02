@@ -128,4 +128,4 @@ BUGS-style initial values for the hierarchical model are available as `JuliaBUGS
 
 The bundled copies of this example do not include reference posterior summaries, so there is no shipped table to compare against here. Published posterior summaries for both models — the per-hospital mortality rates `p[1]` through `p[12]`, and for the hierarchical model also `mu`, `sigma`, and `pop.mean` — are given on the [OpenBUGS Surgical page](https://chjackson.github.io/openbugsdoc/Examples/Surgical.html). A correctly converged chain's `summarystats` should reproduce those values up to Monte Carlo error, with the hierarchical estimates visibly shrunk towards the population mean relative to the independent ones.
 
-*See also:* the [example gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+*See also:* the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

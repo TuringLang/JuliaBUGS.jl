@@ -116,4 +116,4 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 Unlike some of the other Volume 1 examples, this one does not ship with a tabulated reference posterior summary — `JuliaBUGS.BUGSExamples.VOLUME_1.mice.reference_results` is `nothing`, so there are no stored means and standard deviations to reproduce here. The published estimates for the shape parameter `r`, the group medians, and the treatment contrasts are reported on the [OpenBUGS Mice page](https://chjackson.github.io/openbugsdoc/Examples/Mice.html) (obtained there from a burn-in of 1000 updates followed by 10000 further updates). Once your chain has converged, the posterior means and standard deviations from `summarystats(chain)` should agree with those published values up to Monte Carlo error.
 
-See also: the [Example Gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: the [Example Gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

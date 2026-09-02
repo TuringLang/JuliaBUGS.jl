@@ -25,7 +25,7 @@ r_i &\sim \text{Binomial}(n_i, p_i)
 
 Here ``\alpha_0`` is the baseline log-odds of germination, ``\alpha_1`` and ``\alpha_2`` are the main effects of seed type and root extract, and ``\alpha_{12}`` is their interaction. The plate effects ``b_i`` capture variation left unexplained by those factors. The regression coefficients receive vague priors, as does the random-effect precision `tau`; the derived quantity `sigma = 1 / sqrt(tau)` is the standard deviation of the plate effects.
 
-Here is the model written with the `@bugs` macro. Because Julia treats `f(x) = ...` as a function definition, the BUGS link-function form `logit(p[i]) <- ...` is written by applying the inverse link (`logistic`) on the right-hand side. JuliaBUGS can also run the original BUGS program directly; see [Migrating from WinBUGS, OpenBUGS, and JAGS](../guides/differences.md) for that workflow.
+Here is the model written with the `@bugs` macro. Because Julia treats `f(x) = ...` as a function definition, the BUGS link-function form `logit(p[i]) <- ...` is written by applying the inverse link (`logistic`) on the right-hand side. JuliaBUGS can also run the original BUGS program directly; see [Migrating from WinBUGS, OpenBUGS, and JAGS](../../guides/differences.md) for that workflow.
 
 ```@example seeds
 using JuliaBUGS
@@ -91,7 +91,7 @@ nothing # hide
 ```
 
 JuliaBUGS draws the omitted plate effects `b` from their prior. See [Initial
-Values](../guides/initialization.md) for partial initialization, array-valued parameters, and the
+Values](../../guides/initialization.md) for partial initialization, array-valued parameters, and the
 flat vectors accepted by samplers.
 
 ## Sampling
@@ -128,5 +128,5 @@ The published reference posterior summaries for this example are:
 
 A correctly converged chain's `summarystats` output should match these values up to Monte Carlo error.
 
-See also: [gallery overview](index.md), [getting-started tutorial](../getting_started.md), and
-[migration guide](../guides/differences.md).
+See also: [gallery overview](../index.md), [getting-started tutorial](../../getting_started.md), and
+[migration guide](../../guides/differences.md).

@@ -111,4 +111,4 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 The source file for this example ships with `reference_results = nothing`, so there is no bundled table of published posterior summaries to reproduce here. The MultiBUGS and OpenBUGS pages linked above report posterior means and standard deviations for `alpha`, `beta.age`, `beta.sex`, the disease effects `beta.dis[2]`–`beta.dis[4]`, the Weibull shape `r`, and the random-effect standard deviation `sigma`, obtained from a 1000-iteration burn-in followed by 10000 further iterations. A correctly converged chain's `summarystats` output should match those published values up to Monte Carlo error.
 
-See also: the [gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: the [gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

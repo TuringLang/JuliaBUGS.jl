@@ -104,4 +104,4 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 Reference posterior summaries are not bundled with the package for this example; the published results table can be found on the [OpenBUGS Blockers page](https://chjackson.github.io/openbugsdoc/Examples/Blockers.html). The quantities of interest are the pooled treatment effect `d`, the predictive effect for a new trial `var"delta.new"`, and the between-trial standard deviation `sigma`. A correctly converged chain's `summarystats(chain)` should match the published values up to Monte Carlo error.
 
-See also: the [example gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

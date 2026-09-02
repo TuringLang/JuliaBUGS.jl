@@ -90,4 +90,4 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 Reference posterior summaries are not bundled with the package for this example; the published results table can be found on the [OpenBUGS Pumps page](https://chjackson.github.io/openbugsdoc/Examples/Pumps.html). The quantities of interest are the hyperparameters `alpha` and `beta` and the pump-specific failure rates `theta[1]` through `theta[10]`. A correctly converged chain's `summarystats(chain)` should match the published values up to Monte Carlo error.
 
-See also: the [example gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

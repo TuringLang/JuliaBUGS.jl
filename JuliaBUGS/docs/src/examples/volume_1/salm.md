@@ -140,5 +140,5 @@ These are maximum quasi-likelihood point estimates rather than posterior summari
 posterior means from a correctly converged chain should land close to them, up to Monte Carlo
 error and the mild differences between the two estimation approaches.
 
-See also: the [gallery overview](index.md) and the
-[getting-started tutorial](../getting_started.md).
+See also: the [gallery overview](../index.md) and the
+[getting-started tutorial](../../getting_started.md).

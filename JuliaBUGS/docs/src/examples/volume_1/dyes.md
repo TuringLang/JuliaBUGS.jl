@@ -99,4 +99,4 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 No reference posterior table is bundled with this example (`JuliaBUGS.BUGSExamples.VOLUME_1.dyes.reference_results` is `nothing`), so compare your output against the published summaries on the [OpenBUGS Dyes page](https://chjackson.github.io/openbugsdoc/Examples/Dyes.html). As points of reference, the classical analysis of these data gives ``\sigma^2_{\text{with}} = 2451`` and ``\sigma^2_{\text{btw}} = 1764``, and the overall mean yield ``\theta`` is close to the sample grand mean of about 1527. Note that the posterior of the between-batch variance has a very long upper tail, so its posterior mean sits well above its median; a correctly converged chain's `summarystats` should agree with the published BUGS results up to Monte Carlo error.
 
-See also: the [example gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

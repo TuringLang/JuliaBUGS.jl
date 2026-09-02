@@ -122,4 +122,4 @@ The published reference posterior summaries for this example are:
 
 A correctly converged chain's `summarystats` output should match these values up to Monte Carlo error.
 
-See also: the [gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: the [gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

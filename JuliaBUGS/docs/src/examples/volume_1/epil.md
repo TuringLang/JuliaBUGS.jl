@@ -128,4 +128,4 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 JuliaBUGS does not ship reference results for this example. For published estimates, see the [OpenBUGS documentation page](https://chjackson.github.io/openbugsdoc/Examples/Epil.html), which reports results alongside the approximate-likelihood fit of Breslow and Clayton (1993); a correctly converged chain's `summarystats` should agree with those values up to Monte Carlo error.
 
-See also: the [example gallery overview](index.md) and the [getting started tutorial](../getting_started.md).
+See also: the [example gallery overview](../index.md) and the [getting started tutorial](../../getting_started.md).
