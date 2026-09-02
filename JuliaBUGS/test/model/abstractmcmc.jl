@@ -21,6 +21,18 @@ using Test
     sampler = IndependentMH()
     transition, state = AbstractMCMC.step(rng, logdensitymodel, sampler)
 
+    @testset "Function-scoped model construction" begin
+        function sample_in_function(model_def, data)
+            model = compile(model_def, data)
+            return sample(
+                Random.MersenneTwister(42), model, IndependentMH(), 3; progress=false
+            )
+        end
+
+        draws = sample_in_function(model_def, data)
+        @test length(draws) == 3
+    end
+
     @testset "ParamsWithStats with params only" begin
         pws = AbstractMCMC.ParamsWithStats(
             logdensitymodel, sampler, transition, state; params=true, stats=false

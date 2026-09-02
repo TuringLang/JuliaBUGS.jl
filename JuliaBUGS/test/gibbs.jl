@@ -242,6 +242,17 @@ using StatsBase: mode
             # `Gibbs` reports no statistics of its own, so the model's log density stands in.
             @test chain.name_map[:internals] == [:lp]
             @test all(isfinite, vec(chain[:lp].data))
+
+            draws = Base.invokelatest(
+                sample,
+                Random.MersenneTwister(123),
+                model,
+                gibbs,
+                2;
+                adtype=AutoReverseDiff(),
+                progress=false,
+            )
+            @test length(draws) == 2
         end
     end
 

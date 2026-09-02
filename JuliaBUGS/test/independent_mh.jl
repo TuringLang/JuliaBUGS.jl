@@ -103,6 +103,23 @@ using Statistics
         @test isapprox(mean(theta_samples), 2.0, atol=0.1)
     end
 
+    @testset "Gradient-wrapped model" begin
+        model_def = @bugs begin
+            x ~ Normal(0, 1)
+        end
+        model = compile(model_def, (;))
+        draws = sample(
+            Random.MersenneTwister(123),
+            model,
+            IndependentMH(),
+            3;
+            adtype=ADTypes.AutoReverseDiff(),
+            progress=false,
+        )
+
+        @test length(draws) == 3
+    end
+
     @testset "IndependentMH state consistency" begin
         model_def = @bugs begin
             mu ~ Normal(0, 10)

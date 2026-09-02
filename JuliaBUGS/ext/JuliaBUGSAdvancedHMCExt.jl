@@ -10,6 +10,17 @@ using JuliaBUGS.Random
 
 import JuliaBUGS: gibbs_internal
 
+function JuliaBUGS.Model._build_model(
+    ::BUGSModel, ::AdvancedHMC.AbstractHMCSampler, ::Nothing
+)
+    throw(
+        ArgumentError(
+            "Sampling with HMC or NUTS requires an explicit AD backend. " *
+            "Pass `adtype` to `sample`, or sample a `BUGSModelWithGradient`.",
+        ),
+    )
+end
+
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG,
     cond_model::BUGSModel,

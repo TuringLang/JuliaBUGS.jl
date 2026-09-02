@@ -52,14 +52,11 @@ end
 
 y = [1.2, 0.9, 1.4, 1.1, 0.7]
 model = normal_location((; y), 1.0, length(y))
-posterior = JuliaBUGS.BUGSModelWithGradient(
-    model, AutoMooncake(; config = nothing)
-)
-
 rng = MersenneTwister(42)
 sampler = HMC(0.1, 10)
 draws = sample(
-    rng, posterior, sampler, 2_000;
+    rng, model, sampler, 2_000;
+    adtype = AutoMooncake(; config = nothing),
     n_adapts = 500, discard_initial = 500, progress = false,
 )
 ```

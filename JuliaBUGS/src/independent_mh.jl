@@ -50,12 +50,12 @@ end
 # Initial step
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:Model.BUGSModelLike},
     sampler::IndependentMH;
     initial_params=nothing,
     kwargs...,
 )
-    model = logdensitymodel.logdensity
+    model = Model.base_bugs_model(logdensitymodel)
 
     # Initialize with provided params or sample from prior
     if isnothing(initial_params)
@@ -74,12 +74,12 @@ end
 # Subsequent steps
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:Model.BUGSModelLike},
     sampler::IndependentMH,
     state::IndependentMHState;
     kwargs...,
 )
-    model = logdensitymodel.logdensity
+    model = Model.base_bugs_model(logdensitymodel)
 
     # Use smart copy for efficiency
     current_env = Model.smart_copy_evaluation_env(

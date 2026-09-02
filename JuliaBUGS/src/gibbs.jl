@@ -355,9 +355,9 @@ This function initializes the Gibbs sampler by:
 """
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
-    l_model::AbstractMCMC.LogDensityModel{<:BUGSModel},
+    l_model::AbstractMCMC.LogDensityModel{<:Model.BUGSModelLike},
     sampler::Gibbs{N,S};
-    model=l_model.logdensity,
+    model=Model.base_bugs_model(l_model),
     kwargs...,
 ) where {N,S}
     # Verify sampler map on first step
@@ -402,10 +402,10 @@ For each group:
 """
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
-    l_model::AbstractMCMC.LogDensityModel{<:BUGSModel},
+    l_model::AbstractMCMC.LogDensityModel{<:Model.BUGSModelLike},
     sampler::Gibbs,
     state::AbstractGibbsState;
-    model=l_model.logdensity,
+    model=Model.base_bugs_model(l_model),
     kwargs...,
 )
     evaluation_env = state.evaluation_env
