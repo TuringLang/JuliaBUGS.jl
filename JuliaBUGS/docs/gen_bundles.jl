@@ -72,7 +72,9 @@ function write_example(dir, vol, key, ex)
         println(io)
         println(io, "model_def = JuliaBUGS.@bugs(\"\"\"")
         print(io, ex.original_syntax_program)
-        println(io, "\"\"\")")
+        # `false` keeps the dotted BUGS names, so a published parameter reads
+        # `beta.c` exactly as the original program and its reference table do.
+        println(io, "\"\"\", false)")
         println(io)
         println(io, "build_model(data) = JuliaBUGS.compile(model_def, data)")
     end
@@ -82,15 +84,33 @@ function write_example(dir, vol, key, ex)
     end
 end
 
+"""
+    plotted_variables(ex)
+
+Which variables the published plots should show. A trace panel per parameter is
+unreadable once a model has dozens, and Rats alone has 65, so this picks the ones
+a reader came for: the parameters the original example published summaries for,
+or failing that the scalars, which are the population-level quantities in these
+models rather than the per-unit ones.
+"""
+function plotted_variables(ex; limit=6)
+    published = ex.reference_results
+    if !isnothing(published) && !isempty(published)
+        return first(String.(collect(keys(published))), limit)
+    end
+    scalars = [String(k) for (k, v) in pairs(ex.inits) if v isa Number]
+    return first(sort(scalars), limit)
+end
+
 function main()
     mkpath(OUT)
-    written = Symbol[]
+    written = Pair{Symbol,Vector{String}}[]
 
     for (vol, examples) in pairs(BE.volumes()), (key, ex) in pairs(examples)
         vol in WANT_VOL || continue
         WANT_KEY === nothing || key === WANT_KEY || continue
         write_example(OUT, vol, key, ex)
-        push!(written, key)
+        push!(written, key => plotted_variables(ex))
     end
 
     isempty(written) && error("nothing matched $(SELECT)")
@@ -108,7 +128,8 @@ function main()
         println(io, "cd \"\$(dirname \"\$0\")\"")
         println(io, "failed=0")
         println(io)
-        for key in written
+        for (key, vars) in written
+            shown = isempty(vars) ? "" : " --var " * join(("'$v'" for v in vars), " ")
             println(io, "echo \"== $key\"")
             print(
                 io,
@@ -125,6 +146,16 @@ function main()
             )
             println(io, " \\")
             println(io, "  && mcmc export bundle -o bundles/$key.json --force \\")
+            println(
+                io,
+                "  && mcmc plot --kind trace$shown --format svg",
+                " -o bundles/$key-trace.svg \\",
+            )
+            println(
+                io,
+                "  && mcmc plot --kind density$shown --format svg",
+                " -o bundles/$key-density.svg \\",
+            )
             println(io, "  || { echo \"   $key FAILED\"; failed=\$((failed + 1)); }")
             println(io)
         end

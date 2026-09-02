@@ -8,9 +8,9 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.8.1";
+  var VERSION = "0.8.2";
   var BUNDLE = "https://unpkg.com/doodleppl@" + VERSION + "/dist/doodleppl.global.js";
-  var SRI = "sha384-J2scl5T4h2iCNQWIjIDf8ypCTphR4Jm53tnX8ijKzKZqlsuI9kkH47vxqH5YkxRD";
+  var SRI = "sha384-kP+vVZySDxyhSPr7b4TeR0Y3PFMHerujbh0TlRq8CIlA3+n/Dyx6WH+nxfnDApHd";
   var TIMEOUT_MS = 15000;
 
   function embeds() {
