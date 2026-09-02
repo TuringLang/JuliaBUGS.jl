@@ -30,9 +30,9 @@ pkg> add AbstractMCMC ADTypes AdvancedHMC Distributions Mooncake
 
 ## Example
 
-The `@model` macro defines a function that compiles a model when called. Its first argument
-declares every stochastic variable. Values supplied in that named tuple are observed;
-omitted values remain latent. Subsequent arguments are fixed inputs.
+The `@model` macro defines a model-building function. Its first argument lists stochastic
+variables; supplied values are observed and omitted values remain latent. Later arguments
+are fixed inputs.
 
 ```julia
 using AbstractMCMC
@@ -52,14 +52,11 @@ end
 
 y = [1.2, 0.9, 1.4, 1.1, 0.7]
 model = normal_location((; y), 1.0, length(y))
-posterior = JuliaBUGS.BUGSModelWithGradient(
-    model, AutoMooncake(; config = nothing)
-)
-
 rng = MersenneTwister(42)
 sampler = HMC(0.1, 10)
 draws = sample(
-    rng, posterior, sampler, 2_000;
+    rng, model, sampler, 2_000;
+    adtype = AutoMooncake(; config = nothing),
     n_adapts = 500, discard_initial = 500, progress = false,
 )
 ```

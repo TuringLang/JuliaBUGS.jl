@@ -1,4 +1,36 @@
 @testset "AdvancedHMC" begin
+    @testset "sample prepares the AD backend" begin
+        @model function normal_location_hmc((; y, mu), sigma, N)
+            mu ~ Normal(0, 10)
+            for i in 1:N
+                y[i] ~ Normal(mu, sigma)
+            end
+        end
+
+        model = normal_location_hmc((; y=[1.2, 0.9, 1.4]), 1.0, 3)
+        callback_models = Any[]
+        function callback(_, sampled_model, _, _, _, _; kwargs...)
+            return push!(callback_models, sampled_model.logdensity)
+        end
+
+        draws = AbstractMCMC.sample(
+            StableRNG(1234),
+            model,
+            HMC(0.1, 2),
+            3;
+            adtype=AutoReverseDiff(; compile=false),
+            callback=callback,
+            n_adapts=0,
+            progress=false,
+        )
+
+        @test length(draws) == length(callback_models) == 3
+        @test all(
+            m -> m isa JuliaBUGS.BUGSModelWithGradient && m.adtype isa AutoReverseDiff,
+            callback_models,
+        )
+    end
+
     @testset "Generation of parameter names" begin
         model_def = @bugs begin
             x[1:2] ~ dmnorm(mu[:], sigma[:, :])

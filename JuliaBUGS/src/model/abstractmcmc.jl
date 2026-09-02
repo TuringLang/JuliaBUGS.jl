@@ -17,6 +17,39 @@ base_bugs_model(model::BUGSModel) = model
 base_bugs_model(model::BUGSModelWithGradient) = model.base_model
 base_bugs_model(model::AbstractMCMC.LogDensityModel) = base_bugs_model(model.logdensity)
 
+_sampling_model(model::BUGSModel, ::Nothing) = AbstractMCMC.LogDensityModel(model)
+function _sampling_model(model::BUGSModel, adtype::ADTypes.AbstractADType)
+    return AbstractMCMC.LogDensityModel(BUGSModelWithGradient(model, adtype))
+end
+
+function AbstractMCMC.sample(
+    rng::Random.AbstractRNG,
+    model::BUGSModel,
+    sampler::AbstractMCMC.AbstractSampler,
+    N_or_isdone;
+    adtype::Union{Nothing,ADTypes.AbstractADType}=nothing,
+    kwargs...,
+)
+    return AbstractMCMC.sample(
+        rng, _sampling_model(model, adtype), sampler, N_or_isdone; kwargs...
+    )
+end
+
+function AbstractMCMC.sample(
+    rng::Random.AbstractRNG,
+    model::BUGSModel,
+    sampler::AbstractMCMC.AbstractSampler,
+    parallel::AbstractMCMC.AbstractMCMCEnsemble,
+    N::Integer,
+    nchains::Integer;
+    adtype::Union{Nothing,ADTypes.AbstractADType}=nothing,
+    kwargs...,
+)
+    return AbstractMCMC.sample(
+        rng, _sampling_model(model, adtype), sampler, parallel, N, nchains; kwargs...
+    )
+end
+
 # Strip the model wrappers once, so the per-format `gen_chains` methods only need a
 # `BUGSModel` method.
 function JuliaBUGS.gen_chains(
