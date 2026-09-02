@@ -91,26 +91,9 @@ An `AbstractMCMC.ParamsWithStats` holding a [`ParamsDict`](@ref), as produced by
 """
 const BUGSParamsWithStats = AbstractMCMC.ParamsWithStats{ParamsDict}
 
-function normalize_transition(params, stats::NamedTuple)
-    extras = NamedTuple()
-    # Keep vectors positional; the public constructor assigns them `θ[i]` names.
-    return AbstractMCMC.ParamsWithStats{typeof(params),typeof(stats),typeof(extras)}(
-        params, stats, extras
-    )
-end
-
-function normalize_transition(model::BUGSModel, sampler, transition)
-    params, stats = JuliaBUGS.require_transition_params_and_stats(
-        model, sampler, transition
-    )
-    return normalize_transition(params, stats)
-end
-
-function JuliaBUGS.transition_params_and_stats(
-    ::BUGSModel, ::Any, draw::AbstractMCMC.ParamsWithStats
-)
-    return draw.params, draw.stats
-end
+# No `nothing` values are stored. The union keeps sampler-owned `Vector{<:Transition}`
+# methods from intercepting JuliaBUGS output dispatch while retaining each raw transition.
+const CollectedTransitions{T} = Vector{Union{Nothing,T}}
 
 function AbstractMCMC.samples(
     transition,
@@ -132,10 +115,9 @@ function AbstractMCMC.samples(
             kwargs...,
         )
     end
-    draw = normalize_transition(extracted...)
-    draws = Vector{typeof(draw)}()
-    sizehint!(draws, N)
-    return draws
+    transitions = CollectedTransitions{typeof(transition)}()
+    sizehint!(transitions, N)
+    return transitions
 end
 
 function AbstractMCMC.samples(
@@ -156,35 +138,7 @@ function AbstractMCMC.samples(
             kwargs...,
         )
     end
-    draw = normalize_transition(extracted...)
-    return Vector{typeof(draw)}()
-end
-
-function AbstractMCMC.save!!(
-    draws::Vector{<:AbstractMCMC.ParamsWithStats},
-    transition,
-    iteration::Integer,
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
-    sampler::AbstractMCMC.AbstractSampler,
-    N::Integer;
-    kwargs...,
-)
-    draw = normalize_transition(base_bugs_model(logdensitymodel), sampler, transition)
-    draws′ = BangBang.push!!(draws, draw)
-    draws′ !== draws && sizehint!(draws′, N)
-    return draws′
-end
-
-function AbstractMCMC.save!!(
-    draws::Vector{<:AbstractMCMC.ParamsWithStats},
-    transition,
-    iteration::Integer,
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
-    sampler::AbstractMCMC.AbstractSampler;
-    kwargs...,
-)
-    draw = normalize_transition(base_bugs_model(logdensitymodel), sampler, transition)
-    return BangBang.push!!(draws, draw)
+    return CollectedTransitions{typeof(transition)}()
 end
 
 """
@@ -469,34 +423,45 @@ function JuliaBUGS.gen_chains(
 end
 
 function AbstractMCMC.bundle_samples(
-    ts::Vector,
+    ts::CollectedTransitions,
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     sampler::AbstractMCMC.AbstractSampler,
     state,
-    chain_type::Type{
-        <:Union{AbstractMCMC.ParamsWithStats,AbstractVector{<:AbstractMCMC.ParamsWithStats}}
-    };
+    chain_type::Type{<:AbstractVector{<:AbstractMCMC.ParamsWithStats}};
     kwargs...,
 )
     return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
 end
 
-# Sampling without a `chain_type` returns `ParamsWithStats` draws. Samplers JuliaBUGS does
-# not know how to read keep AbstractMCMC's behaviour and hand back the raw transitions.
+function AbstractMCMC.bundle_samples(
+    ts::CollectedTransitions{T},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler,
+    state,
+    chain_type::Type;
+    kwargs...,
+) where {T}
+    model = base_bugs_model(logdensitymodel)
+    output_type = chain_type === Any ? Vector{AbstractMCMC.ParamsWithStats} : chain_type
+    if applicable(JuliaBUGS.gen_chains, output_type, model, ts, NamedTuple[])
+        return JuliaBUGS.bundle_transitions(
+            output_type, logdensitymodel, ts, sampler; kwargs...
+        )
+    end
+
+    transitions = Vector{T}(ts)
+    return AbstractMCMC.bundle_samples(
+        transitions, logdensitymodel, sampler, state, chain_type; kwargs...
+    )
+end
+
 function AbstractMCMC.bundle_samples(
     ts::Vector,
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
     sampler::AbstractMCMC.AbstractSampler,
     state,
-    ::Type{Any};
+    chain_type::Type{<:AbstractVector{<:AbstractMCMC.ParamsWithStats}};
     kwargs...,
 )
-    isempty(ts) && return ts
-    model = base_bugs_model(logdensitymodel)
-    if JuliaBUGS.transition_params_and_stats(model, sampler, first(ts)) === nothing
-        return ts
-    end
-    return JuliaBUGS.bundle_transitions(
-        Vector{AbstractMCMC.ParamsWithStats}, logdensitymodel, ts, sampler; kwargs...
-    )
+    return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
 end

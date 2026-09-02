@@ -24,9 +24,7 @@ using Test
     @testset "Function-scoped model construction" begin
         function sample_in_function(model_def, data)
             model = compile(model_def, data)
-            return sample(
-                Random.MersenneTwister(42), model, IndependentMH(), 3; progress=false
-            )
+            return sample(Random.MersenneTwister(42), model, RWMH(2), 3; progress=false)
         end
 
         draws = sample_in_function(model_def, data)

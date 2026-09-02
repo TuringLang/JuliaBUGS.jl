@@ -138,9 +138,9 @@ formats that store scalar columns take the union of the keys across draws and fi
 themselves.
 
 Implementing this method is all a sampler needs to do to support every JuliaBUGS output
-format, including the `AbstractMCMC.ParamsWithStats` a callback sees. JuliaBUGS normalizes
-recognized transitions to `ParamsWithStats` before output-format dispatch, so format
-extensions do not depend on sampler-specific transition types.
+format, including the `AbstractMCMC.ParamsWithStats` a callback sees. Raw transitions are
+retained until output-format dispatch, then unpacked for JuliaBUGS formats. This preserves
+sampler-owned formats that require their original transition type.
 
 The fallback returns `nothing`, meaning the sampler is not known to JuliaBUGS. Its raw
 transitions remain available to AbstractMCMC and sampler-owned output methods. JuliaBUGS

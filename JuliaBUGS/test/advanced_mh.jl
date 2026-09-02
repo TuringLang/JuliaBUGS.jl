@@ -130,16 +130,17 @@ using JuliaBUGS: @model, EnumeratedSampler, Gibbs, gibbs_internal
         )
     end
 
-    @testset "MCMCChains output" begin
+    @testset "output formats" begin
         model_def = @bugs begin
             mu ~ Normal(0, 1)
             y ~ Normal(mu, 0.1)
         end
         model = compile(model_def, (; y=1.0))
+        sampler = RWMH([Normal(0, 0.2)])
         chain = sample(
             StableRNG(14),
             model,
-            RWMH([Normal(0, 0.2)]),
+            sampler,
             100;
             initial_params=JuliaBUGS.getparams(model),
             chain_type=MCMCChains.Chains,
@@ -149,5 +150,28 @@ using JuliaBUGS: @model, EnumeratedSampler, Gibbs, gibbs_internal
         @test chain isa MCMCChains.Chains
         @test chain.name_map[:parameters] == [:mu]
         @test chain.name_map[:internals] == [:lp, :accepted]
+
+        named_draws = sample(
+            StableRNG(17),
+            model,
+            sampler,
+            5;
+            initial_params=JuliaBUGS.getparams(model),
+            chain_type=Vector{NamedTuple},
+            progress=false,
+        )
+        @test named_draws isa Vector{<:NamedTuple}
+        @test keys(first(named_draws)) == (:param_1, :lp)
+
+        raw_draws = sample(
+            StableRNG(17),
+            model,
+            sampler,
+            5;
+            initial_params=JuliaBUGS.getparams(model),
+            chain_type=Vector{AbstractTransition},
+            progress=false,
+        )
+        @test raw_draws isa Vector{<:AbstractTransition}
     end
 end
