@@ -433,7 +433,10 @@ function compile(
             values(eval_env),
         ),
     )
-    base_model = BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params, true)
+    compile_options = Model.ModelCompileOptions(skip_validation, eval_module)
+    base_model = BUGSModel(
+        g, nonmissing_eval_env, model_def, data, compile_options, initial_params, true
+    )
 
     # If adtype provided, wrap with gradient capabilities
     if adtype !== nothing

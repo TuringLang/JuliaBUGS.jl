@@ -33,6 +33,16 @@ end
     @test model.evaluation_env.x isa Vector{Float64}
 end
 
+@testset "Model compilation metadata can be deep-copied" begin
+    model_def = @bugs begin
+        x ~ dnorm(0, 1)
+    end
+    model = compile(model_def, (;))
+    copied = deepcopy(model)
+
+    @test copied.compile_options === model.compile_options
+end
+
 @testset "Model Interface Functions" begin
     @testset "parameters and variables" begin
         model_def = @bugs begin

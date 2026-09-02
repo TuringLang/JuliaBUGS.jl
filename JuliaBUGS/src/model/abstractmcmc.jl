@@ -17,6 +17,50 @@ base_bugs_model(model::BUGSModel) = model
 base_bugs_model(model::BUGSModelWithGradient) = model.base_model
 base_bugs_model(model::AbstractMCMC.LogDensityModel) = base_bugs_model(model.logdensity)
 
+_build_model(model::BUGSModel, ::Any, ::Nothing) = AbstractMCMC.LogDensityModel(model)
+function _build_model(model::BUGSModel, ::Any, adtype::ADTypes.AbstractADType)
+    return AbstractMCMC.LogDensityModel(BUGSModelWithGradient(model, adtype))
+end
+
+function _prepare_and_sample(rng, model, sampler, args...; adtype, kwargs...)
+    return AbstractMCMC.sample(
+        rng, _build_model(model, sampler, adtype), sampler, args...; kwargs...
+    )
+end
+
+# `compile` creates node functions with `Core.eval`, so models compiled and sampled
+# within one function cross a world-age boundary. Keep wrapping and sampling in one
+# `invokelatest` call. A future compiler should represent node expressions as callable
+# data, removing both `Core.eval` and this boundary.
+_sample_in_latest_world(args...; kwargs...) =
+    Base.invokelatest(_prepare_and_sample, args...; kwargs...)
+
+function AbstractMCMC.sample(
+    rng::Random.AbstractRNG,
+    model::BUGSModel,
+    sampler::AbstractMCMC.AbstractSampler,
+    N_or_isdone;
+    adtype::Union{Nothing,ADTypes.AbstractADType}=nothing,
+    kwargs...,
+)
+    return _sample_in_latest_world(rng, model, sampler, N_or_isdone; adtype, kwargs...)
+end
+
+function AbstractMCMC.sample(
+    rng::Random.AbstractRNG,
+    model::BUGSModel,
+    sampler::AbstractMCMC.AbstractSampler,
+    parallel::AbstractMCMC.AbstractMCMCEnsemble,
+    N::Integer,
+    nchains::Integer;
+    adtype::Union{Nothing,ADTypes.AbstractADType}=nothing,
+    kwargs...,
+)
+    return _sample_in_latest_world(
+        rng, model, sampler, parallel, N, nchains; adtype, kwargs...
+    )
+end
+
 # Strip the model wrappers once, so the per-format `gen_chains` methods only need a
 # `BUGSModel` method.
 function JuliaBUGS.gen_chains(
