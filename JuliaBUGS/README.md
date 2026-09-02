@@ -70,7 +70,9 @@ and assess convergence before interpreting posterior summaries.
 
 For existing BUGS programs, the
 [`@bugs` interface](https://turinglang.org/JuliaBUGS.jl/stable/two_macros/) accepts traditional
-BUGS notation, including models migrated from WinBUGS, OpenBUGS, or JAGS.
+BUGS notation, including models migrated from
+[WinBUGS](https://www.mrc-bsu.cam.ac.uk/software/bugs-project), OpenBUGS, JAGS, or
+[NIMBLE](https://r-nimble.org/).
 
 ## Repository structure
 
