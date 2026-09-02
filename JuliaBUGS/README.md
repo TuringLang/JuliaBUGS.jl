@@ -1,52 +1,88 @@
 # JuliaBUGS.jl
+
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://TuringLang.github.io/JuliaBUGS.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://TuringLang.github.io/JuliaBUGS.jl/dev)
 
-**JuliaBUGS.jl** is a modern, high-performance implementation of the [BUGS](https://en.wikipedia.org/wiki/WinBUGS) probabilistic programming language in [Julia](https://julialang.org/). It brings the familiar BUGS modelling syntax into the Julia ecosystem, enabling Bayesian inference with speed, flexibility, and seamless integration with the scientific computing ecosystem in Julia.
+JuliaBUGS is a probabilistic programming system for Bayesian models represented as directed
+graphs. It compiles each model into an explicit dependency graph used for initialisation,
+log-density evaluation, conditioning, and inference. This representation supports both the
+analysis of established BUGS models and research on graph-aware inference methods.
 
----
+JuliaBUGS implements the AbstractPPL, AbstractMCMC, and LogDensityProblems interfaces in the
+Turing ecosystem. Package extensions provide automatic differentiation, gradient-based and
+component-wise samplers, and MCMCChains or FlexiChains output.
 
-## Why JuliaBUGS?
+[DoodlePPL](https://turinglang.org/JuliaBUGS.jl/DoodlePPL/), developed from DoodleBUGS,
+provides a browser-based graph editor that generates BUGS and Stan programs.
+[RJuliaBUGS](https://mateusmaiads.github.io/rjuliabugs/) makes JuliaBUGS available from R.
 
--   **BUGS syntax** — write models using standard BUGS notation.
-    
--   **High performance** — leverage Julia’s speed and just-in-time (JIT) compilation.
-    
--   **Interoperability with Julia ecosystem** — works smoothly with MCMC algorithms from [Turing.jl](https://turinglang.org/) and the broader Julia PPL ecosystem.   
+## Installation
 
----
-
-## Quick Start
-
-A simple example model:
-
-```julia
-using JuliaBUGS, Random, AbstractMCMC
-
-normal_model = JuliaBUGS.@bugs"""
-model {
-  for (i in 1:N) {
-    y[i] ~ dnorm(mu, tau)
-  }
-  mu ~ dnorm(0, 0.001)
-  tau ~ dgamma(0.1, 0.1)
-}
-"""
-
-# The model definition is callable: pass data to construct a model.
-posterior = normal_model((; N = 10, y = randn(10)))
-rng, sampler = Random.MersenneTwister(123), JuliaBUGS.IndependentMH()
-
-chain = AbstractMCMC.sample(rng, posterior, sampler, 1000)
+```julia-repl
+pkg> add JuliaBUGS
 ```
 
-For a complete walkthrough, see [Getting Started](https://turinglang.org/JuliaBUGS.jl/stable/getting_started/).
+The HMC example also requires its sampling and differentiation packages:
 
----
+```julia-repl
+pkg> add AbstractMCMC ADTypes AdvancedHMC Distributions Mooncake
+```
 
-## **Related Tools**
+## Example
 
-- [**DoodlePPL**](https://turinglang.org/JuliaBUGS.jl/DoodlePPL/) — a browser-based interface for drawing BUGS models.
-- [**RJuliaBUGS**](https://mateusmaiads.github.io/rjuliabugs/) — an R interface to JuliaBUGS.
-    
-For alternative BUGS-family tools, see [JAGS](https://sourceforge.net/p/mcmc-jags/code-0/ci/default/tree/) and [Nimble](https://r-nimble.org/).
+The `@model` macro defines a function that compiles a model when called. Its first argument
+declares every stochastic variable. Values supplied in that named tuple are observed;
+omitted values remain latent. Subsequent arguments are fixed inputs.
+
+```julia
+using AbstractMCMC
+using ADTypes: AutoMooncake
+using AdvancedHMC: HMC
+using Distributions: Normal
+using JuliaBUGS
+using Random
+import Mooncake
+
+@model function normal_location((; y, μ), σ, N)
+    μ ~ Normal(0, 10)
+    for i in 1:N
+        y[i] ~ Normal(μ, σ)
+    end
+end
+
+y = [1.2, 0.9, 1.4, 1.1, 0.7]
+model = normal_location((; y), 1.0, length(y))
+posterior = JuliaBUGS.BUGSModelWithGradient(
+    model, AutoMooncake(; config = nothing)
+)
+
+rng = MersenneTwister(42)
+sampler = HMC(0.1, 10)
+draws = sample(
+    rng, posterior, sampler, 2_000;
+    n_adapts = 500, discard_initial = 500, progress = false,
+)
+```
+
+The call returns 2,000 posterior draws after 500 adaptation iterations. Each draw contains
+parameter values and sampler diagnostics. Substantive analyses should use multiple chains
+and assess convergence before interpreting posterior summaries.
+
+For existing BUGS programs, the
+[`@bugs` interface](https://turinglang.org/JuliaBUGS.jl/stable/two_macros/) accepts traditional
+BUGS notation, including models migrated from
+[WinBUGS](https://www.mrc-bsu.cam.ac.uk/software/bugs-project), OpenBUGS, JAGS, or
+[NIMBLE](https://r-nimble.org/).
+
+## Repository structure
+
+- `JuliaBUGS/` contains the Julia package, tests, documentation, examples, and benchmarks.
+- `DoodlePPL/` contains the static deployment of the browser-based graph editor.
+
+## Documentation
+
+The [manual](https://turinglang.org/JuliaBUGS.jl/stable/) covers model construction,
+initialisation, automatic differentiation, inference, generated quantities, and migration
+from other BUGS implementations.
+
+JuliaBUGS is distributed under the MIT License.
