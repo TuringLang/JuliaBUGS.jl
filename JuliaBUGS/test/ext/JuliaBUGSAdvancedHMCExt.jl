@@ -1,5 +1,5 @@
 @testset "AdvancedHMC" begin
-    @testset "sample prepares the AD backend" begin
+    @testset "sample prepares AD models in function scope" begin
         @model function normal_location_hmc((; y, mu), sigma, N)
             mu ~ Normal(0, 10)
             for i in 1:N
@@ -7,28 +7,37 @@
             end
         end
 
-        model = normal_location_hmc((; y=[1.2, 0.9, 1.4]), 1.0, 3)
-        callback_models = Any[]
-        function callback(_, sampled_model, _, _, _, _; kwargs...)
-            return push!(callback_models, sampled_model.logdensity)
+        function run_sampling(args...)
+            model = normal_location_hmc((; y=[1.2, 0.9, 1.4]), 1.0, 3)
+            callback_models = Any[]
+            function callback(_, sampled_model, _, _, _, _; kwargs...)
+                return push!(callback_models, sampled_model.logdensity)
+            end
+            draws = AbstractMCMC.sample(
+                StableRNG(1234),
+                model,
+                HMC(0.1, 2),
+                args...;
+                adtype=AutoReverseDiff(; compile=false),
+                callback,
+                n_adapts=0,
+                progress=false,
+            )
+            return draws, callback_models
         end
 
-        draws = AbstractMCMC.sample(
-            StableRNG(1234),
-            model,
-            HMC(0.1, 2),
-            3;
-            adtype=AutoReverseDiff(; compile=false),
-            callback=callback,
-            n_adapts=0,
-            progress=false,
-        )
+        draws, callback_models = run_sampling(3)
+        is_ad_model =
+            m -> m isa JuliaBUGS.BUGSModelWithGradient && m.adtype isa AutoReverseDiff
 
         @test length(draws) == length(callback_models) == 3
-        @test all(
-            m -> m isa JuliaBUGS.BUGSModelWithGradient && m.adtype isa AutoReverseDiff,
-            callback_models,
-        )
+        @test all(is_ad_model, callback_models)
+
+        chains, callback_models = run_sampling(MCMCSerial(), 2, 2)
+        @test length(chains) == 2
+        @test all(chain -> length(chain) == 2, chains)
+        @test length(callback_models) == 4
+        @test all(is_ad_model, callback_models)
     end
 
     @testset "Generation of parameter names" begin
