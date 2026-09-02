@@ -7,8 +7,8 @@ quantities, and the sampler's own statistics.
 ```@example output
 using JuliaBUGS
 using AbstractMCMC
-using AdvancedMH
-using MCMCChains
+using JuliaBUGS.AdvancedMH: RWMH
+using MCMCChains: Chains, summarystats
 
 model_def = @bugs begin
     mu ~ dnorm(0, 1)
@@ -45,7 +45,10 @@ sampler actually produced is recorded, so a statistic missing from one draw is a
 `NamedTuple` rather than padded. `Base.pairs` walks parameters and statistics at once:
 
 ```@example output
-using AdvancedHMC, ADTypes, ReverseDiff, DifferentiationInterface
+using ADTypes: AutoReverseDiff
+using AdvancedHMC: NUTS
+using DifferentiationInterface
+using ReverseDiff
 
 ad_model = compile(model_def, (; N = 3, y = [1.2, 0.8, 1.5]); adtype = AutoReverseDiff())
 nuts_draws = AbstractMCMC.sample(

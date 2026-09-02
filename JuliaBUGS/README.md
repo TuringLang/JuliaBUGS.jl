@@ -19,27 +19,27 @@ provides a browser-based graph editor that generates BUGS and Stan programs.
 ## Installation
 
 ```julia-repl
-pkg> add JuliaBUGS
+pkg> add JuliaBUGS FlexiChains
 ```
 
 ## Example
 
 The `@model` macro defines a function that compiles a model when called. Its first argument
 declares every stochastic variable. Values supplied in that named tuple are observed;
-omitted values remain latent. The equivalent WinBUGS definition uses the string form of
-`@bugs`; both forms produce models accepted by the same samplers.
+omitted values remain latent.
 
 ```julia
 using JuliaBUGS
 using JuliaBUGS: AbstractMCMC, EnumeratedSampler, Gibbs, OrderedDict
-using JuliaBUGS.AdvancedMH: RWMH
+using JuliaBUGS.AdvancedMH: RobustAdaptiveMetropolis
 using JuliaBUGS.Distributions: Categorical, Gamma, Normal
+using FlexiChains: VNChain, summarystats
 using Random: MersenneTwister
 
-@model function gaussian_mixture((; y, z, mu, tau), weights, K, N)
+@model function gaussian_mixture((; y, z, mu, tau), weights, prior_mean, K, N)
     for k in 1:K
         tau[k] ~ Gamma(2, 1 / 2)
-        mu[k] ~ Normal(0, inv(sqrt(2 * tau[k])))
+        mu[k] ~ Normal(prior_mean[k], inv(sqrt(2 * tau[k])))
         sigma2[k] = inv(tau[k])
     end
     for i in 1:N
@@ -48,11 +48,44 @@ using Random: MersenneTwister
     end
 end
 
-gaussian_mixture_bugs = @bugs("""
+y = [-2.1, -1.8, 0.0, 0.2, 2.8, 3.1]
+weights = fill(1 / 3, 3)
+prior_mean = [-2.0, 0.0, 3.0]
+model = gaussian_mixture((; y), weights, prior_mean, 3, length(y))
+sampler = Gibbs(
+    model,
+    OrderedDict(
+        @varname(z) => EnumeratedSampler(),
+        [@varname(mu), @varname(tau)] => RobustAdaptiveMetropolis(),
+    ),
+)
+draws = AbstractMCMC.sample(
+    MersenneTwister(42),
+    model,
+    sampler,
+    AbstractMCMC.MCMCSerial(),
+    10_000,
+    4;
+    discard_initial = 2_000, progress = false, chain_type = VNChain,
+)
+summarystats(draws)
+```
+
+<details>
+<summary>Equivalent WinBUGS-syntax example</summary>
+
+```julia
+using JuliaBUGS
+using JuliaBUGS: AbstractMCMC, EnumeratedSampler, Gibbs, OrderedDict
+using JuliaBUGS.AdvancedMH: RobustAdaptiveMetropolis
+using FlexiChains: VNChain, summarystats
+using Random: MersenneTwister
+
+gaussian_mixture = @bugs("""
 model {
     for (k in 1:K) {
         tau[k] ~ dgamma(2, 2)
-        mu[k] ~ dnorm(0, 2 * tau[k])
+        mu[k] ~ dnorm(prior_mean[k], 2 * tau[k])
         sigma2[k] <- 1 / tau[k]
     }
     for (i in 1:N) {
@@ -64,30 +97,35 @@ model {
 
 y = [-2.1, -1.8, 0.0, 0.2, 2.8, 3.1]
 weights = fill(1 / 3, 3)
-julia_model = gaussian_mixture((; y), weights, 3, length(y))
-winbugs_model = gaussian_mixture_bugs((; y, weights, K=3, N=length(y)))
-model = julia_model  # Use `winbugs_model` here to sample the WinBUGS definition.
+prior_mean = [-2.0, 0.0, 3.0]
+model = gaussian_mixture((; y, weights, prior_mean, K=3, N=length(y)))
+sampler = Gibbs(
+    model,
+    OrderedDict(
+        @varname(z) => EnumeratedSampler(),
+        [@varname(mu), @varname(tau)] => RobustAdaptiveMetropolis(),
+    ),
+)
 draws = AbstractMCMC.sample(
     MersenneTwister(42),
     model,
-    Gibbs(
-        model,
-        OrderedDict(
-            @varname(z) => EnumeratedSampler(),
-            [@varname(mu), @varname(tau)] => RWMH(6),
-        ),
-    ),
-    2_000;
-    discard_initial = 500, progress = false,
+    sampler,
+    AbstractMCMC.MCMCSerial(),
+    10_000,
+    4;
+    discard_initial = 2_000, progress = false, chain_type = VNChain,
 )
+summarystats(draws)
 ```
 
-The Gamma prior on each precision is equivalent to an inverse-gamma prior on `sigma2`.
+</details>
+
+The component-specific prior means make the labels identifiable. The Gamma prior on each
+precision is equivalent to an inverse-gamma prior on `sigma2`.
 `EnumeratedSampler` draws the allocation indicators exactly from their finite full
-conditional. `RWMH` updates the three component means and precisions as one continuous block.
-The call returns 2,000 posterior draws after discarding the first 500 iterations. Substantive
-analyses should use multiple chains and assess convergence before interpreting posterior
-summaries.
+conditional. `RobustAdaptiveMetropolis` updates the component means and precisions as one
+continuous block. The call returns four `VNChain` chains; inspect `summarystats(draws)` before
+interpreting posterior summaries.
 
 For existing BUGS programs, the
 [`@bugs` interface](https://turinglang.org/JuliaBUGS.jl/stable/two_macros/) accepts traditional
