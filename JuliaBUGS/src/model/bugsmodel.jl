@@ -256,6 +256,9 @@ struct ModelCompileOptions
     eval_module::Module
 end
 
+# Compilation modules have global identity and stay shared across model copies.
+Base.deepcopy_internal(options::ModelCompileOptions, ::IdDict) = options
+
 """
     BUGSModel
 
