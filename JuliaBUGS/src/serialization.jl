@@ -11,13 +11,17 @@ function Serialization.serialize(s::Serialization.AbstractSerializer, model::BUG
     Serialization.serialize(s, BUGSModel)
 
     # Serialize minimal state; skip generated functions and caches
-    Serialization.serialize(s, (
-        transformed = model.transformed,
-        model_def = model.model_def,
-        data = model.data,
-        evaluation_env = model.evaluation_env,
-        evaluation_mode = model.evaluation_mode
-    ))
+    Serialization.serialize(
+        s,
+        (
+            transformed=model.transformed,
+            model_def=model.model_def,
+            data=model.data,
+            evaluation_env=model.evaluation_env,
+            evaluation_mode=model.evaluation_mode,
+            compile_options=model.compile_options,
+        ),
+    )
     return nothing
 end
 
@@ -55,7 +59,14 @@ function Serialization.deserialize(s::Serialization.AbstractSerializer, ::Type{<
     state = Serialization.deserialize(s)
 
     # Reconstruct the model; compile regenerates process-local node functions.
-    model = compile(state.model_def, state.data, state.evaluation_env)
+    options = state.compile_options
+    model = compile(
+        state.model_def,
+        state.data,
+        state.evaluation_env;
+        skip_validation=options.skip_validation,
+        eval_module=options.eval_module,
+    )
     model = settrans(model, state.transformed)
 
     # Restore the original evaluation mode.

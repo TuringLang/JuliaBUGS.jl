@@ -251,6 +251,11 @@ struct UseGeneratedLogDensityFunction <: EvaluationMode end
 struct UseGraph <: EvaluationMode end
 struct UseAutoMarginalization <: EvaluationMode end
 
+struct ModelCompileOptions
+    skip_validation::Bool
+    eval_module::Module
+end
+
 """
     BUGSModel
 
@@ -261,6 +266,7 @@ The `BUGSModel` object is used for inference and represents the output of compil
 
 - `model_def::Expr`: The original model definition (for serialization).
 - `data::data_T`: The data associated with the model (for serialization).
+- `compile_options::ModelCompileOptions`: Options needed to reconstruct node functions.
 - `g::BUGSGraph`: The dependency graph of the model.
 - `evaluation_env::T`: A `NamedTuple` containing values of variables in the model (constrained space).
 - `transformed::Bool`: Whether model parameters are in the transformed (unconstrained) space.
@@ -290,6 +296,7 @@ struct BUGSModel{
 } <: AbstractBUGSModel
     model_def::Expr
     data::data_T
+    compile_options::ModelCompileOptions
 
     g::BUGSGraph
 
@@ -332,11 +339,13 @@ function BUGSModel(
     mutable_symbols::Set{Symbol}=model.mutable_symbols,
     model_def::Expr=model.model_def,
     data=model.data,
+    compile_options::ModelCompileOptions=model.compile_options,
 )
     # Return model without precomputing caches (on-demand generation)
     return BUGSModel(
         model_def,
         data,
+        compile_options,
         g,
         evaluation_env,
         transformed,
@@ -402,6 +411,7 @@ function BUGSModel(
     evaluation_env::NamedTuple,
     model_def::Expr,
     data::NamedTuple,
+    compile_options::ModelCompileOptions,
     initial_params::NamedTuple=NamedTuple(),
     is_transformed::Bool=true,
 )
@@ -458,6 +468,7 @@ function BUGSModel(
     return BUGSModel(
         model_def,
         data,
+        compile_options,
         g,
         evaluation_env,
         is_transformed,

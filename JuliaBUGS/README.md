@@ -30,9 +30,9 @@ pkg> add AbstractMCMC ADTypes AdvancedHMC Distributions Mooncake
 
 ## Example
 
-The `@model` macro defines a model-building function. Its first argument lists stochastic
-variables; supplied values are observed and omitted values remain latent. Later arguments
-are fixed inputs.
+The `@model` macro defines a function that compiles a model when called. Its first argument
+declares every stochastic variable. Values supplied in that named tuple are observed;
+omitted values remain latent. Subsequent arguments are fixed inputs.
 
 ```julia
 using AbstractMCMC
