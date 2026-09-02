@@ -54,6 +54,15 @@ function validate_gibbs_component(
     )
 end
 
+function validate_gibbs_component(
+    model::BUGSModel,
+    variables,
+    node_types,
+    sampler_tuple::Tuple{<:AdvancedMH.MHSampler,<:ADTypes.AbstractADType},
+)
+    return validate_gibbs_component(model, variables, node_types, first(sampler_tuple))
+end
+
 function AbstractMCMC.setparams!!(
     model::AbstractMCMC.LogDensityModel{<:Model.BUGSModelLike},
     state::AdvancedMH.RobustAdaptiveMetropolisState,

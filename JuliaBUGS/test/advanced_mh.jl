@@ -1,5 +1,6 @@
 using AdvancedMH:
     AbstractTransition, Ensemble, RWMH, RobustAdaptiveMetropolis, StaticMH, StretchProposal
+using ADTypes: AutoForwardDiff
 using JuliaBUGS: @model, EnumeratedSampler, Gibbs, gibbs_internal
 
 @testset "AdvancedMH" begin
@@ -121,12 +122,12 @@ using JuliaBUGS: @model, EnumeratedSampler, Gibbs, gibbs_internal
 
         @test all(isfinite, chain[:x])
         @test all(isfinite, chain[:y])
+        ensemble = Ensemble(4, StretchProposal(MvNormal(zeros(2), I)))
         @test_throws ArgumentError Gibbs(
-            model,
-            OrderedDict(
-                [@varname(x), @varname(y)] =>
-                    Ensemble(4, StretchProposal(MvNormal(zeros(2), I))),
-            ),
+            model, OrderedDict([@varname(x), @varname(y)] => ensemble)
+        )
+        @test_throws ArgumentError Gibbs(
+            model, OrderedDict([@varname(x), @varname(y)] => (ensemble, AutoForwardDiff()))
         )
     end
 
