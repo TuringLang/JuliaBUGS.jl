@@ -15,6 +15,7 @@ JuliaBUGS compiles `@bugs` programs and `@model` functions into graphs compatibl
 - Tests require `Pkg.test` with an explicit group or file; direct `test/runtests.jl` execution fails.
 - Run the smallest target, for example: `julia --project=JuliaBUGS -e 'using Pkg; Pkg.test(; test_args=["log_density"])'`.
 - Groups are in `test/runtests.jl`; `elementary` includes doctests and `parallel_sampling` needs threads.
+- Use Julia-version-specific manifests (`Manifest-v{major}.{minor}.toml`), not `Manifest.toml`.
 - Format with JuliaFormatter v1 using `format("JuliaBUGS"; verbose = true)`; discard unrelated changes.
 
 ## Julia engineering
