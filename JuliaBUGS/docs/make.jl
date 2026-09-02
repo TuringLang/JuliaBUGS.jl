@@ -9,7 +9,7 @@ makedocs(;
     sitename="JuliaBUGS.jl",
     warnonly=[:cross_references, :doctest],
     format=Documenter.HTML(;
-        assets=["assets/doodleppl.css", "assets/doodleppl.js"], collapselevel=1
+        assets=["assets/examples.css", "assets/inline-plots.js"], collapselevel=1
     ),
     pages=[
         "Home" => "index.md",

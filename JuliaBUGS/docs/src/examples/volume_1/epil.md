@@ -79,7 +79,7 @@ The model as a directed graph. Drag a node to rearrange it, or use the pencil to
 the model and watch the generated BUGS code change with it.
 
 ```@raw html
-<script src="https://unpkg.com/doodleppl@0.8.2/dist/doodleppl.global.js" defer></script>
+<script src="https://unpkg.com/doodleppl@0.9.0/dist/doodleppl.global.js" defer></script>
 <doodle-ppl class="doodleppl-embed" model="epil" height="560px"
             theme-from="theme--documenter-dark"></doodle-ppl>
 ```
