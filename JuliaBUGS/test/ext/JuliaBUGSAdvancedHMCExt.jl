@@ -40,6 +40,22 @@
         @test all(chain -> length(chain) == 2, chains)
         @test length(callback_models) == 4
         @test all(is_ad_model, callback_models)
+
+        caught = try
+            AbstractMCMC.sample(
+                StableRNG(1234),
+                normal_location_hmc((; y=[1.2, 0.9, 1.4]), 1.0, 3),
+                HMC(0.1, 2),
+                1;
+                n_adapts=0,
+                progress=false,
+            )
+            nothing
+        catch exception
+            exception
+        end
+        @test caught isa ArgumentError
+        @test occursin("adtype", sprint(showerror, caught))
     end
 
     @testset "Generation of parameter names" begin

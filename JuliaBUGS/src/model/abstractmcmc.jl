@@ -17,14 +17,14 @@ base_bugs_model(model::BUGSModel) = model
 base_bugs_model(model::BUGSModelWithGradient) = model.base_model
 base_bugs_model(model::AbstractMCMC.LogDensityModel) = base_bugs_model(model.logdensity)
 
-_build_model(model::BUGSModel, ::Nothing) = AbstractMCMC.LogDensityModel(model)
-function _build_model(model::BUGSModel, adtype::ADTypes.AbstractADType)
+_build_model(model::BUGSModel, ::Any, ::Nothing) = AbstractMCMC.LogDensityModel(model)
+function _build_model(model::BUGSModel, ::Any, adtype::ADTypes.AbstractADType)
     return AbstractMCMC.LogDensityModel(BUGSModelWithGradient(model, adtype))
 end
 
 function _prepare_and_sample(rng, model, sampler, args...; adtype, kwargs...)
     return AbstractMCMC.sample(
-        rng, _build_model(model, adtype), sampler, args...; kwargs...
+        rng, _build_model(model, sampler, adtype), sampler, args...; kwargs...
     )
 end
 
