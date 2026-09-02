@@ -15,9 +15,9 @@ using SliceSampling
 import JuliaBUGS: gibbs_internal, validate_gibbs_component
 
 function JuliaBUGS.validate_gibbs_component(
-    model::BUGSModel, variables, sampler::SliceSampling.AbstractSliceSampling
+    ::BUGSModel, variables, node_types, sampler::SliceSampling.AbstractSliceSampling
 )
-    return _require_continuous_gibbs_component(model, variables, "SliceSampling")
+    return _require_continuous_gibbs_component(variables, node_types, "SliceSampling")
 end
 
 function SliceSampling.initial_sample(::Random.AbstractRNG, model::BUGSModel)

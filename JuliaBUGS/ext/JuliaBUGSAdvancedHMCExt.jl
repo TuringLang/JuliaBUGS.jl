@@ -15,7 +15,7 @@ using JuliaBUGS.Random
 import JuliaBUGS: gibbs_internal, validate_gibbs_component
 
 function JuliaBUGS.validate_gibbs_component(
-    ::BUGSModel, _variables, ::AdvancedHMC.AbstractHMCSampler
+    ::BUGSModel, _variables, _node_types, ::AdvancedHMC.AbstractHMCSampler
 )
     throw(
         ArgumentError(
@@ -26,11 +26,12 @@ function JuliaBUGS.validate_gibbs_component(
 end
 
 function JuliaBUGS.validate_gibbs_component(
-    model::BUGSModel,
+    ::BUGSModel,
     variables,
+    node_types,
     ::Tuple{<:AdvancedHMC.AbstractHMCSampler,<:ADTypes.AbstractADType},
 )
-    return _require_continuous_gibbs_component(model, variables, "AdvancedHMC")
+    return _require_continuous_gibbs_component(variables, node_types, "AdvancedHMC")
 end
 
 function JuliaBUGS.Model._build_model(

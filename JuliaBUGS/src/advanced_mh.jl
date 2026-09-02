@@ -43,7 +43,9 @@ function transition_params_and_stats(
     return transition.params, (; lp=transition.lp, accepted=transition.accepted)
 end
 
-function validate_gibbs_component(::BUGSModel, _variables, ::AdvancedMH.Ensemble)
+function validate_gibbs_component(
+    ::BUGSModel, _variables, _node_types, ::AdvancedMH.Ensemble
+)
     throw(
         ArgumentError(
             "AdvancedMH.Ensemble cannot update a Gibbs block; use an AdvancedMH " *

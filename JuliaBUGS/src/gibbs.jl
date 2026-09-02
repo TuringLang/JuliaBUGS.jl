@@ -64,18 +64,9 @@ discrete support. Specify it explicitly in a sampler map to make that choice vis
 """
 struct EnumeratedSampler <: AbstractMCMC.AbstractSampler end
 
-validate_gibbs_component(::BUGSModel, _variables, _sampler) = nothing
+validate_gibbs_component(::BUGSModel, _variables, _node_types, _sampler) = nothing
 
-function _gibbs_component_node_types(model::BUGSModel, variables)
-    node_types = Model._compute_node_types(model)
-    sorted_nodes = model.graph_evaluation_data.sorted_nodes
-    return map(variables) do variable
-        return node_types[findfirst(==(variable), sorted_nodes)]
-    end
-end
-
-function _select_gibbs_component_sampler(model::BUGSModel, variables, sampler)
-    node_types = _gibbs_component_node_types(model, variables)
+function _select_gibbs_component_sampler(node_types, sampler)
     finite_discrete = node_types .=== :discrete_finite
     if all(finite_discrete)
         return EnumeratedSampler()
@@ -92,8 +83,7 @@ function _select_gibbs_component_sampler(model::BUGSModel, variables, sampler)
     return sampler
 end
 
-function _require_continuous_gibbs_component(model::BUGSModel, variables, sampler_name)
-    node_types = _gibbs_component_node_types(model, variables)
+function _require_continuous_gibbs_component(variables, node_types, sampler_name)
     discrete_variables = [
         variable for (variable, node_type) in zip(variables, node_types) if
         node_type === :discrete_finite || node_type === :discrete_infinite
@@ -163,15 +153,20 @@ gibbs = Gibbs(model, sampler_map)
 """
 function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
     verify_sampler_map(model, sampler_map)
-    # Expand variable groups once to avoid repeated computation
     model_parameters = model.graph_evaluation_data.model_parameters
+    node_types = Dict(
+        zip(model.graph_evaluation_data.sorted_nodes, Model._compute_node_types(model))
+    )
     expanded_sampler_map = OrderedDict()
     for (variable_group, sampler) in sampler_map
         variable_group_vec =
             (variable_group isa VarName) ? [variable_group] : variable_group
         expanded_vars = expand_variables(variable_group_vec, model_parameters)
-        selected_sampler = _select_gibbs_component_sampler(model, expanded_vars, sampler)
-        validate_gibbs_component(model, expanded_vars, selected_sampler)
+        component_node_types = map(variable -> node_types[variable], expanded_vars)
+        selected_sampler = _select_gibbs_component_sampler(component_node_types, sampler)
+        validate_gibbs_component(
+            model, expanded_vars, component_node_types, selected_sampler
+        )
         expanded_sampler_map[expanded_vars] = selected_sampler
     end
     return Gibbs{eltype(keys(expanded_sampler_map)),eltype(values(expanded_sampler_map))}(
