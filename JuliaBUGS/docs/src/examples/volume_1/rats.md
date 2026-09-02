@@ -135,10 +135,14 @@ That run used the settings the original documents, a 1000 update burn in followe
 | `beta.c`  | 6.186          | 6.186    | 0.1086        | 0.1069  |
 | `sigma`   | 6.093          | 6.079    | 0.4643        | 0.4526  |
 
-[Open the full report](https://mcmcjs.github.io/report/#bundle=https://mcmcjs.github.io/bugs-examples/rats.json) for trace plots, densities, and per-parameter diagnostics over all 65 parameters.
+Both chains for those three parameters, and the posterior each one settles on:
 
-Two things to keep in mind when comparing the columns.
-JuliaBUGS samples with NUTS where the original used Gibbs, so the posterior agrees but the Monte Carlo error does not.
-The bundle also writes the dotted BUGS names with underscores, so `beta.c` appears there as `beta_c`.
+![Trace of alpha0, beta.c and sigma over 1000 draws in each of two chains](https://mcmcjs.github.io/bugs-examples/rats-trace.svg)
+
+![Posterior density of alpha0, beta.c and sigma, one curve per chain](https://mcmcjs.github.io/bugs-examples/rats-density.svg)
+
+[Open the full report](https://mcmcjs.github.io/report/#bundle=https://mcmcjs.github.io/bugs-examples/rats.json) to explore all 65 parameters interactively.
+
+One thing to keep in mind when comparing the columns: JuliaBUGS samples with NUTS where the original used Gibbs, so the posterior agrees but the Monte Carlo error does not.
 
 See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).
