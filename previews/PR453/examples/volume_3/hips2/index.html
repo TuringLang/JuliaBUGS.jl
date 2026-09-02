@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Hips2 · JuliaBUGS.jl</title><meta name="title" content="Hips2 · JuliaBUGS.jl"/><meta property="og:title" content="Hips2 · JuliaBUGS.jl"/><meta property="twitter:title" content="Hips2 · JuliaBUGS.jl"/><meta name="description" content="Documentation for JuliaBUGS.jl."/><meta property="og:description" content="Documentation for JuliaBUGS.jl."/><meta property="twitter:description" content="Documentation for JuliaBUGS.jl."/><script data-outdated-warner src="../../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../../assets/documenter.js"></script><script src="../../../search_index.js"></script><script src="../../../siteinfo.js"></script><script src="../../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../../assets/themeswap.js"></script><link href="../../../assets/doodleppl.css" rel="stylesheet" type="text/css"/><script src="../../../assets/doodleppl.js"></script></head><body>
+<!-- NAVBAR START -->
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
+
+    /* Documenter.jl CSS Overrides */
+    html {
+        scroll-padding-top: calc(var(--navbar-height) + 1rem);
+    }
+    .docs-sidebar, #documenter {
+        margin-top: var(--navbar-height);
+    }
+    .docs-version-selector {
+        margin-bottom: 60px !important;
+    }
+    @media screen and (max-width: 1056px) {
+        .docs-version-selector {
+            margin-bottom: 60px !important;
+        }
+        .docs-sidebar {
+            margin-top: 0 !important;
+        }
+    }
+    /* End of Documenter.jl Tweaks */
+
+    /* DocumenterVitepress integration:
+       Vitepress's default theme already exposes `--vp-layout-top-height` as
+       the hook for adding banner-style chrome above its own nav. Every
+       layout-sensitive component (`.VPNav` `top`, `.VPContent` `margin`,
+       `.VPSidebar` `top`, `.VPLocalNav` `padding-top`, `.VPDocAside` `top`
+       and TOC `padding-top`) is already authored to add this variable to
+       its own offset, so binding it to the TuringLang navbar height makes
+       Vitepress reflow itself correctly with zero further intervention.
+       (`:has(.VPNavBar)` scopes this to Vitepress builds; Documenter HTML
+       sites are untouched.) */
+    html:has(.VPNavBar) {
+        --vp-layout-top-height: var(--navbar-height);
+    }
+
+    /* When the rendered site is Vitepress (detected by .VPNavBar being in the
+       DOM), adopt Vitepress's design tokens so the TuringLang navbar tracks
+       the active theme (light/dark, brand colour, body font) and reads as one
+       piece of chrome with the Vitepress nav below it — rather than a stacked
+       second header with its own colour and typography. */
+    html:has(.VPNavBar) {
+        --primary-bg: var(--vp-c-bg);
+        --heading-color: var(--vp-c-text-1);
+        --item-color: var(--vp-c-text-2);
+        --icon-color: var(--vp-c-text-1);
+        --hover-color: var(--vp-c-brand-1);
+        --shadow-color: var(--vp-c-divider);
+        --dropdown-hover-bg: var(--vp-c-default-soft);
+        --font-family: var(--vp-font-family-base);
+    }
+    html:has(.VPNavBar) .ext-navigation {
+        box-shadow: none;
+        border-bottom: 1px solid var(--vp-c-divider);
+    }
+    /* End of DocumenterVitepress Tweaks */
+
+    /* Color and Font Variables */
+    :root {
+        --heading-color: #6c757d;
+        --item-color: rgb(165, 165, 165);
+        --primary-bg: white;
+        --hover-color: #8faad2;
+        --deprecated-bg: #ff4d4d;
+        --deprecated-text: white;
+        --icon-color: #6c757d;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+        --dropdown-hover-bg: #e9ecef;
+        
+        /* Typography */
+        --font-family: "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+        --nav-link-font-size: 1.0625rem;
+        --turing-title-font-size: 21.25px;
+        --icon-font-size: 1.25rem;
+        --dropdown-arrow-font-size: 0.6875rem;
+        --badge-font-size: 0.75rem;
+
+        /* Sizing and Spacing */
+        --navbar-height: 3.75rem;
+        --logo-height: 31px;
+        --logo-width: auto;
+        --logo-padding-top: 7px;
+        --logo-margin-left: 0.8rem;
+        --title-margin-left: 0.4px;
+        --title-nav-spacing: 1.1rem;
+        --nav-item-margin-left: 1.3rem;
+        --icon-margin-left: 1rem;
+        --dropdown-padding: 1.875rem;
+        --dropdown-item-width: 12.5rem;
+        --dropdown-subitem-width: 15.625rem;
+        --dropdown-subitem-padding: 0.125rem 0.625rem;
+    }
+
+    /* Dark Theme Variable Overrides */
+    html.theme--documenter-dark {
+        --heading-color: #e0e0e0;
+        --item-color: #bdbdbd;
+        --primary-bg: #1f2424;
+        --hover-color: #ffffff;
+        --icon-color: #e0e0e0;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #424242;
+    }
+
+    /* Catppuccin Theme Overrides */
+    html.theme--catppuccin-latte {
+        --heading-color: #4c4f69;
+        --primary-bg: #eff1f5;
+        --icon-color: #4c4f69;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+        --dropdown-hover-bg: #e6e9ef;
+    }
+    html.theme--catppuccin-frappe {
+        --heading-color: #c6d0f5;
+        --primary-bg: #303446;
+        --icon-color: #c6d0f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #51576d;
+    }
+    html.theme--catppuccin-macchiato {
+        --heading-color: #cad3f5;
+        --primary-bg: #24273a;
+        --icon-color: #cad3f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #494d64;
+    }
+    html.theme--catppuccin-mocha {
+        --heading-color: #cad3f5;
+        --primary-bg: #1e1e2e;
+        --icon-color: #cad3f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #45475a;
+    }
+
+
+    /* Main Navigation Bar */
+    .ext-navigation {
+        font-family: var(--font-family);
+        position: fixed;
+        height: var(--navbar-height);
+        top: 0;
+        width: 100%;
+        background-color: var(--primary-bg);
+        z-index: 1000;
+        box-shadow: 0 2px 4px var(--shadow-color);
+        display: flex;
+        align-items: center;
+        padding: 0 1.0625rem;
+        transition: transform 0.3s, background-color 0.3s;
+    }
+
+    nav.ext-navigation .ext-navbar-logo {
+        margin-left: var(--logo-margin-left);
+        height: auto;
+        max-height: var(--logo-height);
+        width: auto;
+        padding-top: var(--logo-padding-top);
+    }
+    
+    /* Theme-aware logo text color */
+    .ext-navbar-logo .logo-text {
+        fill: var(--heading-color);
+    }
+    
+    .ext-navbar-title {
+        color: var(--heading-color) !important;
+        font-size: var(--turing-title-font-size) !important;
+        margin-left: var(--title-margin-left);
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+    
+    .ext-navbar-title:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-nav-links {
+        display: flex;
+        align-items: center;
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        flex-grow: 1;
+        margin-left: var(--title-nav-spacing);
+    }
+
+    .ext-nav-links li:first-child {
+        margin-left: 0 !important;
+    }
+
+    .ext-nav-links li {
+        margin-left: var(--nav-item-margin-left) !important;
+    }
+
+    .ext-nav-link {
+        color: var(--heading-color) !important;
+        text-decoration: none;
+        font-size: var(--nav-link-font-size) !important;
+        transition: color 0.2s ease;
+        cursor: pointer;
+    }
+
+    .ext-nav-link:hover,
+    .ext-navbar-item-single a:hover,
+    .ext-navbar-icons a:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-navbar-item-single a {
+        color: var(--heading-color) !important;
+    }
+    
+    .ext-navbar-icons {
+        display: flex;
+        align-items: center;
+    }
+
+    .ext-navbar-icons a {
+        color: var(--icon-color) !important;
+        font-size: var(--icon-font-size) !important;
+        transition: color 0.2s ease;
+        margin-left: var(--icon-margin-left);
+    }
+
+    .ext-menu-toggle {
+        display: none;
+        font-size: 1.5rem;
+        color: var(--heading-color);
+        cursor: pointer;
+    }
+
+    .ext-dropdown {
+        display: none;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        padding: var(--dropdown-padding);
+        position: absolute;
+        top: var(--navbar-height);
+        width: 100%;
+        left: 0;
+        background-color: var(--primary-bg);
+        line-height: 1.875rem;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out, background-color 0.3s;
+        transform: translateY(-0.625rem);
+        box-shadow: 0 4px 6px var(--shadow-color);
+    }
+
+    #library-handler::after {
+        content: "▼";
+        font-size: var(--dropdown-arrow-font-size);
+        margin-left: 0.3125rem;
+        transition: transform 0.3s ease-in-out;
+    }
+
+    #library-handler.open::after {
+        content: "▲";
+    }
+
+    .ext-dropdown.show {
+        display: grid;
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .ext-dropdown ul {
+        width: var(--dropdown-item-width);
+        margin-bottom: 1.25rem;
+    }
+
+    .ext-dropdown ul li {
+        text-align: left;
+        display: flex;
+        align-items: center;
+    }
+
+    .ext-dropdown ul a li {
+        color: var(--item-color);
+        width: var(--dropdown-subitem-width);
+        border-radius: 3px;
+        padding: var(--dropdown-subitem-padding);
+        transition: background-color 0.2s ease;
+    }
+
+    .ext-dropdown ul a li:hover {
+        background-color: var(--dropdown-hover-bg);
+    }
+
+    .ext-dropdown-item-heading {
+        color: var(--heading-color);
+        text-align: center;
+    }
+
+    .deprecated-badge {
+        background-color: var(--deprecated-bg);
+        color: var(--deprecated-text);
+        font-size: var(--badge-font-size);
+        padding: .1rem;
+        border-radius: 3px;
+        margin-left: 0.5rem;
+        line-height: 1;
+    }
+
+    @media (max-width: 966px) {
+        .ext-dropdown {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .ext-nav-links {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            background-color: var(--primary-bg);
+            position: absolute;
+            top: var(--navbar-height);
+            left: 0;
+            padding: 0.625rem 0;
+            height: auto;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px var(--shadow-color);
+            margin-left: 0;
+        }
+
+        .ext-nav-links.show {
+            display: flex;
+        }
+
+        .ext-nav-links li {
+            margin: 0.625rem 0 !important;
+            text-align: center;
+        }
+        
+        .ext-menu-toggle {
+            display: block;
+            margin-left: auto;
+        }
+
+        .ext-navigation.hide {
+            transform: translateY(calc(-1 * var(--navbar-height)));
+        }
+
+        .ext-dropdown {
+            position: static;
+            display: block;
+            opacity: 1;
+            transform: none;
+            box-shadow: none;
+            grid-template-columns: 1fr;
+            padding: 0.625rem;
+            text-align: center;
+        }
+
+        .ext-dropdown ul {
+            width: auto;
+            display: inline-block;
+            margin: 0 auto 0.3125rem;
+            text-align: left;
+        }
+    }
+</style>
+<nav class="ext-navigation">
+    <a title="TuringLang" href="https://turinglang.org/">
+        <svg width="4333" height="1145" viewBox="0 0 4333 1145" fill="none" xmlns="http://www.w3.org/2000/svg" class="ext-navbar-logo">
+            <path class="logo-text" d="M0.44603 193.181V66.9868H663.471V193.181H406.62V898H257.297V193.181H0.44603ZM1097.24 635.874V274.74H1244.13V898H1101.7V787.225H1095.21C1081.14 822.121 1058.01 850.66 1025.82 872.842C993.902 895.024 954.542 906.115 907.744 906.115C866.896 906.115 830.783 897.053 799.403 878.929C768.295 860.534 743.948 833.889 726.365 798.993C708.782 763.826 699.99 721.356 699.99 671.581V274.74H846.878V648.858C846.878 688.353 857.699 719.733 879.34 742.997C900.981 766.261 929.385 777.893 964.551 777.893C986.192 777.893 1007.16 772.618 1027.45 762.068C1047.73 751.518 1064.37 735.828 1077.35 714.999C1090.61 693.899 1097.24 667.524 1097.24 635.874ZM1395.17 898V274.74H1537.6V378.617H1544.09C1555.45 342.639 1574.93 314.911 1602.52 295.434C1630.38 275.687 1662.17 265.813 1697.88 265.813C1705.99 265.813 1715.05 266.219 1725.06 267.031C1735.34 267.572 1743.86 268.518 1750.63 269.871V404.992C1744.4 402.828 1734.53 400.934 1721 399.311C1707.75 397.417 1694.9 396.471 1682.46 396.471C1655.68 396.471 1631.6 402.287 1610.23 413.919C1589.13 425.28 1572.49 441.105 1560.32 461.393C1548.15 481.682 1542.06 505.081 1542.06 531.591V898H1395.17ZM1848.21 898V274.74H1995.1V898H1848.21ZM1922.06 186.283C1898.8 186.283 1878.78 178.573 1862.01 163.154C1845.24 147.464 1836.85 128.664 1836.85 106.752C1836.85 84.5701 1845.24 65.7695 1862.01 50.3503C1878.78 34.6606 1898.8 26.8158 1922.06 26.8158C1945.6 26.8158 1965.61 34.6606 1982.12 50.3503C1998.89 65.7695 2007.27 84.5701 2007.27 106.752C2007.27 128.664 1998.89 147.464 1982.12 163.154C1965.61 178.573 1945.6 186.283 1922.06 186.283ZM2293.04 532.809V898H2146.15V274.74H2286.54V380.646H2293.85C2308.18 345.75 2331.04 318.022 2362.42 297.463C2394.07 276.904 2433.16 266.625 2479.69 266.625C2522.7 266.625 2560.17 275.822 2592.09 294.217C2624.28 312.612 2649.17 339.257 2666.75 374.153C2684.6 409.049 2693.39 451.385 2693.12 501.159V898H2546.24V523.882C2546.24 482.223 2535.41 449.626 2513.77 426.092C2492.4 402.557 2462.78 390.79 2424.91 390.79C2399.21 390.79 2376.35 396.471 2356.34 407.832C2336.59 418.923 2321.03 435.019 2309.67 456.119C2298.58 477.218 2293.04 502.782 2293.04 532.809ZM3113.5 1144.71C3060.75 1144.71 3015.44 1137.54 2977.57 1123.2C2939.7 1109.13 2909.26 1090.2 2886.27 1066.39C2863.28 1042.59 2847.32 1016.21 2838.39 987.269L2970.67 955.213C2976.62 967.386 2985.28 979.424 2996.64 991.327C3008 1003.5 3023.28 1013.51 3042.49 1021.35C3061.97 1029.47 3086.45 1033.53 3115.93 1033.53C3157.59 1033.53 3192.08 1023.38 3219.4 1003.09C3246.73 983.076 3260.39 950.074 3260.39 904.087V786.008H3253.08C3245.51 801.157 3234.42 816.711 3219.81 832.671C3205.47 848.632 3186.4 862.022 3162.6 872.842C3139.06 883.663 3109.44 889.073 3073.73 889.073C3025.85 889.073 2982.44 877.847 2943.48 855.394C2904.8 832.671 2873.96 798.857 2850.97 753.952C2828.24 708.777 2816.88 652.24 2816.88 584.341C2816.88 515.902 2828.24 458.147 2850.97 411.078C2873.96 363.739 2904.93 327.896 2943.89 303.55C2982.84 278.933 3026.26 266.625 3074.14 266.625C3110.66 266.625 3140.69 272.847 3164.22 285.29C3188.03 297.463 3206.96 312.206 3221.03 329.519C3235.09 346.561 3245.78 362.657 3253.08 377.805H3261.2V274.74H3406.06V908.144C3406.06 961.435 3393.34 1005.53 3367.92 1040.42C3342.49 1075.32 3307.73 1101.43 3263.63 1118.74C3219.54 1136.05 3169.5 1144.71 3113.5 1144.71ZM3114.72 773.835C3145.83 773.835 3172.34 766.261 3194.25 751.112C3216.16 735.963 3232.79 714.187 3244.16 685.783C3255.52 657.379 3261.2 623.295 3261.2 583.53C3261.2 544.305 3255.52 509.95 3244.16 480.465C3233.07 450.979 3216.56 428.12 3194.65 411.89C3173.01 395.389 3146.37 387.138 3114.72 387.138C3081.98 387.138 3054.66 395.659 3032.75 412.701C3010.84 429.744 2994.34 453.143 2983.25 482.899C2972.16 512.385 2966.61 545.929 2966.61 583.53C2966.61 621.672 2972.16 655.08 2983.25 683.754C2994.61 712.158 3011.25 734.34 3033.16 750.3C3055.34 765.99 3082.53 773.835 3114.72 773.835ZM3647.08 906.927C3622.47 906.927 3601.37 898.271 3583.78 880.958C3566.2 863.645 3557.54 842.545 3557.82 817.658C3557.54 793.312 3566.2 772.482 3583.78 755.17C3601.37 737.857 3622.47 729.2 3647.08 729.2C3670.89 729.2 3691.58 737.857 3709.17 755.17C3727.02 772.482 3736.08 793.312 3736.35 817.658C3736.08 834.159 3731.75 849.173 3723.37 862.698C3715.25 876.224 3704.43 887.044 3690.91 895.16C3677.65 903.004 3663.04 906.927 3647.08 906.927ZM3888.01 274.74H4034.9V933.708C4034.9 978.613 4026.38 1015.67 4009.33 1044.89C3992.29 1074.1 3967.67 1095.88 3935.48 1110.22C3903.29 1124.55 3864.2 1131.72 3818.22 1131.72C3812.81 1131.72 3807.8 1131.59 3803.2 1131.32C3798.6 1131.32 3793.6 1131.18 3788.19 1130.91V1011.21C3792.25 1011.48 3795.9 1011.62 3799.15 1011.62C3802.39 1011.89 3805.77 1012.02 3809.29 1012.02C3837.42 1012.02 3857.58 1005.12 3869.75 991.327C3881.92 977.801 3888.01 957.918 3888.01 931.679V274.74ZM3961.05 186.283C3937.51 186.283 3917.36 178.573 3900.59 163.154C3884.09 147.464 3875.84 128.664 3875.84 106.752C3875.84 84.5701 3884.09 65.7695 3900.59 50.3503C3917.36 34.6606 3937.51 26.8158 3961.05 26.8158C3984.31 26.8158 4004.19 34.6606 4020.7 50.3503C4037.47 65.7695 4045.85 84.5701 4045.85 106.752C4045.85 128.664 4037.47 147.464 4020.7 163.154C4004.19 178.573 3984.31 186.283 3961.05 186.283ZM4332.83 66.9868V898H4185.94V66.9868H4332.83Z" fill="currentColor"/>
+            <path d="M4076 108.5C4076 168.424 4027.42 217 3967.5 217C3907.58 217 3859 168.424 3859 108.5C3859 48.5762 3907.58 0 3967.5 0C4027.42 0 4076 48.5762 4076 108.5Z" fill="#389725"/>
+            <path d="M3755 814.5C3755 874.424 3706.42 923 3646.5 923C3586.58 923 3538 874.424 3538 814.5C3538 754.576 3586.58 706 3646.5 706C3706.42 706 3755 754.576 3755 814.5Z" fill="#9457B1"/>
+            <path d="M2030 108.5C2030 168.424 1981.42 217 1921.5 217C1861.58 217 1813 168.424 1813 108.5C1813 48.5762 1861.58 0 1921.5 0C1981.42 0 2030 48.5762 2030 108.5Z" fill="#CA3B33"/>
+        </svg>
+    </a>
+    <!-- <a class="ext-navbar-title" href="https://turinglang.org/">Turing.jl</a> -->
+    
+    <ul class="ext-nav-links">
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/getting-started/">Get Started</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/tutorials/">Tutorials</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/faq/">FAQ</a></li>
+        <li>
+            <p class="ext-nav-link" id="library-handler">Libraries</p>
+            <div class="ext-dropdown" id="ext-dropdown-items">
+                <ul>
+                    <li class="ext-dropdown-item-heading">Modelling Languages</li>
+                    <a href="https://turinglang.org/DynamicPPL.jl/"><li>DynamicPPL</li></a>
+                    <a href="https://turinglang.org/JuliaBUGS.jl/"><li>JuliaBUGS</li></a>
+                    <a href="https://turinglang.org/TuringGLM.jl/"><li>TuringGLM</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">MCMC</li>
+                    <a href="https://turinglang.org/AdvancedHMC.jl/"><li>AdvancedHMC</li></a>
+                    <a href="https://turinglang.org/AbstractMCMC.jl/"><li>AbstractMCMC</li></a>
+                    <a href="https://github.com/theogf/ThermodynamicIntegration.jl"><li>ThermodynamicIntegration</li></a>
+                    <a href="https://turinglang.org/AdvancedPS.jl/"><li>AdvancedPS</li></a>
+                    <a href="https://turinglang.org/SliceSampling.jl/"><li>SliceSampling</li></a>
+                    <a href="https://turinglang.org/EllipticalSliceSampling.jl/"><li>EllipticalSliceSampling</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Diagnostics</li>
+                    <a href="https://turinglang.org/MCMCChains.jl/"><li>MCMCChains</li></a>
+                    <a href="https://turinglang.org/MCMCDiagnosticTools.jl/"><li>MCMCDiagnosticTools</li></a>
+                    <a href="https://chalk-lab.github.io/ParetoSmooth.jl/"><li>ParetoSmooth</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Gaussian Processes</li>
+                    <a href="https://juliagaussianprocesses.github.io/AbstractGPs.jl/"><li>AbstractGPs</li></a>
+                    <a href="https://juliagaussianprocesses.github.io/KernelFunctions.jl/"><li>KernelFunctions</li></a>
+                    <a href="https://juliagaussianprocesses.github.io/ApproximateGPs.jl/"><li>ApproximateGPs</li></a>
+                </ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/Bijectors.jl/">Bijectors</a></li></ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/TuringCallbacks.jl/">TuringCallbacks</a></li></ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/Deprecated/TuringBenchmarking/">TuringBenchmarking</a><span class="deprecated-badge">Deprecated</span></li></ul>
+            </div>
+        </li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/news/">News</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/team/">Team</a></li>
+    </ul>
+
+    <div class="ext-navbar-icons">
+        <a href="https://x.com/TuringLang" aria-label="Turing on X"><i class="fa-brands fa-x-twitter"></i></a>
+        <a href="https://discourse.julialang.org/c/domain/probprog/48" aria-label="Turing on Discourse"><i class="fa-brands fa-discourse"></i></a>
+        <a href="https://julialang.slack.com/archives/CCYDC34A0" aria-label="Turing on Slack"><i class="fa-brands fa-slack"></i></a>
+        <a href="https://github.com/TuringLang/" aria-label="Turing.jl on GitHub"><i class="fa-brands fa-github"></i></a>
+    </div>
+
+    <span class="ext-menu-toggle"><i class="fa-solid fa-bars"></i></span>
+</nav>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const menuToggle = document.querySelector(".ext-menu-toggle");
+        const navLinks = document.querySelector(".ext-nav-links");
+        const nav = document.querySelector(".ext-navigation");
+        const libraryHandler = document.getElementById("library-handler");
+        const dropdownContainer = document.getElementById("ext-dropdown-items");
+        let lastScrollY = window.scrollY;
+
+        function closeDropdown() {
+            if (dropdownContainer.classList.contains("show")) {
+                libraryHandler.classList.remove("open");
+                dropdownContainer.classList.remove("show");
+                setTimeout(() => {
+                    if (!dropdownContainer.classList.contains("show")) {
+                        dropdownContainer.style.display = "none";
+                    }
+                }, 300);
+            }
+        }
+
+        function openDropdown() {
+            dropdownContainer.style.display = "grid";
+            libraryHandler.classList.add("open");
+            setTimeout(() => {
+                dropdownContainer.classList.add("show");
+            }, 10);
+        }
+
+        function setAppropriateHeight() {
+            if (window.innerWidth <= 768) {
+                const viewportHeight = window.innerHeight;
+                const navHeight = nav.offsetHeight;
+                navLinks.style.maxHeight = `${viewportHeight - navHeight}px`;
+                navLinks.style.overflowY = "auto";
+            } else {
+                navLinks.style.maxHeight = "";
+                navLinks.style.overflowY = "";
+            }
+        }
+
+        menuToggle.addEventListener("click", (event) => {
+            event.stopPropagation();
+            navLinks.classList.toggle("show");
+            if (navLinks.classList.contains("show")) {
+                setAppropriateHeight();
+                closeDropdown();
+                dropdownContainer.style.display = "none";
+            }
+        });
+
+        libraryHandler.addEventListener("click", (event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            if (dropdownContainer.classList.contains("show")) {
+                closeDropdown();
+            } else {
+                openDropdown();
+            }
+            setAppropriateHeight();
+        });
+
+        // Close all menus if a click is registered outside the navigation bar.
+        document.addEventListener("click", (event) => {
+            if (!nav.contains(event.target)) {
+                navLinks.classList.remove("show");
+                closeDropdown();
+            }
+        });
+
+        // Hide navigation bar on scroll down in mobile view.
+        window.addEventListener("scroll", () => {
+            if (window.innerWidth <= 768) {
+                if (window.scrollY > lastScrollY && window.scrollY > nav.offsetHeight){
+                    nav.classList.add("hide");
+                } else {
+                    nav.classList.remove("hide");
+                }
+                lastScrollY = window.scrollY;
+            }
+        });
+
+        window.addEventListener("resize", setAppropriateHeight);
+    });
+</script>
+<!-- NAVBAR END -->
+
+
+<div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../../">JuliaBUGS.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../../">Home</a></li><li><a class="tocitem" href="../../../getting_started/">Get Started</a></li><li><input class="collapse-toggle" id="menuitem-3" type="checkbox"/><label class="tocitem" for="menuitem-3"><span class="docs-label">User Guide</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><input class="collapse-toggle" id="menuitem-3-1" type="checkbox"/><label class="tocitem" for="menuitem-3-1"><span class="docs-label">Modeling</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../../two_macros/">Choosing <code>@bugs</code> or <code>@model</code></a></li><li><a class="tocitem" href="../../../model_macro/">Defining Models with <code>@model</code></a></li><li><a class="tocitem" href="../../../guides/initialization/">Initial Values</a></li><li><a class="tocitem" href="../../../of_design_doc/">Structuring Parameters with <code>of</code></a></li><li><a class="tocitem" href="../../../graph_plotting/">Inspecting Model Graphs</a></li><li><a class="tocitem" href="../../../guides/pitfalls/">Common Modeling Pitfalls</a></li><li><a class="tocitem" href="../../../guides/tricks/">BUGS Modeling Techniques</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-3-2" type="checkbox"/><label class="tocitem" for="menuitem-3-2"><span class="docs-label">Inference</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../../inference/ad/">Automatic Differentiation</a></li><li><a class="tocitem" href="../../../inference/evaluation_modes/">Evaluation Modes</a></li><li><a class="tocitem" href="../../../inference/auto_marginalization/">Discrete Variables and Auto-Marginalization</a></li><li><a class="tocitem" href="../../../inference/slice_sampling/">Slice Sampling</a></li><li><a class="tocitem" href="../../../inference/output_formats/">Sampling Output Formats</a></li><li><a class="tocitem" href="../../../inference/parallel/">Parallel &amp; Distributed Sampling</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-3-3" type="checkbox"/><label class="tocitem" for="menuitem-3-3"><span class="docs-label">Working with Models</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../../inference/generated_quantities/">Generated Quantities</a></li><li><a class="tocitem" href="../../../inference/fixing/">Fixing Variables (<code>fix</code> / <code>unfix</code>)</a></li><li><a class="tocitem" href="../../../model_as_distribution/">Model as a Distribution</a></li></ul></li></ul></li><li><input class="collapse-toggle" id="menuitem-4" type="checkbox" checked/><label class="tocitem" for="menuitem-4"><span class="docs-label">Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../">Overview</a></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Volume 1</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../volume_1/rats/">Rats</a></li><li><a class="tocitem" href="../../volume_1/pumps/">Pumps</a></li><li><a class="tocitem" href="../../volume_1/dogs/">Dogs</a></li><li><a class="tocitem" href="../../volume_1/seeds/">Seeds</a></li><li><a class="tocitem" href="../../volume_1/surgical/">Surgical</a></li><li><a class="tocitem" href="../../volume_1/magnesium/">Magnesium</a></li><li><a class="tocitem" href="../../volume_1/salm/">Salm</a></li><li><a class="tocitem" href="../../volume_1/equiv/">Equiv</a></li><li><a class="tocitem" href="../../volume_1/dyes/">Dyes</a></li><li><a class="tocitem" href="../../volume_1/stacks/">Stacks</a></li><li><a class="tocitem" href="../../volume_1/epil/">Epil</a></li><li><a class="tocitem" href="../../volume_1/blockers/">Blockers</a></li><li><a class="tocitem" href="../../volume_1/oxford/">Oxford</a></li><li><a class="tocitem" href="../../volume_1/lsat/">LSAT</a></li><li><a class="tocitem" href="../../volume_1/bones/">Bones</a></li><li><a class="tocitem" href="../../volume_1/mice/">Mice</a></li><li><a class="tocitem" href="../../volume_1/kidney/">Kidney</a></li><li><a class="tocitem" href="../../volume_1/leuk/">Leuk</a></li><li><a class="tocitem" href="../../volume_1/leukfr/">LeukFr</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-3" type="checkbox"/><label class="tocitem" for="menuitem-4-3"><span class="docs-label">Volume 2</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../volume_2/">Overview</a></li><li><a class="tocitem" href="../../volume_2/dugongs/">Dugongs</a></li><li><a class="tocitem" href="../../volume_2/orange_trees/">Orange Trees</a></li><li><a class="tocitem" href="../../volume_2/orange_trees_multivariate/">Orange Trees (multivariate)</a></li><li><a class="tocitem" href="../../volume_2/biopsies/">Biopsies</a></li><li><a class="tocitem" href="../../volume_2/eyes/">Eyes</a></li><li><a class="tocitem" href="../../volume_2/hearts/">Hearts</a></li><li><a class="tocitem" href="../../volume_2/air/">Air</a></li><li><a class="tocitem" href="../../volume_2/cervix/">Cervix</a></li><li><a class="tocitem" href="../../volume_2/jaws/">Jaws</a></li><li><a class="tocitem" href="../../volume_2/birats/">BiRats</a></li><li><a class="tocitem" href="../../volume_2/schools/">Schools</a></li><li><a class="tocitem" href="../../volume_2/beetles/">Beetles</a></li><li><a class="tocitem" href="../../volume_2/alligators/">Alligators</a></li><li><a class="tocitem" href="../../volume_2/endo/">Endo</a></li><li><a class="tocitem" href="../../volume_2/stagnant/">Stagnant</a></li><li><a class="tocitem" href="../../volume_2/asia/">Asia</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-4" type="checkbox" checked/><label class="tocitem" for="menuitem-4-4"><span class="docs-label">Volume 3</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../">Overview</a></li><li><a class="tocitem" href="../eye_tracking/">Eye Tracking</a></li><li><a class="tocitem" href="../circle/">Circle</a></li><li><a class="tocitem" href="../hollow_square/">Hollow Square</a></li><li><a class="tocitem" href="../parallelogram/">Parallelogram</a></li><li><a class="tocitem" href="../ring/">Ring</a></li><li><a class="tocitem" href="../square_minus_circle/">Square minus Circle</a></li><li><a class="tocitem" href="../hepatitis/">Hepatitis</a></li><li><a class="tocitem" href="../hepatitis_me/">Hepatitis (measurement error)</a></li><li><a class="tocitem" href="../hips1/">Hips1</a></li><li class="is-active"><a class="tocitem" href>Hips2</a><ul class="internal"><li><a class="tocitem" href="#Model"><span>Model</span></a></li><li><a class="tocitem" href="#Data"><span>Data</span></a></li><li><a class="tocitem" href="#Compiling-the-model"><span>Compiling the model</span></a></li><li><a class="tocitem" href="#Reference-results"><span>Reference results</span></a></li></ul></li><li><a class="tocitem" href="../hips3/">Hips3</a></li><li><a class="tocitem" href="../hips4/">Hips4</a></li><li><a class="tocitem" href="../pig_weights/">Pig Weights</a></li><li><a class="tocitem" href="../bayes_factors/">Bayes Factors</a></li></ul></li></ul></li><li><input class="collapse-toggle" id="menuitem-5" type="checkbox"/><label class="tocitem" for="menuitem-5"><span class="docs-label">Migration Guides</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../../guides/differences/">WinBUGS, OpenBUGS, JAGS</a></li><li><a class="tocitem" href="../../../migration/from_turing/">Turing.jl</a></li><li><a class="tocitem" href="../../../R_interface/">R</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-6" type="checkbox"/><label class="tocitem" for="menuitem-6"><span class="docs-label">Reference</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../../api/api/">Julia API</a></li><li><a class="tocitem" href="../../../api/functions/">Functions</a></li><li><a class="tocitem" href="../../../api/distributions/">Distributions</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-7" type="checkbox"/><label class="tocitem" for="menuitem-7"><span class="docs-label">Developer Guide</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../../developers/parser/">Parser</a></li><li><a class="tocitem" href="../../../developers/source_gen/">Source Code Generation</a></li><li><a class="tocitem" href="../../../developers/BUGS_notes/">Notes on BUGS Implementations</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li><a class="is-disabled">Volume 3</a></li><li class="is-active"><a href>Hips2</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Hips2</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/TuringLang/JuliaBUGS.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/TuringLang/JuliaBUGS.jl/blob/main/JuliaBUGS/docs/src/examples/volume_3/hips2.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Hips2:-MC-estimates-for-each-strata"><a class="docs-heading-anchor" href="#Hips2:-MC-estimates-for-each-strata">Hips2: MC estimates for each strata</a><a id="Hips2:-MC-estimates-for-each-strata-1"></a><a class="docs-heading-anchor-permalink" href="#Hips2:-MC-estimates-for-each-strata" title="Permalink"></a></h1><p>The second of the four hip-replacement examples changes the arithmetic rather than the model. The clinical setting, the data and the transition structure are exactly those of <a href="../hips1/">Hips1</a>: the same 5-state Markov model over 60 annual cycles for each of 12 age and sex strata, the same fixed revision hazards <code>h</code>, operative mortality <code>lambda.op</code> of 1%, re-revision rate <code>rho</code> of 4%, background mortality table <code>lambda</code>, state costs <code>c</code>, life-year weights <code>bl</code>, utilities <code>bq</code>, and 6% discounting of both costs and benefits. What changes is how the expected cost and benefit are worked out.</p><p>Instead of propagating the marginal state distribution analytically, this version simulates one individual patient per strata at every iteration. The state occupied at cycle <span>$t$</span> is a one-trial multinomial draw, and the probabilities for the next draw are read off the row of the transition matrix belonging to the state just occupied:</p><p class="math-container">\[\pi_{k,t,s} = \sum_{r=1}^{S} y_{k,t-1,r} \, \Lambda_{k,t,r,s}, \qquad
+y_{k,t,\cdot} \sim \text{Multinomial}(\pi_{k,t,\cdot},\, 1)\]</p><p>Because <span>$y_{k,t-1,\cdot}$</span> is an indicator vector, the inner product simply selects a row, so the trajectory is a genuine random walk through the five states. Costs and benefits are then accumulated along that one simulated path rather than integrated over the state distribution, and the multinomial draws are the only stochastic nodes in the model.</p><p>The two formulations answer the same question in different currencies. Posterior means of <code>C[k]</code>, <code>BL[k]</code> and <code>BQ[k]</code> are Monte Carlo estimates of the closed-form expectations that Hips1 computes exactly, and should agree with them up to Monte Carlo error. Their posterior standard deviations, however, measure something Hips1 cannot express: the spread between individual patients within a strata, which is substantial for life expectancy and for the cost of a revision that either does or does not occur. Parameter uncertainty is still absent, and is taken up in <a href="../hips3/">Hips3</a> and <a href="../hips4/">Hips4</a>. The example is in <a href="https://www.multibugs.org/examples/latest/VolumeIII.html">Volume 3 of the classic BUGS examples</a>; see also the <a href="https://chjackson.github.io/openbugsdoc/Examples/Hips2.html">OpenBUGS version of this example</a>.</p><p>The model definition, data, initial values, and published reference results shown here all come from <code>JuliaBUGS.BUGSExamples.VOLUME_3.hips2</code>, which ships with the package.</p><h2 id="Model"><a class="docs-heading-anchor" href="#Model">Model</a><a id="Model-1"></a><a class="docs-heading-anchor-permalink" href="#Model" title="Permalink"></a></h2><pre><code class="language-julia hljs">using JuliaBUGS
+
+example = JuliaBUGS.BUGSExamples.VOLUME_3.hips2
+example.model_def</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">quote
+    for k = 1:K
+        for t = 1:N
+            ct[k, t] = inprod(y[k, t, :], c[:]) / pow(1 + var&quot;delta.c&quot;, t - 1)
+        end
+        C[k] = C0 + sum(ct[k, :])
+        for t = 1:N
+            blt[k, t] = inprod(y[k, t, :], bl[:]) / pow(1 + var&quot;delta.b&quot;, t - 1)
+        end
+        BL[k] = sum(blt[k, :])
+        for t = 1:N
+            bqt[k, t] = inprod(y[k, t, :], bq[:]) / pow(1 + var&quot;delta.b&quot;, t - 1)
+        end
+        BQ[k] = sum(bqt[k, :])
+        for t = 1:N
+            Lambda[k, t, 1, 1] = (1 - gamma[k, t]) - lambda[k, t]
+            Lambda[k, t, 1, 2] = gamma[k, t] * var&quot;lambda.op&quot;
+            Lambda[k, t, 1, 3] = gamma[k, t] * (1 - var&quot;lambda.op&quot;)
+            Lambda[k, t, 1, 4] = 0
+            Lambda[k, t, 1, 5] = lambda[k, t]
+            Lambda[k, t, 2, 1] = 0
+            Lambda[k, t, 2, 2] = 0
+            Lambda[k, t, 2, 3] = 0
+            Lambda[k, t, 2, 4] = 0
+            Lambda[k, t, 2, 5] = 1
+            Lambda[k, t, 3, 1] = 0
+            Lambda[k, t, 3, 2] = 0
+            Lambda[k, t, 3, 3] = 0
+            Lambda[k, t, 3, 4] = 1 - lambda[k, t]
+            Lambda[k, t, 3, 5] = lambda[k, t]
+            Lambda[k, t, 4, 1] = 0
+            Lambda[k, t, 4, 2] = rho * var&quot;lambda.op&quot;
+            Lambda[k, t, 4, 3] = rho * (1 - var&quot;lambda.op&quot;)
+            Lambda[k, t, 4, 4] = (1 - rho) - lambda[k, t]
+            Lambda[k, t, 4, 5] = lambda[k, t]
+            Lambda[k, t, 5, 1] = 0
+            Lambda[k, t, 5, 2] = 0
+            Lambda[k, t, 5, 3] = 0
+            Lambda[k, t, 5, 4] = 0
+            Lambda[k, t, 5, 5] = 1
+            gamma[k, t] = h[k] * (t - 1)
+        end
+        pi[k, 1, 1] = 1 - var&quot;lambda.op&quot;
+        pi[k, 1, 2] = 0
+        pi[k, 1, 3] = 0
+        pi[k, 1, 4] = 0
+        pi[k, 1, 5] = var&quot;lambda.op&quot;
+        y[k, 1, 1:S] ~ dmulti(pi[k, 1, :], 1)
+        for t = 2:N
+            for s = 1:S
+                pi[k, t, s] = inprod(y[k, t - 1, :], Lambda[k, t, :, s])
+            end
+            y[k, t, 1:S] ~ dmulti(pi[k, t, :], 1)
+        end
+    end
+    var&quot;mean.C&quot; = inprod(var&quot;p.strata&quot;[:], C[:])
+    var&quot;mean.BL&quot; = inprod(var&quot;p.strata&quot;[:], BL[:])
+    var&quot;mean.BQ&quot; = inprod(var&quot;p.strata&quot;[:], BQ[:])
+end</code></pre><p>The program as it appears in the original BUGS distribution:</p><pre><code class="language-julia hljs">print(example.original_syntax_program)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">model {
+
+		for(k in 1 : K) {    # loop over strata
+
+		# Cost and benefit equations
+		#######################
+
+		# Costs
+			for(t in 1 : N) {
+				ct[k, t] &lt;- inprod(y[k, t, ], c[]) / pow(1 + delta.c, t - 1)
+			}
+			C[k] &lt;- C0 + sum(ct[k, ])
+
+			# Benefits - life expectancy
+			for(t in 1 : N) {
+				blt[k, t] &lt;- inprod(y[k, t, ], bl[]) / pow(1 + delta.b, t - 1)
+			}
+			BL[k] &lt;- sum(blt[k, ])
+
+			# Benefits - QALYs
+			for(t in 1:N) {
+				bqt[k, t] &lt;- inprod(y[k, t, ], bq[]) / pow(1 + delta.b, t - 1)
+			}
+			BQ[k] &lt;- sum(bqt[k, ])
+
+
+			# Markov model probabilities:
+			#######################
+
+			# Transition matrix
+			for(t in 1 : N) {
+				Lambda[k, t, 1, 1] &lt;- 1 -  gamma[k, t] - lambda[k, t]
+				Lambda[k, t, 1, 2] &lt;- gamma[k, t] * lambda.op
+				Lambda[k, t, 1, 3] &lt;- gamma[k, t] *(1 - lambda.op)
+				Lambda[k, t, 1, 4] &lt;- 0
+				Lambda[k, t, 1, 5] &lt;- lambda[k, t]
+
+				Lambda[k, t, 2, 1] &lt;- 0
+				Lambda[k, t, 2, 2] &lt;- 0
+				Lambda[k, t, 2, 3] &lt;- 0
+				Lambda[k, t, 2, 4] &lt;- 0
+				Lambda[k, t, 2, 5] &lt;- 1
+
+				Lambda[k, t, 3, 1] &lt;- 0
+				Lambda[k, t, 3, 2] &lt;- 0
+				Lambda[k, t, 3, 3] &lt;- 0
+				Lambda[k, t, 3, 4] &lt;- 1 -  lambda[k, t]
+				Lambda[k, t, 3, 5] &lt;- lambda[k, t]
+
+				Lambda[k, t, 4, 1] &lt;- 0
+				Lambda[k, t, 4, 2] &lt;- rho * lambda.op
+				Lambda[k, t, 4, 3] &lt;- rho * (1 - lambda.op)
+				Lambda[k, t, 4, 4] &lt;- 1 - rho - lambda[k, t]
+				Lambda[k, t, 4, 5] &lt;- lambda[k, t]
+
+				Lambda[k, t, 5, 1] &lt;- 0
+				Lambda[k, t, 5, 2] &lt;- 0
+				Lambda[k, t, 5, 3] &lt;- 0
+				Lambda[k, t, 5, 4] &lt;- 0
+				Lambda[k, t, 5, 5] &lt;- 1
+
+				gamma[k, t] &lt;- h[k] * (t - 1)
+			}
+
+			# Marginal probability of being in each state at time 1
+			pi[k, 1, 1] &lt;- 1 - lambda.op  pi[k, 1, 2]&lt;-0     pi[k, 1, 3] &lt;- 0   pi[k, 1, 4] &lt;- 0
+			pi[k, 1, 5] &lt;- lambda.op
+
+			# state of each individual in strata k at time t =1
+			y[k,1,1 : S] ~ dmulti(pi[k,1, ], 1)
+
+			# state of each individual in strata k at time t &gt; 1
+			for(t in 2 : N) {
+				for(s in 1:S) {
+					#  sampling probabilities
+					pi[k, t, s] &lt;- inprod(y[k, t - 1, ], Lambda[k, t, , s])
+				}
+				y[k, t, 1 : S] ~ dmulti(pi[k, t, ], 1)
+			}
+
+		}
+
+		# Mean of costs and benefits over strata
+		#################################
+
+		mean.C &lt;- inprod(p.strata[], C[])
+		mean.BL &lt;- inprod(p.strata[], BL[])
+		mean.BQ &lt;- inprod(p.strata[], BQ[])
+
+	}</code></pre><h2 id="Data"><a class="docs-heading-anchor" href="#Data">Data</a><a id="Data-1"></a><a class="docs-heading-anchor-permalink" href="#Data" title="Permalink"></a></h2><pre><code class="language-julia hljs">example.data</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(N = 60, K = 12, S = 5, rho = 0.04, var&quot;lambda.op&quot; = 0.01, h = [0.0022, 0.0022, 0.0022, 0.0016, 0.0016, 0.0016, 0.0017, 0.0017, 0.0017, 0.0012, 0.0012, 0.0012], C0 = 4052, c = [0, 5290, 5290, 0, 0], bl = [1, 0, 1, 1, 0], bq = [0.938, -0.622, -0.3387, 0.938, 0.0], var&quot;delta.c&quot; = 0.06, var&quot;delta.b&quot; = 0.06, var&quot;p.strata&quot; = [0.02, 0.03, 0.07, 0.13, 0.1, 0.0, 0.02, 0.04, 0.1, 0.22, 0.26, 0.01], lambda = [0.0017 0.0017 … 0.1958 0.1958; 0.0044 0.0044 … 0.1958 0.1958; … ; 0.0578 0.0578 … 0.1503 0.1503; 0.1503 0.1503 … 0.1503 0.1503])</code></pre><h2 id="Compiling-the-model"><a class="docs-heading-anchor" href="#Compiling-the-model">Compiling the model</a><a id="Compiling-the-model-1"></a><a class="docs-heading-anchor-permalink" href="#Compiling-the-model" title="Permalink"></a></h2><pre><code class="language-julia hljs">model = JuliaBUGS.compile(example.model_def, example.data)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr34"><span class="sgr1">BUGSModel</span></span> (parameters are in transformed (unconstrained) space, with dimension 3600):
+
+<span class="sgr33"><span class="sgr1">  Model parameters:</span></span>
+    <span class="sgr36">y[12, 1, 1:5], y[12, 2, 1:5], y[12, 3, 1:5], y[12, 4, 1:5], y[12, 5, 1:5], y[12, 6, 1:5], y[12, 7, 1:5], y[12, 8, 1:5], y[12, 9, 1:5], y[12, 10, 1:5], y[12, 11, 1:5], y[12, 12, 1:5], y[12, 13, 1:5], y[12, 14, 1:5], y[12, 15, 1:5], y[12, 16, 1:5], y[12, 17, 1:5], y[12, 18, 1:5], y[12, 19, 1:5], y[12, 20, 1:5], y[12, 21, 1:5], y[12, 22, 1:5], y[12, 23, 1:5], y[12, 24, 1:5], y[12, 25, 1:5], y[12, 26, 1:5], y[12, 27, 1:5], y[12, 28, 1:5], y[12, 29, 1:5], y[12, 30, 1:5], y[12, 31, 1:5], y[12, 32, 1:5], y[12, 33, 1:5], y[12, 34, 1:5], y[12, 35, 1:5], y[12, 36, 1:5], y[12, 37, 1:5], y[12, 38, 1:5], y[12, 39, 1:5], y[12, 40, 1:5], y[12, 41, 1:5], y[12, 42, 1:5], y[12, 43, 1:5], y[12, 44, 1:5], y[12, 45, 1:5], y[12, 46, 1:5], y[12, 47, 1:5], y[12, 48, 1:5], y[12, 49, 1:5], y[12, 50, 1:5], y[12, 51, 1:5], y[12, 52, 1:5], y[12, 53, 1:5], y[12, 54, 1:5], y[12, 55, 1:5], y[12, 56, 1:5], y[12, 57, 1:5], y[12, 58, 1:5], y[12, 59, 1:5], y[12, 60, 1:5], y[11, 1, 1:5], y[11, 2, 1:5], y[11, 3, 1:5], y[11, 4, 1:5], y[11, 5, 1:5], y[11, 6, 1:5], y[11, 7, 1:5], y[11, 8, 1:5], y[11, 9, 1:5], y[11, 10, 1:5], y[11, 11, 1:5], y[11, 12, 1:5], y[11, 13, 1:5], y[11, 14, 1:5], y[11, 15, 1:5], y[11, 16, 1:5], y[11, 17, 1:5], y[11, 18, 1:5], y[11, 19, 1:5], y[11, 20, 1:5], y[11, 21, 1:5], y[11, 22, 1:5], y[11, 23, 1:5], y[11, 24, 1:5], y[11, 25, 1:5], y[11, 26, 1:5], y[11, 27, 1:5], y[11, 28, 1:5], y[11, 29, 1:5], y[11, 30, 1:5], y[11, 31, 1:5], y[11, 32, 1:5], y[11, 33, 1:5], y[11, 34, 1:5], y[11, 35, 1:5], y[11, 36, 1:5], y[11, 37, 1:5], y[11, 38, 1:5], y[11, 39, 1:5], y[11, 40, 1:5], y[11, 41, 1:5], y[11, 42, 1:5], y[11, 43, 1:5], y[11, 44, 1:5], y[11, 45, 1:5], y[11, 46, 1:5], y[11, 47, 1:5], y[11, 48, 1:5], y[11, 49, 1:5], y[11, 50, 1:5], y[11, 51, 1:5], y[11, 52, 1:5], y[11, 53, 1:5], y[11, 54, 1:5], y[11, 55, 1:5], y[11, 56, 1:5], y[11, 57, 1:5], y[11, 58, 1:5], y[11, 59, 1:5], y[11, 60, 1:5], y[10, 1, 1:5], y[10, 2, 1:5], y[10, 3, 1:5], y[10, 4, 1:5], y[10, 5, 1:5], y[10, 6, 1:5], y[10, 7, 1:5], y[10, 8, 1:5], y[10, 9, 1:5], y[10, 10, 1:5], y[10, 11, 1:5], y[10, 12, 1:5], y[10, 13, 1:5], y[10, 14, 1:5], y[10, 15, 1:5], y[10, 16, 1:5], y[10, 17, 1:5], y[10, 18, 1:5], y[10, 19, 1:5], y[10, 20, 1:5], y[10, 21, 1:5], y[10, 22, 1:5], y[10, 23, 1:5], y[10, 24, 1:5], y[10, 25, 1:5], y[10, 26, 1:5], y[10, 27, 1:5], y[10, 28, 1:5], y[10, 29, 1:5], y[10, 30, 1:5], y[10, 31, 1:5], y[10, 32, 1:5], y[10, 33, 1:5], y[10, 34, 1:5], y[10, 35, 1:5], y[10, 36, 1:5], y[10, 37, 1:5], y[10, 38, 1:5], y[10, 39, 1:5], y[10, 40, 1:5], y[10, 41, 1:5], y[10, 42, 1:5], y[10, 43, 1:5], y[10, 44, 1:5], y[10, 45, 1:5], y[10, 46, 1:5], y[10, 47, 1:5], y[10, 48, 1:5], y[10, 49, 1:5], y[10, 50, 1:5], y[10, 51, 1:5], y[10, 52, 1:5], y[10, 53, 1:5], y[10, 54, 1:5], y[10, 55, 1:5], y[10, 56, 1:5], y[10, 57, 1:5], y[10, 58, 1:5], y[10, 59, 1:5], y[10, 60, 1:5], y[9, 1, 1:5], y[9, 2, 1:5], y[9, 3, 1:5], y[9, 4, 1:5], y[9, 5, 1:5], y[9, 6, 1:5], y[9, 7, 1:5], y[9, 8, 1:5], y[9, 9, 1:5], y[9, 10, 1:5], y[9, 11, 1:5], y[9, 12, 1:5], y[9, 13, 1:5], y[9, 14, 1:5], y[9, 15, 1:5], y[9, 16, 1:5], y[9, 17, 1:5], y[9, 18, 1:5], y[9, 19, 1:5], y[9, 20, 1:5], y[9, 21, 1:5], y[9, 22, 1:5], y[9, 23, 1:5], y[9, 24, 1:5], y[9, 25, 1:5], y[9, 26, 1:5], y[9, 27, 1:5], y[9, 28, 1:5], y[9, 29, 1:5], y[9, 30, 1:5], y[9, 31, 1:5], y[9, 32, 1:5], y[9, 33, 1:5], y[9, 34, 1:5], y[9, 35, 1:5], y[9, 36, 1:5], y[9, 37, 1:5], y[9, 38, 1:5], y[9, 39, 1:5], y[9, 40, 1:5], y[9, 41, 1:5], y[9, 42, 1:5], y[9, 43, 1:5], y[9, 44, 1:5], y[9, 45, 1:5], y[9, 46, 1:5], y[9, 47, 1:5], y[9, 48, 1:5], y[9, 49, 1:5], y[9, 50, 1:5], y[9, 51, 1:5], y[9, 52, 1:5], y[9, 53, 1:5], y[9, 54, 1:5], y[9, 55, 1:5], y[9, 56, 1:5], y[9, 57, 1:5], y[9, 58, 1:5], y[9, 59, 1:5], y[9, 60, 1:5], y[8, 1, 1:5], y[8, 2, 1:5], y[8, 3, 1:5], y[8, 4, 1:5], y[8, 5, 1:5], y[8, 6, 1:5], y[8, 7, 1:5], y[8, 8, 1:5], y[8, 9, 1:5], y[8, 10, 1:5], y[8, 11, 1:5], y[8, 12, 1:5], y[8, 13, 1:5], y[8, 14, 1:5], y[8, 15, 1:5], y[8, 16, 1:5], y[8, 17, 1:5], y[8, 18, 1:5], y[8, 19, 1:5], y[8, 20, 1:5], y[8, 21, 1:5], y[8, 22, 1:5], y[8, 23, 1:5], y[8, 24, 1:5], y[8, 25, 1:5], y[8, 26, 1:5], y[8, 27, 1:5], y[8, 28, 1:5], y[8, 29, 1:5], y[8, 30, 1:5], y[8, 31, 1:5], y[8, 32, 1:5], y[8, 33, 1:5], y[8, 34, 1:5], y[8, 35, 1:5], y[8, 36, 1:5], y[8, 37, 1:5], y[8, 38, 1:5], y[8, 39, 1:5], y[8, 40, 1:5], y[8, 41, 1:5], y[8, 42, 1:5], y[8, 43, 1:5], y[8, 44, 1:5], y[8, 45, 1:5], y[8, 46, 1:5], y[8, 47, 1:5], y[8, 48, 1:5], y[8, 49, 1:5], y[8, 50, 1:5], y[8, 51, 1:5], y[8, 52, 1:5], y[8, 53, 1:5], y[8, 54, 1:5], y[8, 55, 1:5], y[8, 56, 1:5], y[8, 57, 1:5], y[8, 58, 1:5], y[8, 59, 1:5], y[8, 60, 1:5], y[7, 1, 1:5], y[7, 2, 1:5], y[7, 3, 1:5], y[7, 4, 1:5], y[7, 5, 1:5], y[7, 6, 1:5], y[7, 7, 1:5], y[7, 8, 1:5], y[7, 9, 1:5], y[7, 10, 1:5], y[7, 11, 1:5], y[7, 12, 1:5], y[7, 13, 1:5], y[7, 14, 1:5], y[7, 15, 1:5], y[7, 16, 1:5], y[7, 17, 1:5], y[7, 18, 1:5], y[7, 19, 1:5], y[7, 20, 1:5], y[7, 21, 1:5], y[7, 22, 1:5], y[7, 23, 1:5], y[7, 24, 1:5], y[7, 25, 1:5], y[7, 26, 1:5], y[7, 27, 1:5], y[7, 28, 1:5], y[7, 29, 1:5], y[7, 30, 1:5], y[7, 31, 1:5], y[7, 32, 1:5], y[7, 33, 1:5], y[7, 34, 1:5], y[7, 35, 1:5], y[7, 36, 1:5], y[7, 37, 1:5], y[7, 38, 1:5], y[7, 39, 1:5], y[7, 40, 1:5], y[7, 41, 1:5], y[7, 42, 1:5], y[7, 43, 1:5], y[7, 44, 1:5], y[7, 45, 1:5], y[7, 46, 1:5], y[7, 47, 1:5], y[7, 48, 1:5], y[7, 49, 1:5], y[7, 50, 1:5], y[7, 51, 1:5], y[7, 52, 1:5], y[7, 53, 1:5], y[7, 54, 1:5], y[7, 55, 1:5], y[7, 56, 1:5], y[7, 57, 1:5], y[7, 58, 1:5], y[7, 59, 1:5], y[7, 60, 1:5], y[6, 1, 1:5], y[6, 2, 1:5], y[6, 3, 1:5], y[6, 4, 1:5], y[6, 5, 1:5], y[6, 6, 1:5], y[6, 7, 1:5], y[6, 8, 1:5], y[6, 9, 1:5], y[6, 10, 1:5], y[6, 11, 1:5], y[6, 12, 1:5], y[6, 13, 1:5], y[6, 14, 1:5], y[6, 15, 1:5], y[6, 16, 1:5], y[6, 17, 1:5], y[6, 18, 1:5], y[6, 19, 1:5], y[6, 20, 1:5], y[6, 21, 1:5], y[6, 22, 1:5], y[6, 23, 1:5], y[6, 24, 1:5], y[6, 25, 1:5], y[6, 26, 1:5], y[6, 27, 1:5], y[6, 28, 1:5], y[6, 29, 1:5], y[6, 30, 1:5], y[6, 31, 1:5], y[6, 32, 1:5], y[6, 33, 1:5], y[6, 34, 1:5], y[6, 35, 1:5], y[6, 36, 1:5], y[6, 37, 1:5], y[6, 38, 1:5], y[6, 39, 1:5], y[6, 40, 1:5], y[6, 41, 1:5], y[6, 42, 1:5], y[6, 43, 1:5], y[6, 44, 1:5], y[6, 45, 1:5], y[6, 46, 1:5], y[6, 47, 1:5], y[6, 48, 1:5], y[6, 49, 1:5], y[6, 50, 1:5], y[6, 51, 1:5], y[6, 52, 1:5], y[6, 53, 1:5], y[6, 54, 1:5], y[6, 55, 1:5], y[6, 56, 1:5], y[6, 57, 1:5], y[6, 58, 1:5], y[6, 59, 1:5], y[6, 60, 1:5], y[5, 1, 1:5], y[5, 2, 1:5], y[5, 3, 1:5], y[5, 4, 1:5], y[5, 5, 1:5], y[5, 6, 1:5], y[5, 7, 1:5], y[5, 8, 1:5], y[5, 9, 1:5], y[5, 10, 1:5], y[5, 11, 1:5], y[5, 12, 1:5], y[5, 13, 1:5], y[5, 14, 1:5], y[5, 15, 1:5], y[5, 16, 1:5], y[5, 17, 1:5], y[5, 18, 1:5], y[5, 19, 1:5], y[5, 20, 1:5], y[5, 21, 1:5], y[5, 22, 1:5], y[5, 23, 1:5], y[5, 24, 1:5], y[5, 25, 1:5], y[5, 26, 1:5], y[5, 27, 1:5], y[5, 28, 1:5], y[5, 29, 1:5], y[5, 30, 1:5], y[5, 31, 1:5], y[5, 32, 1:5], y[5, 33, 1:5], y[5, 34, 1:5], y[5, 35, 1:5], y[5, 36, 1:5], y[5, 37, 1:5], y[5, 38, 1:5], y[5, 39, 1:5], y[5, 40, 1:5], y[5, 41, 1:5], y[5, 42, 1:5], y[5, 43, 1:5], y[5, 44, 1:5], y[5, 45, 1:5], y[5, 46, 1:5], y[5, 47, 1:5], y[5, 48, 1:5], y[5, 49, 1:5], y[5, 50, 1:5], y[5, 51, 1:5], y[5, 52, 1:5], y[5, 53, 1:5], y[5, 54, 1:5], y[5, 55, 1:5], y[5, 56, 1:5], y[5, 57, 1:5], y[5, 58, 1:5], y[5, 59, 1:5], y[5, 60, 1:5], y[4, 1, 1:5], y[4, 2, 1:5], y[4, 3, 1:5], y[4, 4, 1:5], y[4, 5, 1:5], y[4, 6, 1:5], y[4, 7, 1:5], y[4, 8, 1:5], y[4, 9, 1:5], y[4, 10, 1:5], y[4, 11, 1:5], y[4, 12, 1:5], y[4, 13, 1:5], y[4, 14, 1:5], y[4, 15, 1:5], y[4, 16, 1:5], y[4, 17, 1:5], y[4, 18, 1:5], y[4, 19, 1:5], y[4, 20, 1:5], y[4, 21, 1:5], y[4, 22, 1:5], y[4, 23, 1:5], y[4, 24, 1:5], y[4, 25, 1:5], y[4, 26, 1:5], y[4, 27, 1:5], y[4, 28, 1:5], y[4, 29, 1:5], y[4, 30, 1:5], y[4, 31, 1:5], y[4, 32, 1:5], y[4, 33, 1:5], y[4, 34, 1:5], y[4, 35, 1:5], y[4, 36, 1:5], y[4, 37, 1:5], y[4, 38, 1:5], y[4, 39, 1:5], y[4, 40, 1:5], y[4, 41, 1:5], y[4, 42, 1:5], y[4, 43, 1:5], y[4, 44, 1:5], y[4, 45, 1:5], y[4, 46, 1:5], y[4, 47, 1:5], y[4, 48, 1:5], y[4, 49, 1:5], y[4, 50, 1:5], y[4, 51, 1:5], y[4, 52, 1:5], y[4, 53, 1:5], y[4, 54, 1:5], y[4, 55, 1:5], y[4, 56, 1:5], y[4, 57, 1:5], y[4, 58, 1:5], y[4, 59, 1:5], y[4, 60, 1:5], y[3, 1, 1:5], y[3, 2, 1:5], y[3, 3, 1:5], y[3, 4, 1:5], y[3, 5, 1:5], y[3, 6, 1:5], y[3, 7, 1:5], y[3, 8, 1:5], y[3, 9, 1:5], y[3, 10, 1:5], y[3, 11, 1:5], y[3, 12, 1:5], y[3, 13, 1:5], y[3, 14, 1:5], y[3, 15, 1:5], y[3, 16, 1:5], y[3, 17, 1:5], y[3, 18, 1:5], y[3, 19, 1:5], y[3, 20, 1:5], y[3, 21, 1:5], y[3, 22, 1:5], y[3, 23, 1:5], y[3, 24, 1:5], y[3, 25, 1:5], y[3, 26, 1:5], y[3, 27, 1:5], y[3, 28, 1:5], y[3, 29, 1:5], y[3, 30, 1:5], y[3, 31, 1:5], y[3, 32, 1:5], y[3, 33, 1:5], y[3, 34, 1:5], y[3, 35, 1:5], y[3, 36, 1:5], y[3, 37, 1:5], y[3, 38, 1:5], y[3, 39, 1:5], y[3, 40, 1:5], y[3, 41, 1:5], y[3, 42, 1:5], y[3, 43, 1:5], y[3, 44, 1:5], y[3, 45, 1:5], y[3, 46, 1:5], y[3, 47, 1:5], y[3, 48, 1:5], y[3, 49, 1:5], y[3, 50, 1:5], y[3, 51, 1:5], y[3, 52, 1:5], y[3, 53, 1:5], y[3, 54, 1:5], y[3, 55, 1:5], y[3, 56, 1:5], y[3, 57, 1:5], y[3, 58, 1:5], y[3, 59, 1:5], y[3, 60, 1:5], y[2, 1, 1:5], y[2, 2, 1:5], y[2, 3, 1:5], y[2, 4, 1:5], y[2, 5, 1:5], y[2, 6, 1:5], y[2, 7, 1:5], y[2, 8, 1:5], y[2, 9, 1:5], y[2, 10, 1:5], y[2, 11, 1:5], y[2, 12, 1:5], y[2, 13, 1:5], y[2, 14, 1:5], y[2, 15, 1:5], y[2, 16, 1:5], y[2, 17, 1:5], y[2, 18, 1:5], y[2, 19, 1:5], y[2, 20, 1:5], y[2, 21, 1:5], y[2, 22, 1:5], y[2, 23, 1:5], y[2, 24, 1:5], y[2, 25, 1:5], y[2, 26, 1:5], y[2, 27, 1:5], y[2, 28, 1:5], y[2, 29, 1:5], y[2, 30, 1:5], y[2, 31, 1:5], y[2, 32, 1:5], y[2, 33, 1:5], y[2, 34, 1:5], y[2, 35, 1:5], y[2, 36, 1:5], y[2, 37, 1:5], y[2, 38, 1:5], y[2, 39, 1:5], y[2, 40, 1:5], y[2, 41, 1:5], y[2, 42, 1:5], y[2, 43, 1:5], y[2, 44, 1:5], y[2, 45, 1:5], y[2, 46, 1:5], y[2, 47, 1:5], y[2, 48, 1:5], y[2, 49, 1:5], y[2, 50, 1:5], y[2, 51, 1:5], y[2, 52, 1:5], y[2, 53, 1:5], y[2, 54, 1:5], y[2, 55, 1:5], y[2, 56, 1:5], y[2, 57, 1:5], y[2, 58, 1:5], y[2, 59, 1:5], y[2, 60, 1:5], y[1, 1, 1:5], y[1, 2, 1:5], y[1, 3, 1:5], y[1, 4, 1:5], y[1, 5, 1:5], y[1, 6, 1:5], y[1, 7, 1:5], y[1, 8, 1:5], y[1, 9, 1:5], y[1, 10, 1:5], y[1, 11, 1:5], y[1, 12, 1:5], y[1, 13, 1:5], y[1, 14, 1:5], y[1, 15, 1:5], y[1, 16, 1:5], y[1, 17, 1:5], y[1, 18, 1:5], y[1, 19, 1:5], y[1, 20, 1:5], y[1, 21, 1:5], y[1, 22, 1:5], y[1, 23, 1:5], y[1, 24, 1:5], y[1, 25, 1:5], y[1, 26, 1:5], y[1, 27, 1:5], y[1, 28, 1:5], y[1, 29, 1:5], y[1, 30, 1:5], y[1, 31, 1:5], y[1, 32, 1:5], y[1, 33, 1:5], y[1, 34, 1:5], y[1, 35, 1:5], y[1, 36, 1:5], y[1, 37, 1:5], y[1, 38, 1:5], y[1, 39, 1:5], y[1, 40, 1:5], y[1, 41, 1:5], y[1, 42, 1:5], y[1, 43, 1:5], y[1, 44, 1:5], y[1, 45, 1:5], y[1, 46, 1:5], y[1, 47, 1:5], y[1, 48, 1:5], y[1, 49, 1:5], y[1, 50, 1:5], y[1, 51, 1:5], y[1, 52, 1:5], y[1, 53, 1:5], y[1, 54, 1:5], y[1, 55, 1:5], y[1, 56, 1:5], y[1, 57, 1:5], y[1, 58, 1:5], y[1, 59, 1:5], y[1, 60, 1:5]</span>
+
+<span class="sgr33"><span class="sgr1">  Variable sizes and types:</span></span>
+    <span class="sgr36">bl</span>: <span class="sgr32">size = (5,), type = Vector{Int64}</span>
+    <span class="sgr36">gamma</span>: <span class="sgr32">size = (12, 60), type = Matrix{Float64}</span>
+    <span class="sgr36">rho</span>: <span class="sgr32">type = Float64</span>
+    <span class="sgr36">h</span>: <span class="sgr32">size = (12,), type = Vector{Float64}</span>
+    <span class="sgr36">c</span>: <span class="sgr32">size = (5,), type = Vector{Int64}</span>
+    <span class="sgr36">ct</span>: <span class="sgr32">size = (12, 60), type = Matrix{Float64}</span>
+    <span class="sgr36">pi</span>: <span class="sgr32">size = (12, 60, 5), type = Array{Float64, 3}</span>
+    <span class="sgr36">lambda</span>: <span class="sgr32">size = (12, 60), type = Matrix{Float64}</span>
+    <span class="sgr36">K</span>: <span class="sgr32">type = Int64</span>
+    <span class="sgr36">S</span>: <span class="sgr32">type = Int64</span>
+    <span class="sgr36">BL</span>: <span class="sgr32">size = (12,), type = Vector{Float64}</span>
+    <span class="sgr36">N</span>: <span class="sgr32">type = Int64</span>
+    <span class="sgr36">p.strata</span>: <span class="sgr32">size = (12,), type = Vector{Float64}</span>
+    <span class="sgr36">blt</span>: <span class="sgr32">size = (12, 60), type = Matrix{Float64}</span>
+    <span class="sgr36">C0</span>: <span class="sgr32">type = Int64</span>
+    <span class="sgr36">delta.c</span>: <span class="sgr32">type = Float64</span>
+    <span class="sgr36">delta.b</span>: <span class="sgr32">type = Float64</span>
+    <span class="sgr36">bqt</span>: <span class="sgr32">size = (12, 60), type = Matrix{Float64}</span>
+    <span class="sgr36">BQ</span>: <span class="sgr32">size = (12,), type = Vector{Float64}</span>
+    <span class="sgr36">mean.BL</span>: <span class="sgr32">type = Float64</span>
+    <span class="sgr36">bq</span>: <span class="sgr32">size = (5,), type = Vector{Float64}</span>
+    <span class="sgr36">mean.BQ</span>: <span class="sgr32">type = Float64</span>
+    <span class="sgr36">y</span>: <span class="sgr32">size = (12, 60, 5), type = Array{Float64, 3}</span>
+    <span class="sgr36">mean.C</span>: <span class="sgr32">type = Float64</span>
+    <span class="sgr36">lambda.op</span>: <span class="sgr32">type = Float64</span>
+    <span class="sgr36">Lambda</span>: <span class="sgr32">size = (12, 60, 5, 5), type = Array{Float64, 4}</span>
+    <span class="sgr36">C</span>: <span class="sgr32">size = (12,), type = Vector{Float64}</span>
+</code></pre><p>See <a href="../../../getting_started/">Getting Started</a> for the recipe that takes a compiled model to posterior samples.</p><h2 id="Reference-results"><a class="docs-heading-anchor" href="#Reference-results">Reference results</a><a id="Reference-results-1"></a><a class="docs-heading-anchor-permalink" href="#Reference-results" title="Permalink"></a></h2><p>The posterior summaries published with the original example. A converged chain should reproduce these up to Monte Carlo error.</p><pre><code class="language-julia hljs">example.reference_results</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(var&quot;BL[1]&quot; = (mean = 14.46, std = 2.893), var&quot;BL[2]&quot; = (mean = 12.72, std = 3.326), var&quot;BL[3]&quot; = (mean = 10.34, std = 3.68), var&quot;BL[4]&quot; = (mean = 7.74, std = 3.544), var&quot;BL[5]&quot; = (mean = 5.38, std = 2.988), var&quot;BL[6]&quot; = (mean = 4.093, std = 2.922), var&quot;BL[7]&quot; = (mean = 15.13, std = 2.649), var&quot;BL[8]&quot; = (mean = 13.72, std = 3.105), var&quot;BL[9]&quot; = (mean = 11.69, std = 3.507), var&quot;BL[10]&quot; = (mean = 9.117, std = 3.641), var&quot;BL[11]&quot; = (mean = 6.453, std = 3.316), var&quot;BL[12]&quot; = (mean = 4.988, std = 3.46), var&quot;BQ[1]&quot; = (mean = 13.15, std = 2.632), var&quot;BQ[2]&quot; = (mean = 11.6, std = 3.012), var&quot;BQ[3]&quot; = (mean = 9.469, std = 3.338), var&quot;BQ[4]&quot; = (mean = 7.16, std = 3.255), var&quot;BQ[5]&quot; = (mean = 4.999, std = 2.757), var&quot;BQ[6]&quot; = (mean = 3.805, std = 2.698), var&quot;BQ[7]&quot; = (mean = 13.81, std = 2.426), var&quot;BQ[8]&quot; = (mean = 12.55, std = 2.831), var&quot;BQ[9]&quot; = (mean = 10.74, std = 3.197), var&quot;BQ[10]&quot; = (mean = 8.445, std = 3.349), var&quot;BQ[11]&quot; = (mean = 5.996, std = 3.057), var&quot;BQ[12]&quot; = (mean = 4.642, std = 3.2), var&quot;C[1]&quot; = (mean = 5788.0, std = 1908.0), var&quot;C[2]&quot; = (mean = 5422.0, std = 1875.0), var&quot;C[3]&quot; = (mean = 5001.0, std = 1705.0), var&quot;C[4]&quot; = (mean = 4470.0, std = 1235.0), var&quot;C[5]&quot; = (mean = 4251.0, std = 898.6), var&quot;C[6]&quot; = (mean = 4192.0, std = 769.6), var&quot;C[7]&quot; = (mean = 5623.0, std = 1795.0), var&quot;C[8]&quot; = (mean = 5353.0, std = 1781.0), var&quot;C[9]&quot; = (mean = 4986.0, std = 1615.0), var&quot;C[10]&quot; = (mean = 4497.0, std = 1268.0), var&quot;C[11]&quot; = (mean = 4292.0, std = 977.8), var&quot;C[12]&quot; = (mean = 4207.0, std = 783.4), var&quot;mean.BL&quot; = (mean = 8.692, std = 1.369), var&quot;mean.BQ&quot; = (mean = 8.02, std = 1.258), var&quot;mean.C&quot; = (mean = 4607.0, std = 479.8))</code></pre><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+mermaid.initialize({
+    startOnLoad: true,
+    theme: "neutral"
+});
+</script></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../hips1/">« Hips1</a><a class="docs-footer-nextpage" href="../hips3/">Hips3 »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Wednesday 2 September 2026 17:47">Wednesday 2 September 2026</span>. Using Julia version 1.12.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
