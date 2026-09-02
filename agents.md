@@ -15,6 +15,7 @@ JuliaBUGS compiles `@bugs` programs and `@model` functions into graphs compatibl
 - Tests require `Pkg.test` with an explicit group or file; direct `test/runtests.jl` execution fails.
 - Run the smallest target, for example: `julia --project=JuliaBUGS -e 'using Pkg; Pkg.test(; test_args=["log_density"])'`.
 - Groups are in `test/runtests.jl`; `elementary` includes doctests and `parallel_sampling` needs threads.
+- Use Julia-version-specific manifests (`Manifest-v{major}.{minor}.toml`), not `Manifest.toml`.
 - Format with JuliaFormatter v1 using `format("JuliaBUGS"; verbose = true)`; discard unrelated changes.
 
 ## Julia engineering
@@ -41,6 +42,11 @@ JuliaBUGS compiles `@bugs` programs and `@model` functions into graphs compatibl
   frontier cache against explicit enumeration on a minimal model.
 - Conditioning, fixing, or graph changes must invalidate dependent classification,
   parameter-layout, source-generation, and marginalization data.
+- Each Gibbs block targets its full conditional given the latest values of all other blocks,
+  including updates earlier in the same sweep. This constrains the target, not the proposal.
+- Prefer direct draws from tractable full conditionals. `EnumeratedSampler` handles finite
+  discrete blocks; add exact kernels for other recognized families, such as Normal, rather
+  than using generic Metropolis-Hastings or slice transitions.
 - Preserve types, shapes, and absent statistics through flat vectors, `ParamsWithStats`, MCMCChains, and FlexiChains.
 
 ## Front ends and review

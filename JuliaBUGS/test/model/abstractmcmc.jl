@@ -1,5 +1,5 @@
 using JuliaBUGS
-using JuliaBUGS: IndependentMH
+using AdvancedMH: RWMH
 using AbstractMCMC
 using Random
 using Test
@@ -18,15 +18,13 @@ using Test
     logdensitymodel = AbstractMCMC.LogDensityModel(model)
 
     rng = Random.MersenneTwister(42)
-    sampler = IndependentMH()
+    sampler = RWMH(2)
     transition, state = AbstractMCMC.step(rng, logdensitymodel, sampler)
 
     @testset "Function-scoped model construction" begin
         function sample_in_function(model_def, data)
             model = compile(model_def, data)
-            return sample(
-                Random.MersenneTwister(42), model, IndependentMH(), 3; progress=false
-            )
+            return sample(Random.MersenneTwister(42), model, RWMH(2), 3; progress=false)
         end
 
         draws = sample_in_function(model_def, data)
@@ -104,15 +102,22 @@ using Test
         model = compile(model_def, (K=2, w=[0.3, 0.7], delta=[0.0, 2.0], sigma=1.0, y=1.5))
         model = JuliaBUGS.settrans(model, true)
         model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseAutoMarginalization())
-        transition, log_densities = JuliaBUGS.Model.evaluate_with_marginalization_values!!(
+        _, log_densities = JuliaBUGS.Model.evaluate_with_marginalization_values!!(
             model, [0.0]
+        )
+        marginalized_sampler = RWMH(1)
+        transition, marginalized_state = AbstractMCMC.step(
+            Random.MersenneTwister(43),
+            AbstractMCMC.LogDensityModel(model),
+            marginalized_sampler;
+            initial_params=[0.0],
         )
 
         pws = AbstractMCMC.ParamsWithStats(
             AbstractMCMC.LogDensityModel(model),
-            sampler,
+            marginalized_sampler,
             transition,
-            state;
+            marginalized_state;
             params=true,
             stats=true,
         )

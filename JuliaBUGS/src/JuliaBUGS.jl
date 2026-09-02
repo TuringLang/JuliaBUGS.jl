@@ -4,6 +4,7 @@ using AbstractMCMC
 using AbstractPPL
 using Accessors
 using ADTypes
+using AdvancedMH: AdvancedMH
 using BangBang
 using Bijectors: Bijectors
 using Distributions
@@ -127,7 +128,7 @@ function gen_chains end
 Unpack a single `transition` produced by `sampler` into a `(params, stats)` pair, where
 `params` is the flat parameter vector ordered as `LogDensityProblems.logdensity` expects it
 and `stats` is a `NamedTuple` of the statistics the sampler reported for that draw. A
-sampler whose transition is an evaluation environment (`Gibbs`, `IndependentMH`) returns
+sampler whose transition is an evaluation environment (`Gibbs`) returns
 the environment itself as `params` instead, which keeps the values' types — an `Int`-valued
 discrete latent stays an `Int` in every output format.
 
@@ -137,11 +138,13 @@ formats that store scalar columns take the union of the keys across draws and fi
 themselves.
 
 Implementing this method is all a sampler needs to do to support every JuliaBUGS output
-format, including the `AbstractMCMC.ParamsWithStats` a callback sees.
+format, including the `AbstractMCMC.ParamsWithStats` a callback sees. Raw transitions are
+retained until output-format dispatch, then unpacked for JuliaBUGS formats. This preserves
+sampler-owned formats that require their original transition type.
 
-The fallback returns `nothing`, meaning the sampler is not known to JuliaBUGS. Sampling
-without a `chain_type` then hands back the raw transitions; asking for a specific output
-format raises an error naming this method.
+The fallback returns `nothing`, meaning the sampler is not known to JuliaBUGS. Its raw
+transitions remain available to AbstractMCMC and sampler-owned output methods. JuliaBUGS
+output methods that require this representation raise an error naming this method.
 """
 function transition_params_and_stats end
 
@@ -174,8 +177,8 @@ export to_distribution
 
 transition_params_and_stats(::BUGSModel, ::Any, ::Any) = nothing
 
-include("independent_mh.jl")
 include("gibbs.jl")
+include("advanced_mh.jl")
 
 include("source_gen.jl")
 

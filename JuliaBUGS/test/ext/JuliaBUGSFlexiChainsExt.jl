@@ -1,4 +1,4 @@
-using JuliaBUGS: Gibbs, IndependentMH, BUGSModelWithGradient, getparams, settrans
+using JuliaBUGS: Gibbs, BUGSModelWithGradient, getparams, settrans
 using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
 
 # test FlexiChain construction with a simple Bayesian linear regression model
@@ -138,7 +138,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
         @varname(sigma[2]),
         @varname(sigma[3]),
     ])
-    mu_draws = hmc_chain[@varname(mu[1:3]), stack = false]
+    mu_draws = hmc_chain[@varname(mu[1:3]), stack=false]
     @test length(mu_draws) == 10
     @test all(v -> v isa AbstractVector && length(v) == 3, mu_draws)
     # each iteration stores its own array copy, not a single reused buffer
@@ -156,9 +156,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
         gibbs_model = compile(model_def, (; N=5, y=[1.0, 1.5, 2.0, 2.5, 3.0]))
 
         sampler_map = OrderedDict(
-            @varname(μ) => IndependentMH(),
-            @varname(τ) => IndependentMH(),
-            @varname(θ) => IndependentMH(),
+            @varname(μ) => RWMH(1), @varname(τ) => RWMH(1), @varname(θ) => RWMH(5)
         )
         gibbs = Gibbs(gibbs_model, sampler_map)
 
@@ -172,17 +170,15 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
         @test length(FlexiChains.parameters(chain)) == 7  # μ, τ, θ[1:5]
     end
 
-    @testset "IndependentMH with chain_type=VNChain" begin
+    @testset "AdvancedMH with chain_type=VNChain" begin
         model_def = @bugs begin
             mu ~ Normal(0, 1)
             y ~ Normal(mu, 0.1)
         end
-        imh_model = compile(model_def, (; y=1.0))
+        mh_model = compile(model_def, (; y=1.0))
 
         rng = Random.MersenneTwister(999)
-        chain = sample(
-            rng, imh_model, IndependentMH(), 100; chain_type=VNChain, progress=false
-        )
+        chain = sample(rng, mh_model, RWMH(1), 100; chain_type=VNChain, progress=false)
 
         @test chain isa VNChain
         @test @varname(mu) in FlexiChains.parameters(chain)
@@ -365,7 +361,7 @@ end
         AbstractMCMC.sample,
         StableRNG(11),
         model,
-        IndependentMH(),
+        RWMH(2),
         10;
         progress=false,
         chain_type=Vector{AbstractMCMC.ParamsWithStats},
