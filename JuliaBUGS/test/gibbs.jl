@@ -503,6 +503,42 @@ using StatsBase: mode
         end
     end
 
+    @testset "Exact finite discrete blocks" begin
+        array_model_def = @bugs begin
+            for i in 1:3
+                k[i] ~ dbern(0.5)
+            end
+        end
+        array_model = compile(array_model_def, (;), (; k=zeros(Int, 3)))
+        array_gibbs = Gibbs(
+            array_model, OrderedDict(@varname(k) => JuliaBUGS.EnumeratedSampler())
+        )
+        logdensitymodel = AbstractMCMC.LogDensityModel(array_model)
+        rng = StableRNG(2027)
+        _, state = Base.invokelatest(AbstractMCMC.step, rng, logdensitymodel, array_gibbs)
+        draws = NamedTuple[]
+        for _ in 1:10
+            draw, state = Base.invokelatest(
+                AbstractMCMC.step, rng, logdensitymodel, array_gibbs, state
+            )
+            push!(draws, draw)
+        end
+        @test allunique(objectid(draw.k) for draw in draws)
+
+        scalar_model_def = @bugs begin
+            k ~ dbern(0.5)
+        end
+        scalar_model = JuliaBUGS.settrans(compile(scalar_model_def, (;), (; k=0)), false)
+        scalar_gibbs = Gibbs(scalar_model, RWMH(1))
+        logdensitymodel = AbstractMCMC.LogDensityModel(scalar_model)
+        _, state = Base.invokelatest(AbstractMCMC.step, rng, logdensitymodel, scalar_gibbs)
+        draw, _ = Base.invokelatest(
+            AbstractMCMC.step, rng, logdensitymodel, scalar_gibbs, state
+        )
+        @test draw.k in (0, 1)
+        @test !scalar_model.transformed
+    end
+
     @testset "Gibbs with AdvancedHMC/AdvancedMH integration" begin
         using AdvancedHMC: HMC, NUTS
         using AdvancedMH: RWMH, StaticMH

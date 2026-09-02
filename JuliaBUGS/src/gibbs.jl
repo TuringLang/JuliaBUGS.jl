@@ -262,9 +262,10 @@ end
 function gibbs_internal(
     rng::Random.AbstractRNG, cond_model::BUGSModel, ::EnumeratedSampler, _state=nothing
 )
-    evaluation_env = Model._sample_discrete_latents!!(
-        rng, cond_model, cond_model.evaluation_env
+    evaluation_env = Model.smart_copy_evaluation_env(
+        cond_model.evaluation_env, cond_model.mutable_symbols
     )
+    evaluation_env = Model._sample_discrete_latents!!(rng, cond_model, evaluation_env)
     return evaluation_env, nothing
 end
 
@@ -457,6 +458,8 @@ function AbstractMCMC.step(
         variables_to_condition_on = setdiff(model_parameters, variables_to_update)
         conditioned_model = AbstractPPL.condition(model, variables_to_condition_on)
         if sampler.sampler_map[variables_to_update] isa EnumeratedSampler
+            # Marginalization requires transformed mode; exact blocks are entirely discrete.
+            conditioned_model = settrans(conditioned_model, true)
             conditioned_model = set_evaluation_mode(
                 conditioned_model, UseAutoMarginalization()
             )
