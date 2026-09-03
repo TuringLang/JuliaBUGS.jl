@@ -2,10 +2,21 @@
 
 ## 0.17.0
 
+### Highlights
+
+- **`sample` takes the compiled model directly** (#529). `sample(rng, model, sampler, N; adtype=AutoMooncake())` builds the gradient wrapper internally, and gradient-free samplers work on the bare model without it. The manual `BUGSModelWithGradient(model, adtype)` path still works, and ensemble sampling (`MCMCSerial`, `MCMCThreads`) takes the same keyword.
+
+- **Models compiled and sampled inside one function work** (#529). `compile` creates node functions at runtime, so sampling now runs in one latest-world call and no longer hits world-age errors when a model is built and sampled in the same function.
+
+- **Gibbs blocks target their full conditionals** (#532). Every block update sees the latest values of all other blocks, and AdvancedMH, AdvancedHMC, and SliceSampling kernels are retargeted after each block update.
+
+- **`EnumeratedSampler`** (#532) draws finite discrete Gibbs blocks exactly from their enumerated full conditional. The README walks through a three-component Gaussian mixture, `EnumeratedSampler` for the allocations and a random-walk kernel for the component parameters, in both `@model` and WinBUGS syntax.
+
+- **One output-conversion path for all samplers** (#532). MCMCChains and FlexiChains outputs are built through the shared conversion, and sampler-owned formats keep their raw transitions.
+
 ### Breaking Changes
 
-- `IndependentMH` has been removed. Use `AdvancedMH.RWMH` or `AdvancedMH.StaticMH`; AdvancedMH is now a direct dependency.
-- `EnumeratedSampler` samples finite discrete Gibbs blocks exactly from their enumerated full conditional.
+- `IndependentMH` has been removed (#532). It used an incomplete independence-proposal acceptance ratio and mixed constrained proposals with transformed target densities. Use `AdvancedMH.RWMH` or `AdvancedMH.StaticMH` instead. AdvancedMH is now a direct dependency, available as `JuliaBUGS.AdvancedMH`.
 
 ## 0.16.1
 
