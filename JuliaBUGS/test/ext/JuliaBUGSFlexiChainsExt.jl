@@ -375,3 +375,33 @@ end
     # Array-valued variables survive the conversion whole.
     @test all(v -> size(v) == (2,), vec(chain[@varname(x[1:2])]))
 end
+
+@testset "VNChain output with DynamicPPL loaded" begin
+    @eval using DynamicPPL: DynamicPPL
+
+    model_def = @bugs begin
+        mu ~ dnorm(0, 0.001)
+        for i in 1:N
+            y[i] ~ dnorm(mu, 1)
+        end
+    end
+    model = compile(model_def, (; N=3, y=[1.0, 2.0, 3.0]))
+
+    for sampler in (NUTS(0.8), Gibbs(model, RobustAdaptiveMetropolis()))
+        chain = Base.invokelatest(
+            AbstractMCMC.sample,
+            StableRNG(24),
+            model,
+            sampler,
+            20;
+            chain_type=VNChain,
+            n_adapts=10,
+            discard_initial=10,
+            progress=false,
+            adtype=AutoForwardDiff(),
+        )
+        @test chain isa VNChain
+        @test size(chain) == (20, 1)
+        @test all(isfinite, vec(chain[@varname(mu)]))
+    end
+end
