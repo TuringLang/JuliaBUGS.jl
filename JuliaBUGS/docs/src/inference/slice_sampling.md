@@ -93,8 +93,9 @@ gibbs_chain = AbstractMCMC.sample(
 summarystats(gibbs_chain)
 ```
 
-Slice samplers can be freely mixed with other samplers (HMC, `IndependentMH`, …) in the same
-`sampler_map`.
+Slice samplers can be freely mixed with HMC and AdvancedMH samplers in the same `sampler_map`.
+They update continuous blocks. `Gibbs` updates finite discrete blocks exactly by enumerating
+and normalizing their full conditional, without invoking SliceSampling or AdvancedMH.
 
 ## Output formats and statistics
 

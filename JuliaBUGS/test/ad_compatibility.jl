@@ -224,4 +224,22 @@
             @test all(isfinite, grad)
         end
     end
+
+    @testset "Missing AD integration" begin
+        script = """
+        using ADTypes, JuliaBUGS
+        model = compile(@bugs(begin x ~ dnorm(0, 1) end), (;))
+        caught = try
+            JuliaBUGS.BUGSModelWithGradient(model, AutoReverseDiff())
+            nothing
+        catch exception
+            exception
+        end
+        @assert caught isa ArgumentError
+        @assert occursin("DifferentiationInterface", caught.msg)
+        """
+        run(
+            `$(Base.julia_cmd()) --project=$(Base.active_project()) --startup-file=no -e $script`,
+        )
+    end
 end

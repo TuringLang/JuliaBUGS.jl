@@ -91,6 +91,14 @@ using JuliaBUGS: Gibbs
         )
         gibbs = Gibbs(gibbs_model, sampler_map)
 
+        logdensitymodel = AbstractMCMC.LogDensityModel(gibbs_model)
+        _, state = AbstractMCMC.step(StableRNG(1357), logdensitymodel, gibbs)
+        _, state = AbstractMCMC.step(StableRNG(1358), logdensitymodel, gibbs, state)
+        @test all(
+            sub_state -> haskey(sub_state.transition.info, :num_proposals),
+            values(state.sub_states),
+        )
+
         chain = Base.invokelatest(
             AbstractMCMC.sample,
             StableRNG(1357),
@@ -106,5 +114,45 @@ using JuliaBUGS: Gibbs
         @test Set([:a, :b]) ⊆ Set(chain.name_map[:parameters])
         @test all(isfinite, vec(chain[:a].data))
         @test all(isfinite, vec(chain[:b].data))
+    end
+
+    @testset "Gibbs targets continuous full conditionals" begin
+        conditional_model_def = @bugs begin
+            x ~ Normal(0, 1)
+            y ~ Normal(x, 1)
+            z ~ Normal(y, 1)
+        end
+        conditional_model = compile(conditional_model_def, (; z=1.0), (; x=0.0, y=0.0))
+        gibbs = Gibbs(
+            conditional_model,
+            OrderedDict(
+                @varname(x) => SliceSampling.SliceSteppingOut(1.0),
+                @varname(y) => SliceSampling.SliceSteppingOut(1.0),
+            ),
+        )
+        chain = AbstractMCMC.sample(
+            StableRNG(9753),
+            conditional_model,
+            gibbs,
+            5_000;
+            discard_initial=500,
+            chain_type=Chains,
+            progress=false,
+        )
+
+        @test mean(chain[:x]) ≈ 1 / 3 atol = 0.06
+        @test mean(chain[:y]) ≈ 2 / 3 atol = 0.06
+    end
+
+    @testset "Finite discrete blocks use exact Gibbs updates" begin
+        discrete_model_def = @bugs begin
+            k ~ Bernoulli(0.5)
+            y ~ Bernoulli(0.1 + 0.8 * k)
+        end
+        discrete_model = compile(discrete_model_def, (; y=1), (; k=0))
+        gibbs = Gibbs(
+            discrete_model, OrderedDict(@varname(k) => SliceSampling.SliceSteppingOut(1.0))
+        )
+        @test only(values(gibbs.sampler_map)) isa JuliaBUGS.EnumeratedSampler
     end
 end

@@ -15,9 +15,17 @@ addprocs(
     using DifferentiationInterface
     using ReverseDiff
     using StableRNGs
+    using Distributions
+
+    function assert_gradient_model(
+        rng, model, sampler, transition, state, iteration; kwargs...
+    )
+        @assert model.logdensity isa JuliaBUGS.BUGSModelWithGradient
+        return nothing
+    end
 end
 
-@testset "Distributed Sampling (Issue #333)" begin
+@testset "Distributed sampling" begin
     # Use the same model from issue #333
     data = (
         r=[10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],
@@ -106,6 +114,31 @@ end
 
         @test length(samples) == n_chains
         @test all(length(chain) == n_samples for chain in samples)
+    end
+
+    @testset "MCMCDistributed prepares @model AD models" begin
+        @model function distributed_normal_model((; y, mu), sigma)
+            mu ~ Normal(0, 10)
+            y ~ Normal(mu, sigma)
+        end
+
+        model = distributed_normal_model((; y=1.0), 1.0)
+        n_chains = nworkers()
+        samples = sample(
+            StableRNG(1234),
+            model,
+            HMC(0.1, 2),
+            MCMCDistributed(),
+            2,
+            n_chains;
+            adtype=AutoReverseDiff(; compile=false),
+            callback=assert_gradient_model,
+            n_adapts=0,
+            progress=false,
+        )
+
+        @test length(samples) == n_chains
+        @test all(length(chain) == 2 for chain in samples)
     end
 end
 

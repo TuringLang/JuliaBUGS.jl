@@ -109,12 +109,29 @@ grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothin
 ```
 """
 function BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
+    x = getparams(model)
+    _require_ad_integration(adtype, x)
+
     # Check AD backend compatibility with evaluation mode
     model = _check_ad_compatibility(model, adtype)
 
-    x = getparams(model)
     prep = _prepare_logdensity_gradient(adtype, model, x)
     return BUGSModelWithGradient(adtype, prep, model)
+end
+
+function _require_ad_integration(adtype::ADTypes.AbstractADType, x::AbstractVector)
+    applicable(AbstractPPL.prepare, adtype, _logdensity_for_gradient, x) && return nothing
+    if _is_mooncake(adtype)
+        requirement = "Mooncake"
+    else
+        requirement = "DifferentiationInterface and the package implementing the backend"
+    end
+    throw(
+        ArgumentError(
+            "No gradient implementation is loaded for $(typeof(adtype)). " *
+            "Load $requirement before constructing a `BUGSModelWithGradient`.",
+        ),
+    )
 end
 
 function _is_mooncake(adtype::ADTypes.AbstractADType)

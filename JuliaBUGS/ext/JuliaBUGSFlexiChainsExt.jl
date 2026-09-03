@@ -75,17 +75,6 @@ function JuliaBUGS.gen_chains(
     )
 end
 
-function AbstractMCMC.bundle_samples(
-    ts::Vector,
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
-    sampler::AbstractMCMC.AbstractSampler,
-    state,
-    chain_type::Type{FlexiChains.VNChain};
-    kwargs...,
-)
-    return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
-end
-
 """
     AbstractMCMC.from_samples(
         ::Type{<:FlexiChains.FlexiChain{<:VarName}},

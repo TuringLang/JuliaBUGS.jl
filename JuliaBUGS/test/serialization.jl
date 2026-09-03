@@ -1,3 +1,22 @@
+serialization_normal(mu, sigma) = Normal(mu, sigma)
+
+@model function serialization_normal_model((; y, mu), sigma)
+    mu ~ serialization_normal(0, 10)
+    y ~ serialization_normal(mu, sigma)
+end
+
+@testset "serialization preserves @model compilation context" begin
+    model = serialization_normal_model((; y=1.0), 1.0)
+    io = IOBuffer()
+    serialize(io, model)
+    seekstart(io)
+    restored = deserialize(io)
+    params = JuliaBUGS.Model.getparams(model)
+
+    @test Base.invokelatest(LogDensityProblems.logdensity, restored, params) ==
+        Base.invokelatest(LogDensityProblems.logdensity, model, params)
+end
+
 @testset "serialization" begin
     (; model_def, data) = JuliaBUGS.BUGSExamples.rats
     model = compile(model_def, data)

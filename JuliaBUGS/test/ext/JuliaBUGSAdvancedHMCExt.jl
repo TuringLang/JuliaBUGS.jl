@@ -1,4 +1,63 @@
 @testset "AdvancedHMC" begin
+    @testset "sample prepares AD models in function scope" begin
+        @model function normal_location_hmc((; y, mu), sigma, N)
+            mu ~ Normal(0, 10)
+            for i in 1:N
+                y[i] ~ Normal(mu, sigma)
+            end
+        end
+
+        function run_sampling(args...)
+            model = normal_location_hmc((; y=[1.2, 0.9, 1.4]), 1.0, 3)
+            callback_models = Any[]
+            function callback(
+                rng, sampled_model, sampler, transition, state, iteration; kwargs...
+            )
+                return push!(callback_models, sampled_model.logdensity)
+            end
+            draws = AbstractMCMC.sample(
+                StableRNG(1234),
+                model,
+                HMC(0.1, 2),
+                args...;
+                adtype=AutoReverseDiff(; compile=false),
+                callback,
+                n_adapts=0,
+                progress=false,
+            )
+            return draws, callback_models
+        end
+
+        draws, callback_models = run_sampling(3)
+        is_ad_model =
+            m -> m isa JuliaBUGS.BUGSModelWithGradient && m.adtype isa AutoReverseDiff
+
+        @test length(draws) == length(callback_models) == 3
+        @test all(is_ad_model, callback_models)
+
+        chains, callback_models = run_sampling(MCMCSerial(), 2, 2)
+        @test length(chains) == 2
+        @test all(chain -> length(chain) == 2, chains)
+        @test length(callback_models) == 4
+        @test all(is_ad_model, callback_models)
+
+        caught = try
+            AbstractMCMC.sample(
+                StableRNG(1234),
+                normal_location_hmc((; y=[1.2, 0.9, 1.4]), 1.0, 3),
+                HMC(0.1, 2),
+                1;
+                n_adapts=0,
+                progress=false,
+            )
+            nothing
+        catch exception
+            exception
+        end
+        @test caught isa ArgumentError
+        @test occursin("adtype", sprint(showerror, caught))
+    end
+
     @testset "Generation of parameter names" begin
         model_def = @bugs begin
             x[1:2] ~ dmnorm(mu[:], sigma[:, :])
