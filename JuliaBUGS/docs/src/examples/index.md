@@ -60,3 +60,5 @@ time. The model is in the source tree at `src/BUGSExamples/Volume_4/`.
 | [LeukFr: Cox Regression with Random Effects](volume_1/leukfr.md) | Cox proportional-hazards survival model with a normal pair-level frailty (random effect) for the Freireich leukaemia remission data. |
 
 New to the workflow these pages assume? See [Getting Started](../getting_started.md) for the model-to-samples walkthrough that every example page follows.
+
+Adding an example? The Volume 2 and 3 pages share one structure, and the script that produced it is kept in [issue #533](https://github.com/TuringLang/JuliaBUGS.jl/issues/533) rather than in the repository, since the pages are written and maintained by hand from here.
