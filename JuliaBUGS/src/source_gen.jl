@@ -667,10 +667,8 @@ end
 
 ## transform AST to log density computation code
 
-function _gen_log_density_computation_function_expr(
-    model_def, evaluation_env, function_name::Symbol=:__compute_log_density__
-)
-    return MacroTools.@q function $function_name(__evaluation_env__, __flattened_values__)
+function _gen_log_density_computation_function_expr(model_def, evaluation_env)
+    return MacroTools.@q function (__evaluation_env__, __flattened_values__)
         (; $(keys(evaluation_env)...)) = __evaluation_env__
         __logp__ = 0.0
         __current_idx__ = 1

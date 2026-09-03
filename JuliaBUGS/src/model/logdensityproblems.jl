@@ -1,9 +1,7 @@
 using LogDensityProblems
 
 function _eval_logdensity(model, ::UseGeneratedLogDensityFunction, x)
-    return Base.invokelatest(
-        model.log_density_computation_function, model.evaluation_env, x
-    )
+    return model.log_density_computation_function(model.evaluation_env, x)
 end
 
 function _eval_logdensity(model, ::UseGraph, x)
@@ -219,13 +217,7 @@ function _prepare_logdensity_gradient(
     adtype::ADTypes.AbstractADType, model::BUGSModel, x::AbstractVector
 )
     if model.evaluation_mode isa UseGeneratedLogDensityFunction
-        # The generated log-density function is created by Core.eval when the
-        # evaluation mode is selected. AbstractPPL.prepare probes the target
-        # immediately, so prepare this target in the latest world age without
-        # putting invokelatest inside the function differentiated by AD.
-        return Base.invokelatest(
-            AbstractPPL.prepare, adtype, _generated_logdensity_for_gradient(model), x
-        )
+        return AbstractPPL.prepare(adtype, _generated_logdensity_for_gradient(model), x)
     elseif adtype isa ADTypes.AutoMooncake
         # Mooncake's forward-mode path currently treats AbstractPPL context
         # arguments as AD inputs, but reverse mode can capture the model here so

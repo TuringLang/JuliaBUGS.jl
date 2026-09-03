@@ -4,6 +4,9 @@
 
 ### Bug Fixes
 
+- Models compiled and evaluated in the same function are world-age safe;
+  generated node and log-density functions now use `MistyClosure` instead of
+  defining global methods at runtime (#530).
 - `chain_type = VNChain` works with DynamicPPL loaded (#536). The generic `bundle_samples` is the more specific in the model argument and FlexiChains's DynamicPPL extension is the more specific in `chain_type`, so with both loaded neither won and sampling any model into a `FlexiChain` raised an ambiguous-method error. Every sampler was affected, and so was every session using JuliaBUGS alongside Turing, which loads DynamicPPL. The tests now load DynamicPPL, which is the condition that triggers it.
 
 ## 0.17.0

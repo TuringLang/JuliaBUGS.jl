@@ -43,6 +43,47 @@ end
     @test copied.compile_options === model.compile_options
 end
 
+@model function world_age_model((; x))
+    x ~ Normal(0, 1)
+end
+
+const world_age_bugs_model = @bugs begin
+    x ~ dnorm(0, 1)
+end
+
+const world_age_string_model = @bugs("model { x ~ dnorm(0, 1) }")
+
+function evaluate_function_scoped_models()
+    raw_model_def = MacroTools.rmlines(:(
+        begin
+            x ~ Normal(0, 1)
+        end
+    ))
+    models = (
+        world_age_model((;)),
+        world_age_bugs_model((;), (; x=0.0)),
+        world_age_string_model((;), (; x=0.0)),
+        compile(
+            raw_model_def, (;), (; x=0.0); skip_validation=true, eval_module=@__MODULE__
+        ),
+    )
+    return map(models) do model
+        parameters = [0.0]
+        graph_logdensity = LogDensityProblems.logdensity(model, parameters)
+        generated_model = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
+        generated_logdensity = LogDensityProblems.logdensity(generated_model, parameters)
+        return graph_logdensity, generated_logdensity
+    end
+end
+
+@testset "Function-scoped models are world-age safe" begin
+    expected = logpdf(Normal(), 0.0)
+    for (graph_logdensity, generated_logdensity) in evaluate_function_scoped_models()
+        @test graph_logdensity ≈ expected
+        @test generated_logdensity ≈ expected
+    end
+end
+
 @testset "Model Interface Functions" begin
     @testset "parameters and variables" begin
         model_def = @bugs begin

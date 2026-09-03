@@ -96,9 +96,7 @@ function _bugs_param_value_support(model::BUGSModel)
     for i in eachindex(gd.sorted_nodes)
         gd.is_stochastic_vals[i] || continue
         gd.is_observed_vals[i] && continue
-        dist = Base.invokelatest(
-            gd.node_function_vals[i], model.evaluation_env, gd.loop_vars_vals[i]
-        )
+        dist = gd.node_function_vals[i](model.evaluation_env, gd.loop_vars_vals[i])
         push!(support_types, Distributions.value_support(typeof(dist)))
     end
     isempty(support_types) && return Distributions.Continuous
