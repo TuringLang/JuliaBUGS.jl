@@ -28,13 +28,6 @@ function _prepare_and_sample(rng, model, sampler, args...; adtype, kwargs...)
     )
 end
 
-# `compile` creates node functions with `Core.eval`, so models compiled and sampled
-# within one function cross a world-age boundary. Keep wrapping and sampling in one
-# `invokelatest` call. A future compiler should represent node expressions as callable
-# data, removing both `Core.eval` and this boundary.
-_sample_in_latest_world(args...; kwargs...) =
-    Base.invokelatest(_prepare_and_sample, args...; kwargs...)
-
 function AbstractMCMC.sample(
     rng::Random.AbstractRNG,
     model::BUGSModel,
@@ -43,7 +36,7 @@ function AbstractMCMC.sample(
     adtype::Union{Nothing,ADTypes.AbstractADType}=nothing,
     kwargs...,
 )
-    return _sample_in_latest_world(rng, model, sampler, N_or_isdone; adtype, kwargs...)
+    return _prepare_and_sample(rng, model, sampler, N_or_isdone; adtype, kwargs...)
 end
 
 function AbstractMCMC.sample(
@@ -56,9 +49,7 @@ function AbstractMCMC.sample(
     adtype::Union{Nothing,ADTypes.AbstractADType}=nothing,
     kwargs...,
 )
-    return _sample_in_latest_world(
-        rng, model, sampler, parallel, N, nchains; adtype, kwargs...
-    )
+    return _prepare_and_sample(rng, model, sampler, parallel, N, nchains; adtype, kwargs...)
 end
 
 # Strip the model wrappers once, so the per-format `gen_chains` methods only need a

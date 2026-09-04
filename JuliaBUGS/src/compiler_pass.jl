@@ -711,7 +711,9 @@ function build_node_functions(
                 statement.args[2], statement.args[3]
             end
             args, node_func_expr = make_function_expr(lhs, rhs, eval_env)
-            node_func = Core.eval(eval_module, node_func_expr)
+            loop_vars_type = NamedTuple{loop_vars,NTuple{length(loop_vars),Int}}
+            signature = Tuple{NamedTuple,loop_vars_type}
+            node_func = _make_misty_closure(node_func_expr, eval_module, signature)
             f_dict[statement] = (args, node_func_expr, node_func)
         elseif Meta.isexpr(statement, :for)
             loop_var, _, _, body = decompose_for_expr(statement)

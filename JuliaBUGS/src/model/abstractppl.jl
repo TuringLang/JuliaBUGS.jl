@@ -825,10 +825,12 @@ function _regenerate_log_density_function(
 
     if !isnothing(lowered_model_def)
         log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
-            lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
+            lowered_model_def, evaluation_env
         )
-        new_log_density_computation_function = Core.eval(
-            JuliaBUGS, log_density_computation_expr
+        new_log_density_computation_function = JuliaBUGS._make_misty_closure(
+            log_density_computation_expr,
+            JuliaBUGS,
+            Tuple{typeof(evaluation_env),AbstractVector},
         )
 
         # Collect sorted nodes from the reconstructed model def to ensure correct parameter ordering

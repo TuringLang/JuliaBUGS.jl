@@ -9,6 +9,26 @@
     end
     data = (N=5, y=[1.0, 2.0, 1.5, 2.5, 1.8])
 
+    function function_scoped_mooncake_gradients(model_def, data)
+        graph_model = compile(model_def, data)
+        parameters = JuliaBUGS.getparams(graph_model)
+        generated_model = JuliaBUGS.set_evaluation_mode(
+            graph_model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
+        return map((graph_model, generated_model)) do model
+            gradient_model = JuliaBUGS.BUGSModelWithGradient(
+                model, AutoMooncake(; config=nothing)
+            )
+            LogDensityProblems.logdensity_and_gradient(gradient_model, parameters)
+        end
+    end
+
+    @testset "Function-scoped Mooncake gradients are world-age safe" begin
+        graph_result, generated_result = function_scoped_mooncake_gradients(model_def, data)
+        @test graph_result[1] ≈ generated_result[1]
+        @test graph_result[2] ≈ generated_result[2]
+    end
+
     @testset "UseGraph mode" begin
         model = compile(model_def, data)
         @test model.evaluation_mode isa JuliaBUGS.UseGraph
