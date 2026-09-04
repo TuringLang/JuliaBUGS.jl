@@ -7,6 +7,7 @@ using JuliaBUGS: BUGSModel, BUGSModelWithGradient, OrderedDict
 using JuliaBUGS.Model:
     BUGSModelLike,
     BUGSParamsWithStats,
+    CollectedTransitions,
     copy_stat_values,
     postprocess_rng,
     reconstruct_chain_values,
@@ -73,6 +74,17 @@ function JuliaBUGS.gen_chains(
         dicts;
         iter_indices=range(discard_initial + 1; step=thinning, length=niters),
     )
+end
+
+function AbstractMCMC.bundle_samples(
+    ts::CollectedTransitions,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelLike},
+    sampler::AbstractMCMC.AbstractSampler,
+    state,
+    chain_type::Type{FlexiChains.VNChain};
+    kwargs...,
+)
+    return JuliaBUGS.bundle_transitions(chain_type, logdensitymodel, ts, sampler; kwargs...)
 end
 
 """
