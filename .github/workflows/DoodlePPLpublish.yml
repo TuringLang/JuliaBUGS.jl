@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'DoodlePPL/**'
+      - 'DoodleBUGS/**'
       - '.github/workflows/DoodlePPLpublish.yml'
   workflow_dispatch:
 
@@ -32,3 +33,14 @@ jobs:
           target-folder: DoodlePPL
           clean: true
           clean-exclude: pr-previews
+
+      # The pre-rename app is still deployed here and share links made before
+      # the rename point at it, so the path keeps serving a redirect. `clean`
+      # replaces that old build with the one page.
+      - name: Deploy the DoodleBUGS redirect
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: DoodleBUGS
+          target-folder: DoodleBUGS
+          clean: true
