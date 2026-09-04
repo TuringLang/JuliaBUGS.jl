@@ -114,6 +114,7 @@ All props are optional:
 | `mode` | string | `"embedded"` | `"embedded"` keeps the maximize and edit toggles; `"fullpage"` pins the editor maximized, editable |
 | `read-only` | boolean | `false` | Show the graph view-only: editing and panning are locked and the edit toggle is hidden |
 | `theme-mode` | string | - | `"light"` or `"dark"` |
+| `theme-from` | string | - | A class the host page sets on `<html>` or `<body>` when it is dark, e.g. `"theme--documenter-dark"`. The widget follows it live, so a page with its own theme toggle needs no glue code. Ignored when `theme-mode` is set. |
 | `initial-state` | string | - | JSON string to restore saved work (get from `state-update` event) |
 | `storage-key` | string | auto | Custom key for localStorage (only needed for multiple widgets on same page) |
 

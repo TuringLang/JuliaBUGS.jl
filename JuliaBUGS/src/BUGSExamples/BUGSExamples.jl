@@ -32,7 +32,10 @@ include("./Volume_1/12_Blocker.jl")
 include("./Volume_1/13_Oxford.jl")
 include("./Volume_1/14_LSAT.jl")
 include("./Volume_1/15_Bones.jl")
-#include("./Volume_1/16_Inhalers.jl")
+# 16_Inhalers: compiles to a cyclic graph ("The input graph contains at least one
+# loop") because `group[i]` is a logical node used as an index into `mu[group[i], t]`.
+# The arity of its Example call was also wrong; that is fixed, but it stays disabled.
+# include("./Volume_1/16_Inhalers.jl")
 include("./Volume_1/17_Mice.jl")
 include("./Volume_1/18_Kidney.jl")
 include("./Volume_1/19_Leuk.jl")
@@ -76,8 +79,8 @@ include("Volume_2/12_Ice.jl")
 include("Volume_2/13_Beetles.jl")
 include("Volume_2/14_Alligators.jl")
 include("Volume_2/15_Endo.jl")
-# include("Volume_2/16_Stagnant.jl")
-# include("Volume_2/17_Asia.jl")
+include("Volume_2/16_Stagnant.jl")
+include("Volume_2/17_Asia.jl")
 # include("Volume_2/18_Pigs.jl")
 # include("Volume_2/19_Simulating_data.jl")
 
@@ -96,10 +99,70 @@ vol_2 = (
     # ice = ice,
     beetles = beetles,
     alligators = alligators,
-    endo = endo
+    endo = endo,
+    stagnant = stagnant,
+    asia = asia
+)
+
+include("Volume_3/02_Eye_Tracking.jl")
+include("Volume_3/04_Circle.jl")
+include("Volume_3/04_HollowSquare.jl")
+include("Volume_3/04_Parallelogram.jl")
+include("Volume_3/04_Ring.jl")
+include("Volume_3/04_SquareMinusCircle.jl")
+include("Volume_3/05_Hepatitis.jl")
+include("Volume_3/05_Hepatitis_ME.jl")
+include("Volume_3/06_Hips1.jl")
+include("Volume_3/07_Hips2.jl")
+include("Volume_3/08_Hips3.jl")
+include("Volume_3/09_Hips4.jl")
+include("Volume_3/11_PigWeights.jl")
+include("Volume_3/12_Pines.jl")
+# Not included: 01_Camel (partially observed multivariate node), 03_Fire (dloglik),
+# 10_Jama and 13_St_Veit (interp.lin). See Volume_3/notes.md.
+
+vol_3 = (
+    eye_tracking = eye_tracking,
+    circle = circle,
+    hollow_square = hollow_square,
+    parallelogram = parallelogram,
+    ring = ring,
+    square_minus_circle = square_minus_circle,
+    hepatitis = hepatitis,
+    hepatitis_me = hepatitis_me,
+    hips1 = hips1,
+    hips2 = hips2,
+    hips3 = hips3,
+    hips4 = hips4,
+    pig_weights = pig_weights,
+    bayes_factors = bayes_factors
 )
 
 const VOLUME_1 = vol_1
 const VOLUME_2 = vol_2
+const VOLUME_3 = vol_3
+
+"""
+    volumes()
+
+The registered example volumes, as a `NamedTuple` of `NamedTuple`s.
+"""
+volumes() = (volume_1 = VOLUME_1, volume_2 = VOLUME_2, volume_3 = VOLUME_3)
+
+"""
+    list([io::IO = stdout])
+
+Print every registered example, grouped by volume.
+"""
+function list(io::IO = stdout)
+    for (vol, examples) in pairs(volumes())
+        println(
+            io, replace(titlecase(string(vol)), "_" => " "), " (", length(examples), ")")
+        for (key, ex) in pairs(examples)
+            println(io, "  ", rpad(key, 26), ex.name)
+        end
+    end
+    return nothing
+end
 
 end
