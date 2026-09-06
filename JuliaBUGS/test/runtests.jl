@@ -44,6 +44,7 @@ using ReverseDiff
 using ForwardDiff
 using Mooncake
 using SliceSampling
+using DynamicPPL
 
 JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Exponential Gamma InverseGamma Normal Uniform LogNormal Poisson
 JuliaBUGS.@bugs_primitive Diagonal Dirichlet LKJ MvNormal
@@ -90,6 +91,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("model/domain_error_handling.jl")
         include("ad_compatibility.jl")
         include("model/to_distribution.jl")
+        include("model/to_marginal.jl")
     end,
     "callbacks" => () -> include("model/abstractmcmc.jl"),
     "params_with_stats" => () -> include("model/params_with_stats.jl"),
@@ -98,6 +100,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "inference_flexichains" => () -> include("ext/JuliaBUGSFlexiChainsExt.jl"),
     "inference_mh" => () -> include("advanced_mh.jl"),
     "inference_slice_sampling" => () -> include("ext/JuliaBUGSSliceSamplingExt.jl"),
+    "inference_dynamicppl" => () -> include("ext/JuliaBUGSDynamicPPLExt.jl"),
     "inference_marginalization" => () -> include("model/auto_marginalization_sampling.jl"),
     "gibbs" => () -> include("gibbs.jl"),
     "parallel_sampling" => () -> include("parallel_sampling.jl"),
