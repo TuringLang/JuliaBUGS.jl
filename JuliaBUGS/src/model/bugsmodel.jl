@@ -431,11 +431,11 @@ function BUGSModel(
 
         if !is_stochastic
             # Deterministic node
-            value = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            value = node_function(evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
             # Stochastic node - evaluate distribution
-            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
 
             if !is_observed
                 # Unobserved stochastic node (parameter)
@@ -590,7 +590,7 @@ function initialize!(
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
         variable_type = model.graph_evaluation_data.variable_types[i]
         if !is_stochastic
-            value = Base.invokelatest(node_function, model.evaluation_env, loop_vars)
+            value = node_function(model.evaluation_env, loop_vars)
             BangBang.@set!! model.evaluation_env = setindex!!(
                 model.evaluation_env, value, vn
             )
@@ -609,7 +609,7 @@ function initialize!(
             else
                 BangBang.@set!! model.evaluation_env = setindex!!(
                     model.evaluation_env,
-                    rand(Base.invokelatest(node_function, model.evaluation_env, loop_vars)),
+                    rand(node_function(model.evaluation_env, loop_vars)),
                     vn,
                 )
             end
@@ -694,7 +694,7 @@ function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
             end
         else
             (; node_function, loop_vars) = model.g[v]
-            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             transformed_value = Bijectors.transform(
                 Bijectors.bijector(dist), AbstractPPL.getvalue(evaluation_env, v)
             )
@@ -725,7 +725,7 @@ function getparams(
             d[v] = value
         else
             (; node_function, loop_vars) = model.g[v]
-            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             d[v] = Bijectors.transform(Bijectors.bijector(dist), value)
         end
     end
@@ -805,12 +805,10 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 mode = UseGraph()
             else
                 log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
-                    lowered_model_def,
-                    model.evaluation_env,
-                    gensym(:__compute_log_density__),
+                    lowered_model_def, model.evaluation_env
                 )
-                log_density_computation_function = Core.eval(
-                    JuliaBUGS, log_density_computation_expr
+                log_density_computation_function = JuliaBUGS._make_misty_closure(
+                    log_density_computation_expr, JuliaBUGS
                 )
 
                 # Update sorted_nodes based on reconstructed model to ensure parameter ordering
