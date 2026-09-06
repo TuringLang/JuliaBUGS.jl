@@ -49,3 +49,17 @@ end
         @test gradient == [4.0]
     end
 end
+
+@testset "Nested Mooncake rules" begin
+    f = JuliaBUGS._make_misty_closure(:((env, vars) -> env.x * env.x), JuliaBUGS)
+    target = x -> f((x=x[1],), (;))
+    for adtype in (AutoMooncake(; config=nothing), AutoMooncakeForward(; config=nothing))
+        prep = AbstractPPL.prepare(adtype, target, [2.0])
+        copied_prep = AbstractPPL.prepare(adtype, target, [3.0])
+        for (cache, x) in ((prep, [2.0]), (copied_prep, [3.0]), (prep, [4.0]))
+            value, gradient = AbstractPPL.value_and_gradient!!(cache, x)
+            @test value == x[1]^2
+            @test gradient == [2x[1]]
+        end
+    end
+end
