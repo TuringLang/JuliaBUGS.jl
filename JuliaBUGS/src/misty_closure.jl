@@ -38,7 +38,7 @@ end
     # Avoid boxing constant results when the callable is stored behind an abstract field.
     ir = entry.closure.ir[]
     if length(ir.cfg.blocks) == 1
-        return_node = @static if VERSION >= v"1.12"
+        return_node = @static if VERSION >= v"1.11"
             last(ir.stmts.stmt)
         else
             last(ir.stmts.inst)
