@@ -4,6 +4,7 @@
 
 ### Bug Fixes
 
+- Reduce MistyClosure gradient overhead with argument-type specialization and source-based Mooncake rules.
 - Models compiled and evaluated in the same function are world-age safe;
   generated node and log-density functions now use `MistyClosure` instead of
   defining global methods at runtime (#530).

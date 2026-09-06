@@ -71,8 +71,6 @@ function _create_JuliaBUGS_model(model_name::Symbol)
     return compile(model_def, data, inits)
 end
 
-# ! writing a _function_ to benchmark all models won't work because of world-age error
-
 function benchmark_JuliaBUGS_model_with_Mooncake(model::JuliaBUGS.BUGSModel)
     # Use generated log density function for Mooncake
     model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())

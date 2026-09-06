@@ -462,14 +462,6 @@ function BUGSModel(
         end
     end
 
-    g = JuliaBUGS._specialize_node_functions(g, evaluation_env, compile_options.eval_module)
-    graph_evaluation_data = GraphEvaluationData(
-        g,
-        graph_evaluation_data.sorted_nodes;
-        generated_quantities=Set(graph_evaluation_data.generated_quantities),
-        fixed_parameters=Set(graph_evaluation_data.fixed_parameters),
-    )
-
     # Compute mutable symbols from graph evaluation data
     mutable_symbols = get_mutable_symbols(graph_evaluation_data)
 
@@ -816,9 +808,7 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     lowered_model_def, model.evaluation_env
                 )
                 log_density_computation_function = JuliaBUGS._make_misty_closure(
-                    log_density_computation_expr,
-                    JuliaBUGS,
-                    Tuple{typeof(model.evaluation_env),typeof(getparams(model))},
+                    log_density_computation_expr, JuliaBUGS
                 )
 
                 # Update sorted_nodes based on reconstructed model to ensure parameter ordering

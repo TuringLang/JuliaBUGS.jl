@@ -828,9 +828,7 @@ function _regenerate_log_density_function(
             lowered_model_def, evaluation_env
         )
         new_log_density_computation_function = JuliaBUGS._make_misty_closure(
-            log_density_computation_expr,
-            JuliaBUGS,
-            Tuple{typeof(evaluation_env),AbstractVector},
+            log_density_computation_expr, JuliaBUGS
         )
 
         # Collect sorted nodes from the reconstructed model def to ensure correct parameter ordering
