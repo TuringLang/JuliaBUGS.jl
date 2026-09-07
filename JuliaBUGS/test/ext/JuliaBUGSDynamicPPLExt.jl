@@ -1,6 +1,7 @@
-using DynamicPPL
+# Named imports only: DynamicPPL also exports `split`, which would shadow `Base.split`
+# for every test file loaded after this one.
 using DynamicPPL:
-    LogDensityFunction, InitFromUniform, LinkAll, getlogjoint_internal, logjoint
+    DynamicPPL, LogDensityFunction, InitFromUniform, LinkAll, getlogjoint_internal, logjoint
 using ADTypes: AutoForwardDiff, AutoMooncake
 using JuliaBUGS: to_marginal, recover_discrete
 using JuliaBUGS.Model: _constrain

@@ -44,7 +44,6 @@ using ReverseDiff
 using ForwardDiff
 using Mooncake
 using SliceSampling
-using DynamicPPL
 
 JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Exponential Gamma InverseGamma Normal Uniform LogNormal Poisson
 JuliaBUGS.@bugs_primitive Diagonal Dirichlet LKJ MvNormal
