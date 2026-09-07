@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## 0.18.0
+
+### Highlights
+
+- **`to_marginal` embeds a BUGS model in a Turing model with its discrete parameters summed out** (#540). `to_marginal(source; data)` wraps a BUGS program as a `Distributions.jl` distribution over its continuous parameters, using auto-marginalization for every discrete parameter with finite support. With DynamicPPL loaded, the new `JuliaBUGSDynamicPPLExt` extension lets it stand on the right-hand side of `~`, where the left-hand side receives the constrained continuous parameters, so Turing's NUTS and the other gradient samplers run on those alone. `recover_discrete` draws the summed-out latents back from `p(z | θ, y)` for a given value. Identical calls with the same source and data return the cached distribution.
+
 ## 0.17.1
 
 ### Bug Fixes

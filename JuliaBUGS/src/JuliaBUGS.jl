@@ -173,7 +173,7 @@ end
 include("model/Model.jl")
 using .Model
 using .Model: AbstractBUGSModel, BUGSModel
-export to_distribution
+export to_distribution, to_marginal, recover_discrete
 
 transition_params_and_stats(::BUGSModel, ::Any, ::Any) = nothing
 

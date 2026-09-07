@@ -47,6 +47,7 @@ jobs:
           - "inference_flexichains"
           - "inference_slice_sampling"
           - "inference_marginalization"
+          - "inference_dynamicppl"
           - "gibbs"
           - "parallel_sampling"
           - "distributed_sampling"

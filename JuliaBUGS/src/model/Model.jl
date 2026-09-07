@@ -23,9 +23,11 @@ include("abstractppl.jl")
 include("logdensityproblems.jl")
 include("abstractmcmc.jl")
 include("to_distribution.jl")
+include("to_marginal.jl")
 
 # Public user-facing API
 export parameters, variables, initialize!, getparams, settrans, to_distribution
+export to_marginal, recover_discrete
 export set_evaluation_mode, set_observed_values!
 export model_parameters, generated_quantities, fixed_parameters, variable_type
 

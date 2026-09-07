@@ -212,6 +212,54 @@ the mode and that its `logpdf` may differ from `LogDensityProblems.logdensity`
 for such a model (e.g. a marginalized one). See [Evaluation Modes](inference/evaluation_modes.md)
 and [Auto-Marginalization](inference/auto_marginalization.md) for the modes this
 concerns.
+For a marginalized model use [`to_marginal`](@ref) instead.
+
+## Marginal distribution with `to_marginal`
+
+`to_marginal` wraps a model as a `ContinuousMultivariateDistribution` over its continuous parameters, with every discrete parameter summed out by [auto-marginalization](inference/auto_marginalization.md).
+It takes either a compiled `BUGSModel` or BUGS source with `data`, and identical source calls return the cached distribution.
+
+```julia
+d = to_marginal("""
+model {
+  for (i in 1:N) {
+    z[i] ~ dcat(w[1:2])
+    y[i] ~ dnorm(mu[z[i]], 1)
+  }
+  for (k in 1:2) { mu[k] ~ dnorm(0, 0.01) }
+}
+"""; data = (; N = 3, w = [0.5, 0.5], y = [-3.0, 3.1, -2.9]))
+x = rand(d)      # the continuous parameters, here the two means
+logpdf(d, x)     # log p(mu, y) with z summed out
+```
+
+The variate is a vector of the constrained values of the continuous parameters, in the order of `model.marginalization_cache.continuous_model_parameters`.
+`logpdf` is the marginal log joint as a density in that constrained space, prior and likelihood of the baked-in data included, so unlike `to_distribution` it is the target a gradient sampler wants once the parameters are linked.
+`rand` draws the whole model ancestrally and returns the continuous parameters.
+
+The same restrictions as auto-marginalization apply.
+Only discrete parameters with finite support are summed out, and a model with a `dpois` or other unbounded discrete parameter is an `ArgumentError`.
+
+### Use from Turing
+
+With DynamicPPL loaded, the `JuliaBUGSDynamicPPLExt` extension lets the distribution stand on the right-hand side of `~`.
+The left-hand side receives the constrained continuous parameters, and DynamicPPL links and unlinks them through the model's own transforms, so NUTS and the other gradient samplers run on the continuous parameters alone.
+
+```julia
+using DynamicPPL
+
+DynamicPPL.@model function embedded(d, extra)
+    mu ~ d
+    extra ~ Normal(mu[1], 1)
+end
+```
+
+Both DynamicPPL and JuliaBUGS export a `@model` macro, so qualify it when both are loaded.
+
+### Recovering the summed-out latents
+
+`recover_discrete(d, x)` draws the discrete latents from their conditional posterior `p(z | θ, y)` at the continuous parameters `x`, then forward-samples the generated quantities, and returns the model's evaluation environment holding them.
+It uses the same recovery that sampling into a chain does, and it is what a Stan `generated quantities` block does for a marginalized model.
 
 ## Design notes / decisions
 
@@ -295,4 +343,6 @@ is to modify a `rand(d)` draw in place.
 
 ```@docs
 to_distribution
+to_marginal
+recover_discrete
 ```
