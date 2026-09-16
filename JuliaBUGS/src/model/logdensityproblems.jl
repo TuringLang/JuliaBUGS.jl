@@ -107,6 +107,14 @@ grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothin
 ```
 """
 function BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
+    if ccall(:jl_generating_output, Cint, ()) == 1
+        throw(
+            ArgumentError(
+                "Prepare BUGSModelWithGradient after package loading; AD caches cannot be stored in a package image. " *
+                "Store the base BUGSModel during precompilation instead.",
+            ),
+        )
+    end
     x = getparams(model)
     _require_ad_integration(adtype, x)
 

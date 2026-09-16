@@ -668,8 +668,10 @@ end
 ## transform AST to log density computation code
 
 function _gen_log_density_computation_function_expr(model_def, evaluation_env)
+    # Explicit property names survive hygienic local-variable renaming.
+    unpacking_exprs = [:($var = __evaluation_env__.$var) for var in keys(evaluation_env)]
     return MacroTools.@q function (__evaluation_env__, __flattened_values__)
-        (; $(keys(evaluation_env)...)) = __evaluation_env__
+        $(unpacking_exprs...)
         __logp__ = 0.0
         __current_idx__ = 1
         $(__gen_logp_density_function_body_exprs(model_def.args, evaluation_env)...)

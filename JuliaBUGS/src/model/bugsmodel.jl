@@ -808,7 +808,9 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     lowered_model_def, model.evaluation_env
                 )
                 log_density_computation_function = JuliaBUGS._make_misty_closure(
-                    log_density_computation_expr, JuliaBUGS
+                    log_density_computation_expr,
+                    JuliaBUGS,
+                    model.compile_options.eval_module,
                 )
 
                 # Update sorted_nodes based on reconstructed model to ensure parameter ordering

@@ -23,18 +23,19 @@ end
 
 module MistyClosureTestContext
 transform_value(x) = x * x
+dnorm(args...) = :caller_namespace
 end
 
-@testset "Specializations retain the source world" begin
+@testset "Source ownership and specialization" begin
     expr = :((env, loop_vars) -> transform_value(env.x))
     f = JuliaBUGS._make_misty_closure(expr, MistyClosureTestContext)
+    other = JuliaBUGS._make_misty_closure(
+        :((env, loop_vars) -> 3env.x), MistyClosureTestContext
+    )
     @test f((x=2.0,), (;)) == 4.0
-
-    Core.eval(MistyClosureTestContext, :(transform_value(x) = 3x))
+    @test other((x=2.0,), (;)) == 6.0
     @test f((x=2,), (;)) == 4
     @test @inferred(f((x=2.0f0,), (;))) === 4.0f0
-    updated = JuliaBUGS._make_misty_closure(expr, MistyClosureTestContext)
-    @test updated((x=2.0,), (;)) == 6.0
 
     for adtype in (
         AutoForwardDiff(),
@@ -62,4 +63,17 @@ end
             @test gradient == [2x[1]]
         end
     end
+end
+
+@testset "Concurrent specializations" begin
+    f = JuliaBUGS._make_misty_closure(:((env, vars) -> env.x^2), JuliaBUGS)
+    tasks = [Threads.@spawn(f((x=x,), (;))) for x in (2.0, 3.0f0, 4, 5.0)]
+    @test fetch.(tasks) == [4.0, 9.0f0, 16, 25.0]
+    @test f((x=3.0f0,), (;)) === 9.0f0
+end
+
+@testset "Generated source keeps JuliaBUGS namespace" begin
+    expr = :((env, vars) -> dnorm(env.x, 1))
+    f = JuliaBUGS._make_misty_closure(expr, JuliaBUGS, MistyClosureTestContext)
+    @test f((x=2.0,), (;)) == dnorm(2, 1)
 end

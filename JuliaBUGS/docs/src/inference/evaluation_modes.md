@@ -2,6 +2,31 @@
 
 JuliaBUGS supports multiple evaluation modes that determine how the log density is computed. The evaluation mode also constrains which AD backends can be used.
 
+## Compiled model contract
+
+A compiled BUGS model represents a fixed program: its expressions and explicit
+model inputs determine its density. Evaluation modes and serialization rebuild
+executable code for that same program. BUGS primitives must retain their meaning;
+changing values belong in model inputs, not hidden mutable globals.
+
+The same requirement applies transitively to custom primitives and ordinary Julia
+helpers used by `@model`. JuliaBUGS does not snapshot Julia method definitions.
+After editing a helper, compile a new model and prepare its gradients again;
+continued evaluation of an older model after such edits is unsupported. Restoring
+a model requires compatible package and helper definitions.
+
+MistyClosure specializations are created locally as argument types are encountered.
+AD backends may be loaded after compiling the base model, before preparing its
+gradient wrapper. Loading a backend does not require recompiling the base model.
+
+For a package-level model constant, define its `@model` constructor in that
+package, or pass `eval_module=@__MODULE__` to `compile`, with
+`using JuliaBUGS.BUGSPrimitives` in that module.
+During package precompilation, node evaluation uses ordinary Julia functions;
+MistyClosures are created after loading the package. Prepare gradient wrappers at
+runtime. Generated evaluation continues to resolve model functions in the
+`JuliaBUGS` namespace; register custom primitives there before using that mode.
+
 ## Available Modes
 
 | Mode | Description | AD Backends |
