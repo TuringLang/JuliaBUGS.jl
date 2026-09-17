@@ -139,4 +139,4 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 The package does not bundle reference posterior summaries for this example (its `reference_results` field is empty): the point of the exercise is to compare results across the six priors rather than to reproduce a single set of numbers. Published summaries of `odds.ratio[1:6]` and `tau[1:6]` under each prior are shown on the [OpenBUGS Magnesium page](https://chjackson.github.io/openbugsdoc/Examples/Magnesium.html), and a correctly converged chain's `summarystats(chain)` should match them up to Monte Carlo error.
 
-See also: the [example gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

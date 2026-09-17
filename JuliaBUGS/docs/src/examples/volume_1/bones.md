@@ -76,10 +76,10 @@ summarystats(chain)
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.bones.inits` and can be applied with `initialize!(model, inits)`.
 
 !!! note "Discrete latent variables"
-    The missing entries in `grade` are unobserved ordered-categorical scores, so they are discrete latent variables drawn from `dcat`. Gradient-based samplers such as NUTS cannot move in discrete dimensions directly, so these variables are handled by automatically summing them out (marginalization) before sampling the continuous skeletal ages. See [Auto-Marginalization](../inference/auto_marginalization.md) for how this works and when it applies.
+    The missing entries in `grade` are unobserved ordered-categorical scores, so they are discrete latent variables drawn from `dcat`. Gradient-based samplers such as NUTS cannot move in discrete dimensions directly, so these variables are handled by automatically summing them out (marginalization) before sampling the continuous skeletal ages. See [Auto-Marginalization](../../inference/auto_marginalization.md) for how this works and when it applies.
 
 ## Results
 
 This example does not ship with a stored table of reference posterior summaries (`reference_results` is `nothing` in the packaged example), so there is no bundled reference table to reproduce here. The quantities of interest are the 13 latent skeletal ages `theta`, one per child; the published OpenBUGS/MultiBUGS results report their posterior means and standard deviations for comparison. A correctly converged chain's `summarystats` output for `theta` should match those published values up to Monte Carlo error.
 
-See also: the [Example Gallery overview](index.md) and the [getting-started tutorial](../getting_started.md).
+See also: the [Example Gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).
