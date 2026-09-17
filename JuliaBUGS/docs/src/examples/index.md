@@ -1,8 +1,43 @@
 # Example Gallery
 
-These are the classic BUGS Volume 1 examples, rewritten as runnable JuliaBUGS pages. Each page states the model, loads the data, fits it, and shows the results, so you can read the model and reproduce the numbers in one place. If you know these examples from WinBUGS, OpenBUGS, or JAGS, they should feel familiar; the original write-ups live at the [MultiBUGS examples page](https://www.multibugs.org/examples/latest/VolumeI.html).
+The classic BUGS examples, rewritten as JuliaBUGS pages. Each page states the model, shows
+the data, and points at the published reference results, so you can read the model and
+reproduce the numbers in one place. If you know these examples from WinBUGS, OpenBUGS, or
+JAGS they should feel familiar; the original write-ups live on the MultiBUGS examples pages
+for [Volume 1](https://www.multibugs.org/examples/latest/VolumeI.html),
+[Volume 2](https://www.multibugs.org/examples/latest/VolumeII.html), and
+[Volume 3](https://www.multibugs.org/examples/latest/VolumeIII.html).
 
-Every example also ships inside the package, so you do not need to retype anything. Each one is available as `JuliaBUGS.BUGSExamples.VOLUME_1.<key>`, which bundles the model definition, the data, a set of initial values, and reference results you can compare against.
+Every example ships with the package, so you do not need to retype anything. Each one is
+available as `JuliaBUGS.BUGSExamples.VOLUME_N.<key>`, bundling the model definition, the
+original BUGS program, the data, two sets of initial values, and, where they were published,
+reference results to compare against. The pages below pull everything they show from there.
+`JuliaBUGS.BUGSExamples.list()` prints the lot. The files themselves live in the
+`BUGSExamples/` directory of the repository, one folder per example.
+
+| Volume | Examples | |
+|---|---|---|
+| Volume 1 | 20 | [browse](#Volume-1) |
+| Volume 2 | 16 | [browse](volume_2/index.md) |
+| Volume 3 | 14 | [browse](volume_3/index.md) |
+
+Some examples in the collection use language features JuliaBUGS does not support yet. They
+are on disk, marked blocked, and left out of the volumes above, so their pages are absent
+rather than broken:
+
+| Example | Blocked by |
+|---|---|
+| Volume 1, Inhalers | `compile` reports a loop in the graph: the logical node `group[i]` indexes `mu[group[i], t]` |
+| Volume 2, Ice | `compile` reports a loop in the graph: `beta[k]` has prior mean `betamean[k]`, which is computed from the neighbouring `beta` |
+| Volume 3, Camel | `Y[5, 1:2]` is a partially observed multivariate node, which `compile` rejects |
+| Volume 3, Fire | `dloglik` is not an allowed function in `@bugs` |
+| Volume 3, Jama and St Veit Klinglberg | `interp.lin` is not an allowed function in `@bugs` |
+
+Volume 4 has one example in the repository, Methadone, whose data hold 240,776 observations.
+It is not loaded with the package; `JuliaBUGS.BUGSExamples.load(:methadone)` reads it on
+demand.
+
+## Volume 1
 
 | Example | Model |
 |---|---|
@@ -27,3 +62,5 @@ Every example also ships inside the package, so you do not need to retype anythi
 | [LeukFr: Cox Regression with Random Effects](volume_1/leukfr.md) | Cox proportional-hazards survival model with a normal pair-level frailty (random effect) for the Freireich leukaemia remission data. |
 
 New to the workflow these pages assume? See [Getting Started](../getting_started.md) for the model-to-samples walkthrough that every example page follows.
+
+Adding an example? The Volume 2 and 3 pages share one structure, and the script that produced it is kept in [issue #533](https://github.com/TuringLang/JuliaBUGS.jl/issues/533) rather than in the repository, since the pages are written and maintained by hand from here.
