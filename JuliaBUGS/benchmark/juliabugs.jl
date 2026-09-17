@@ -99,7 +99,6 @@ function benchmark_generated_functions()
     )
     for (adtype, model) in (
         (AutoForwardDiff(), graph),
-        (AutoReverseDiff(), graph),
         (AutoMooncake(; config=nothing), graph),
         (AutoMooncake(; config=nothing), generated),
         (AutoMooncakeForward(; config=nothing), generated),

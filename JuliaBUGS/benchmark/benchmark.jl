@@ -6,9 +6,7 @@ end
 using JuliaBUGS
 
 using ADTypes
-using DifferentiationInterface
 using ForwardDiff
-using ReverseDiff
 using Mooncake
 
 using MetaGraphsNext

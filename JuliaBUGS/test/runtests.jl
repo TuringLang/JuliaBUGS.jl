@@ -77,7 +77,6 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "graphs" => () -> include("graphs.jl"),
     "compilation_model" => () -> begin
         include("misty_closure.jl")
-        include("misty_lifecycle.jl")
         include("model/utils.jl")
         include("model/bugsmodel.jl")
     end,

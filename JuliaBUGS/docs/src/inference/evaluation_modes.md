@@ -2,7 +2,7 @@
 
 JuliaBUGS supports multiple evaluation modes that determine how the log density is computed. The evaluation mode also constrains which AD backends can be used.
 
-## Compiled model contract
+## Compiled model
 
 A compiled BUGS model represents a fixed program **assuming the BUGS primitives
 and helpers used to compute its density are pure and retain stable semantics**.
@@ -88,11 +88,11 @@ runtime. Generated evaluation continues to resolve model functions in the
 
 ## Available Modes
 
-| Mode                               | Description                                            | AD Backends                            |
-|:---------------------------------- |:------------------------------------------------------ |:-------------------------------------- |
-| `UseGraph()`                       | Traverses computational graph (default)                | AutoMooncake, ReverseDiff, ForwardDiff |
-| `UseGeneratedLogDensityFunction()` | Compiles a Julia function for log density              | AutoMooncake, AutoMooncakeForward      |
-| `UseAutoMarginalization()`         | Graph traversal with discrete variable marginalization | AutoMooncake, ReverseDiff, ForwardDiff |
+| Mode | Description | AD Backends |
+|------|-------------|-------------|
+| `UseGraph()` | Traverses computational graph (default) | AutoMooncake, ReverseDiff, ForwardDiff |
+| `UseGeneratedLogDensityFunction()` | Compiles a Julia function for log density | AutoMooncake, AutoMooncakeForward |
+| `UseAutoMarginalization()` | Graph traversal with discrete variable marginalization | AutoMooncake, ReverseDiff, ForwardDiff |
 
 ## UseGraph (Default)
 

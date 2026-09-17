@@ -2,6 +2,7 @@
 # opaque closures nor process-local world ages may be saved in a package image.
 mutable struct _MistyClosureFunction{F} <: Function
     const source::F
+    # The last specialization avoids a lock and dictionary lookup on repeated calls.
     @atomic closure::Any
     specializations::Dict{Type,Any}
     lock::ReentrantLock
@@ -11,12 +12,8 @@ function _prepare_misty_closure(f::_MistyClosureFunction, signature::Type{<:Tupl
     return lock(f.lock) do
         get!(f.specializations, signature) do
             world = Base.get_world_counter()
-            interpreter = Core.Compiler.NativeInterpreter(world)
-            argument_types = Tuple{typeof(f.source),signature.parameters...}
-            method = which(f.source, signature)
-            ir, _ = Core.Compiler.typeinf_ircode(
-                interpreter, method, argument_types, Core.svec(), nothing
-            )
+            ir, _ = only(Base.code_ircode(f.source, signature; world))
+            # OpaqueClosure passes captured values as a tuple in the first IR argument.
             ir.argtypes[1] = Tuple{typeof(f.source)}
             Base.invoke_in_world(world, MistyClosure, ir, f.source; do_compile=true)
         end
@@ -33,7 +30,12 @@ function (f::_MistyClosureFunction)(a::A, b::B) where {A,B}
     if ccall(:jl_generating_output, Cint, ()) == 1
         return Base.invokelatest(f.source, a, b)::R
     end
-    C = isconcretetype(R) ? MistyClosure{Core.OpaqueClosure{Tuple{A,B},R}} : MistyClosure
+    # Type-valued results can have a narrower return type, e.g. Type{Float64} vs DataType.
+    C = if isconcretetype(R) && !(R <: Type)
+        MistyClosure{Core.OpaqueClosure{Tuple{A,B},R}}
+    else
+        MistyClosure
+    end
     closure = @atomic :acquire f.closure
     if !(closure isa C && _misty_signature(closure) === Tuple{A,B})
         closure = _prepare_misty_closure(f, Tuple{A,B})
@@ -55,4 +57,32 @@ function _make_misty_closure(
     end
     source = Core.eval(owner_module, expr)
     return _MistyClosureFunction(source, nothing, Dict{Type,Any}(), ReentrantLock())
+end
+
+_misty_source(f) = f
+_misty_source(f::_MistyClosureFunction) = f.source
+
+function _prepare_misty_gradient(adtype, model, x)
+    Model._supports_mutation(adtype) ||
+        return Model._prepare_logdensity_gradient(adtype, model, x)
+    # Mooncake and Enzyme see ordinary functions; the base model retains its caches.
+    gd = model.graph_evaluation_data
+    gd = @set gd.node_function_vals = map(_misty_source, gd.node_function_vals)
+    g = copy(model.g)
+    for vn in labels(g)
+        node = g[vn]
+        g[vn] = @set node.node_function = _misty_source(node.node_function)
+    end
+    source_model = Model.BUGSModel(
+        model;
+        g,
+        # Provenance is not used by density evaluation and can retain executable caches.
+        base_model=nothing,
+        graph_evaluation_data=gd,
+        log_density_computation_function=_misty_source(
+            model.log_density_computation_function
+        ),
+    )
+    # Source functions were created by eval and may be newer than this caller.
+    return Base.invokelatest(Model._prepare_logdensity_gradient, adtype, source_model, x)
 end

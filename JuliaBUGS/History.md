@@ -4,11 +4,9 @@
 
 ### Bug Fixes
 
-- Defer nested Mooncake rule derivation to preserve enclosing IR; require Mooncake 0.5.33 or newer.
-- Reduce MistyClosure gradient overhead with argument-type specialization and source-based Mooncake rules.
-- Models compiled and evaluated in the same function are world-age safe;
-  generated node and log-density functions now use `MistyClosure` instead of
-  defining global methods at runtime (#530).
+- Use MistyClosures for world-age-safe model evaluation, including models compiled
+  and evaluated in the same function, late AD loading, and package restoration.
+  Mooncake differentiates the ordinary source functions.
 - `chain_type = VNChain` works with DynamicPPL loaded (#536). The generic `bundle_samples` is the more specific in the model argument and FlexiChains's DynamicPPL extension is the more specific in `chain_type`, so with both loaded neither won and sampling any model into a `FlexiChain` raised an ambiguous-method error. Every sampler was affected, and so was every session using JuliaBUGS alongside Turing, which loads DynamicPPL. The tests now load DynamicPPL, which is the condition that triggers it.
 
 ## 0.17.0

@@ -790,59 +790,13 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
         end
         # Lazily generate log density function if not already present
         if isnothing(model.log_density_computation_function)
-            lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
-                model.model_def,
-                model.g,
-                model.evaluation_env;
-                generated_quantities=Set(model.graph_evaluation_data.generated_quantities),
-                fixed_parameters=Set(model.graph_evaluation_data.fixed_parameters),
-            )
-            if isnothing(lowered_model_def)
+            model = regenerate_log_density_function(model)
+            if isnothing(model.log_density_computation_function)
                 @warn(
                     "Could not generate optimized log density function for this model. " *
                         "The evaluation mode is set to `UseGraph`."
                 )
                 mode = UseGraph()
-            else
-                log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
-                    lowered_model_def, model.evaluation_env
-                )
-                log_density_computation_function = JuliaBUGS._make_misty_closure(
-                    log_density_computation_expr,
-                    JuliaBUGS,
-                    model.compile_options.eval_module,
-                )
-
-                # Update sorted_nodes based on reconstructed model to ensure parameter ordering
-                # consistency between UseGraph and UseGeneratedLogDensityFunction modes
-                pass = JuliaBUGS.CollectSortedNodes(model.evaluation_env)
-                JuliaBUGS.analyze_block(pass, reconstructed_model_def)
-
-                gd = model.graph_evaluation_data
-                sorted_nodes = filter(pass.sorted_nodes) do node
-                    node in gd.sorted_nodes
-                end
-
-                # Create fresh GraphEvaluationData for the new order. Preserve the same
-                # generated-quantity classification used to generate the function above so
-                # the stored data and the generated code agree (the 3-argument constructor
-                # would otherwise re-derive GQ from the graph and disagree on, e.g.,
-                # conditioned models).
-                new_gd = GraphEvaluationData(
-                    model.g,
-                    sorted_nodes;
-                    generated_quantities=Set(
-                        model.graph_evaluation_data.generated_quantities
-                    ),
-                    fixed_parameters=Set(model.graph_evaluation_data.fixed_parameters),
-                )
-
-                model = BangBang.setproperty!!(model, :graph_evaluation_data, new_gd)
-                model = BangBang.setproperty!!(
-                    model,
-                    :log_density_computation_function,
-                    log_density_computation_function,
-                )
             end
         end
     elseif mode isa UseAutoMarginalization
