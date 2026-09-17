@@ -1,5 +1,18 @@
 # JuliaBUGS Changelog
 
+## 0.18.0
+
+### Highlights
+
+- **The BUGS examples are plain files** (#543). Each example is a folder under `BUGSExamples/` at the root of the repository, holding the original BUGS program and JSON files for the data, the two sets of initial values, and the published reference results. `JuliaBUGS.BUGSExamples` reads those folders when it loads: a checkout reads the directory directly, and an installed JuliaBUGS reads a snapshot of it that ships as an artifact. `VOLUME_1` and the per-example bindings such as `BUGSExamples.rats` are unchanged, and `Example` gains a `path` field pointing at the folder.
+- **Volume 3 is registered** as `VOLUME_3`, Volume 2 gains Stagnant and Asia, and `volumes()` returns all three volumes. Examples that JuliaBUGS cannot compile yet stay on disk marked `blocked` with the reason, Methadone from Volume 4 is read on demand with `BUGSExamples.load(:methadone)`, and `BUGSExamples.list()` prints everything on disk.
+- `BUGSModelDef(program::String; replace_period=true, no_enclosure=false)` parses a BUGS program held in a string at runtime, with the same result as `@bugs` on that string as a literal.
+
+### Bug Fixes
+
+- The Biopsies example carries its own initial values. Its `inits` were misspelled in the source file, so it silently used the initial values of the multivariate Orange Trees example defined before it.
+- The Hepatitis measurement-error example carries its own reference results instead of those of the plain Hepatitis example.
+
 ## 0.17.1
 
 ### Bug Fixes
