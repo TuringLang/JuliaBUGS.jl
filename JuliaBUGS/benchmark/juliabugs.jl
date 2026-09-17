@@ -71,10 +71,8 @@ function _create_JuliaBUGS_model(model_name::Symbol)
     return compile(model_def, data, inits)
 end
 
-function benchmark_JuliaBUGS_model_with_Mooncake(model::JuliaBUGS.BUGSModel)
-    # Use generated log density function for Mooncake
-    model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
-    ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
+function benchmark_JuliaBUGS_model(model::JuliaBUGS.BUGSModel, adtype)
+    ad_model = JuliaBUGS.BUGSModelWithGradient(model, adtype)
     dim = LogDensityProblems.dimension(model)
     params_values = JuliaBUGS.getparams(model)
     density_time = Chairmarks.@be LogDensityProblems.logdensity($ad_model, $params_values)
