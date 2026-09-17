@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Model as a Distribution · JuliaBUGS.jl</title><meta name="title" content="Model as a Distribution · JuliaBUGS.jl"/><meta property="og:title" content="Model as a Distribution · JuliaBUGS.jl"/><meta property="twitter:title" content="Model as a Distribution · JuliaBUGS.jl"/><meta name="description" content="Documentation for JuliaBUGS.jl."/><meta property="og:description" content="Documentation for JuliaBUGS.jl."/><meta property="twitter:description" content="Documentation for JuliaBUGS.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body>
+<!-- NAVBAR START -->
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
+
+    /* Documenter.jl CSS Overrides */
+    html {
+        scroll-padding-top: calc(var(--navbar-height) + 1rem);
+    }
+    .docs-sidebar, #documenter {
+        margin-top: var(--navbar-height);
+    }
+    .docs-version-selector {
+        margin-bottom: 60px !important;
+    }
+    @media screen and (max-width: 1056px) {
+        .docs-version-selector {
+            margin-bottom: 60px !important;
+        }
+        .docs-sidebar {
+            margin-top: 0 !important;
+        }
+    }
+    /* End of Documenter.jl Tweaks */
+
+    /* DocumenterVitepress integration:
+       Vitepress's default theme already exposes `--vp-layout-top-height` as
+       the hook for adding banner-style chrome above its own nav. Every
+       layout-sensitive component (`.VPNav` `top`, `.VPContent` `margin`,
+       `.VPSidebar` `top`, `.VPLocalNav` `padding-top`, `.VPDocAside` `top`
+       and TOC `padding-top`) is already authored to add this variable to
+       its own offset, so binding it to the TuringLang navbar height makes
+       Vitepress reflow itself correctly with zero further intervention.
+       (`:has(.VPNavBar)` scopes this to Vitepress builds; Documenter HTML
+       sites are untouched.) */
+    html:has(.VPNavBar) {
+        --vp-layout-top-height: var(--navbar-height);
+    }
+
+    /* When the rendered site is Vitepress (detected by .VPNavBar being in the
+       DOM), adopt Vitepress's design tokens so the TuringLang navbar tracks
+       the active theme (light/dark, brand colour, body font) and reads as one
+       piece of chrome with the Vitepress nav below it — rather than a stacked
+       second header with its own colour and typography. */
+    html:has(.VPNavBar) {
+        --primary-bg: var(--vp-c-bg);
+        --heading-color: var(--vp-c-text-1);
+        --item-color: var(--vp-c-text-2);
+        --icon-color: var(--vp-c-text-1);
+        --hover-color: var(--vp-c-brand-1);
+        --shadow-color: var(--vp-c-divider);
+        --dropdown-hover-bg: var(--vp-c-default-soft);
+        --font-family: var(--vp-font-family-base);
+    }
+    html:has(.VPNavBar) .ext-navigation {
+        box-shadow: none;
+        border-bottom: 1px solid var(--vp-c-divider);
+    }
+    /* End of DocumenterVitepress Tweaks */
+
+    /* Color and Font Variables */
+    :root {
+        --heading-color: #6c757d;
+        --item-color: rgb(165, 165, 165);
+        --primary-bg: white;
+        --hover-color: #8faad2;
+        --deprecated-bg: #ff4d4d;
+        --deprecated-text: white;
+        --icon-color: #6c757d;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+        --dropdown-hover-bg: #e9ecef;
+        
+        /* Typography */
+        --font-family: "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+        --nav-link-font-size: 1.0625rem;
+        --turing-title-font-size: 21.25px;
+        --icon-font-size: 1.25rem;
+        --dropdown-arrow-font-size: 0.6875rem;
+        --badge-font-size: 0.75rem;
+
+        /* Sizing and Spacing */
+        --navbar-height: 3.75rem;
+        --logo-height: 31px;
+        --logo-width: auto;
+        --logo-padding-top: 7px;
+        --logo-margin-left: 0.8rem;
+        --title-margin-left: 0.4px;
+        --title-nav-spacing: 1.1rem;
+        --nav-item-margin-left: 1.3rem;
+        --icon-margin-left: 1rem;
+        --dropdown-padding: 1.875rem;
+        --dropdown-item-width: 12.5rem;
+        --dropdown-subitem-width: 15.625rem;
+        --dropdown-subitem-padding: 0.125rem 0.625rem;
+    }
+
+    /* Dark Theme Variable Overrides */
+    html.theme--documenter-dark {
+        --heading-color: #e0e0e0;
+        --item-color: #bdbdbd;
+        --primary-bg: #1f2424;
+        --hover-color: #ffffff;
+        --icon-color: #e0e0e0;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #424242;
+    }
+
+    /* Catppuccin Theme Overrides */
+    html.theme--catppuccin-latte {
+        --heading-color: #4c4f69;
+        --primary-bg: #eff1f5;
+        --icon-color: #4c4f69;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+        --dropdown-hover-bg: #e6e9ef;
+    }
+    html.theme--catppuccin-frappe {
+        --heading-color: #c6d0f5;
+        --primary-bg: #303446;
+        --icon-color: #c6d0f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #51576d;
+    }
+    html.theme--catppuccin-macchiato {
+        --heading-color: #cad3f5;
+        --primary-bg: #24273a;
+        --icon-color: #cad3f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #494d64;
+    }
+    html.theme--catppuccin-mocha {
+        --heading-color: #cad3f5;
+        --primary-bg: #1e1e2e;
+        --icon-color: #cad3f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #45475a;
+    }
+
+
+    /* Main Navigation Bar */
+    .ext-navigation {
+        font-family: var(--font-family);
+        position: fixed;
+        height: var(--navbar-height);
+        top: 0;
+        width: 100%;
+        background-color: var(--primary-bg);
+        z-index: 1000;
+        box-shadow: 0 2px 4px var(--shadow-color);
+        display: flex;
+        align-items: center;
+        padding: 0 1.0625rem;
+        transition: transform 0.3s, background-color 0.3s;
+    }
+
+    nav.ext-navigation .ext-navbar-logo {
+        margin-left: var(--logo-margin-left);
+        height: auto;
+        max-height: var(--logo-height);
+        width: auto;
+        padding-top: var(--logo-padding-top);
+    }
+    
+    /* Theme-aware logo text color */
+    .ext-navbar-logo .logo-text {
+        fill: var(--heading-color);
+    }
+    
+    .ext-navbar-title {
+        color: var(--heading-color) !important;
+        font-size: var(--turing-title-font-size) !important;
+        margin-left: var(--title-margin-left);
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+    
+    .ext-navbar-title:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-nav-links {
+        display: flex;
+        align-items: center;
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        flex-grow: 1;
+        margin-left: var(--title-nav-spacing);
+    }
+
+    .ext-nav-links li:first-child {
+        margin-left: 0 !important;
+    }
+
+    .ext-nav-links li {
+        margin-left: var(--nav-item-margin-left) !important;
+    }
+
+    .ext-nav-link {
+        color: var(--heading-color) !important;
+        text-decoration: none;
+        font-size: var(--nav-link-font-size) !important;
+        transition: color 0.2s ease;
+        cursor: pointer;
+    }
+
+    .ext-nav-link:hover,
+    .ext-navbar-item-single a:hover,
+    .ext-navbar-icons a:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-navbar-item-single a {
+        color: var(--heading-color) !important;
+    }
+    
+    .ext-navbar-icons {
+        display: flex;
+        align-items: center;
+    }
+
+    .ext-navbar-icons a {
+        color: var(--icon-color) !important;
+        font-size: var(--icon-font-size) !important;
+        transition: color 0.2s ease;
+        margin-left: var(--icon-margin-left);
+    }
+
+    .ext-menu-toggle {
+        display: none;
+        font-size: 1.5rem;
+        color: var(--heading-color);
+        cursor: pointer;
+    }
+
+    .ext-dropdown {
+        display: none;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        padding: var(--dropdown-padding);
+        position: absolute;
+        top: var(--navbar-height);
+        width: 100%;
+        left: 0;
+        background-color: var(--primary-bg);
+        line-height: 1.875rem;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out, background-color 0.3s;
+        transform: translateY(-0.625rem);
+        box-shadow: 0 4px 6px var(--shadow-color);
+    }
+
+    #library-handler::after {
+        content: "▼";
+        font-size: var(--dropdown-arrow-font-size);
+        margin-left: 0.3125rem;
+        transition: transform 0.3s ease-in-out;
+    }
+
+    #library-handler.open::after {
+        content: "▲";
+    }
+
+    .ext-dropdown.show {
+        display: grid;
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .ext-dropdown ul {
+        width: var(--dropdown-item-width);
+        margin-bottom: 1.25rem;
+    }
+
+    .ext-dropdown ul li {
+        text-align: left;
+        display: flex;
+        align-items: center;
+    }
+
+    .ext-dropdown ul a li {
+        color: var(--item-color);
+        width: var(--dropdown-subitem-width);
+        border-radius: 3px;
+        padding: var(--dropdown-subitem-padding);
+        transition: background-color 0.2s ease;
+    }
+
+    .ext-dropdown ul a li:hover {
+        background-color: var(--dropdown-hover-bg);
+    }
+
+    .ext-dropdown-item-heading {
+        color: var(--heading-color);
+        text-align: center;
+    }
+
+    .deprecated-badge {
+        background-color: var(--deprecated-bg);
+        color: var(--deprecated-text);
+        font-size: var(--badge-font-size);
+        padding: .1rem;
+        border-radius: 3px;
+        margin-left: 0.5rem;
+        line-height: 1;
+    }
+
+    @media (max-width: 966px) {
+        .ext-dropdown {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .ext-nav-links {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            background-color: var(--primary-bg);
+            position: absolute;
+            top: var(--navbar-height);
+            left: 0;
+            padding: 0.625rem 0;
+            height: auto;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px var(--shadow-color);
+            margin-left: 0;
+        }
+
+        .ext-nav-links.show {
+            display: flex;
+        }
+
+        .ext-nav-links li {
+            margin: 0.625rem 0 !important;
+            text-align: center;
+        }
+        
+        .ext-menu-toggle {
+            display: block;
+            margin-left: auto;
+        }
+
+        .ext-navigation.hide {
+            transform: translateY(calc(-1 * var(--navbar-height)));
+        }
+
+        .ext-dropdown {
+            position: static;
+            display: block;
+            opacity: 1;
+            transform: none;
+            box-shadow: none;
+            grid-template-columns: 1fr;
+            padding: 0.625rem;
+            text-align: center;
+        }
+
+        .ext-dropdown ul {
+            width: auto;
+            display: inline-block;
+            margin: 0 auto 0.3125rem;
+            text-align: left;
+        }
+    }
+</style>
+<nav class="ext-navigation">
+    <a title="TuringLang" href="https://turinglang.org/">
+        <svg width="4333" height="1145" viewBox="0 0 4333 1145" fill="none" xmlns="http://www.w3.org/2000/svg" class="ext-navbar-logo">
+            <path class="logo-text" d="M0.44603 193.181V66.9868H663.471V193.181H406.62V898H257.297V193.181H0.44603ZM1097.24 635.874V274.74H1244.13V898H1101.7V787.225H1095.21C1081.14 822.121 1058.01 850.66 1025.82 872.842C993.902 895.024 954.542 906.115 907.744 906.115C866.896 906.115 830.783 897.053 799.403 878.929C768.295 860.534 743.948 833.889 726.365 798.993C708.782 763.826 699.99 721.356 699.99 671.581V274.74H846.878V648.858C846.878 688.353 857.699 719.733 879.34 742.997C900.981 766.261 929.385 777.893 964.551 777.893C986.192 777.893 1007.16 772.618 1027.45 762.068C1047.73 751.518 1064.37 735.828 1077.35 714.999C1090.61 693.899 1097.24 667.524 1097.24 635.874ZM1395.17 898V274.74H1537.6V378.617H1544.09C1555.45 342.639 1574.93 314.911 1602.52 295.434C1630.38 275.687 1662.17 265.813 1697.88 265.813C1705.99 265.813 1715.05 266.219 1725.06 267.031C1735.34 267.572 1743.86 268.518 1750.63 269.871V404.992C1744.4 402.828 1734.53 400.934 1721 399.311C1707.75 397.417 1694.9 396.471 1682.46 396.471C1655.68 396.471 1631.6 402.287 1610.23 413.919C1589.13 425.28 1572.49 441.105 1560.32 461.393C1548.15 481.682 1542.06 505.081 1542.06 531.591V898H1395.17ZM1848.21 898V274.74H1995.1V898H1848.21ZM1922.06 186.283C1898.8 186.283 1878.78 178.573 1862.01 163.154C1845.24 147.464 1836.85 128.664 1836.85 106.752C1836.85 84.5701 1845.24 65.7695 1862.01 50.3503C1878.78 34.6606 1898.8 26.8158 1922.06 26.8158C1945.6 26.8158 1965.61 34.6606 1982.12 50.3503C1998.89 65.7695 2007.27 84.5701 2007.27 106.752C2007.27 128.664 1998.89 147.464 1982.12 163.154C1965.61 178.573 1945.6 186.283 1922.06 186.283ZM2293.04 532.809V898H2146.15V274.74H2286.54V380.646H2293.85C2308.18 345.75 2331.04 318.022 2362.42 297.463C2394.07 276.904 2433.16 266.625 2479.69 266.625C2522.7 266.625 2560.17 275.822 2592.09 294.217C2624.28 312.612 2649.17 339.257 2666.75 374.153C2684.6 409.049 2693.39 451.385 2693.12 501.159V898H2546.24V523.882C2546.24 482.223 2535.41 449.626 2513.77 426.092C2492.4 402.557 2462.78 390.79 2424.91 390.79C2399.21 390.79 2376.35 396.471 2356.34 407.832C2336.59 418.923 2321.03 435.019 2309.67 456.119C2298.58 477.218 2293.04 502.782 2293.04 532.809ZM3113.5 1144.71C3060.75 1144.71 3015.44 1137.54 2977.57 1123.2C2939.7 1109.13 2909.26 1090.2 2886.27 1066.39C2863.28 1042.59 2847.32 1016.21 2838.39 987.269L2970.67 955.213C2976.62 967.386 2985.28 979.424 2996.64 991.327C3008 1003.5 3023.28 1013.51 3042.49 1021.35C3061.97 1029.47 3086.45 1033.53 3115.93 1033.53C3157.59 1033.53 3192.08 1023.38 3219.4 1003.09C3246.73 983.076 3260.39 950.074 3260.39 904.087V786.008H3253.08C3245.51 801.157 3234.42 816.711 3219.81 832.671C3205.47 848.632 3186.4 862.022 3162.6 872.842C3139.06 883.663 3109.44 889.073 3073.73 889.073C3025.85 889.073 2982.44 877.847 2943.48 855.394C2904.8 832.671 2873.96 798.857 2850.97 753.952C2828.24 708.777 2816.88 652.24 2816.88 584.341C2816.88 515.902 2828.24 458.147 2850.97 411.078C2873.96 363.739 2904.93 327.896 2943.89 303.55C2982.84 278.933 3026.26 266.625 3074.14 266.625C3110.66 266.625 3140.69 272.847 3164.22 285.29C3188.03 297.463 3206.96 312.206 3221.03 329.519C3235.09 346.561 3245.78 362.657 3253.08 377.805H3261.2V274.74H3406.06V908.144C3406.06 961.435 3393.34 1005.53 3367.92 1040.42C3342.49 1075.32 3307.73 1101.43 3263.63 1118.74C3219.54 1136.05 3169.5 1144.71 3113.5 1144.71ZM3114.72 773.835C3145.83 773.835 3172.34 766.261 3194.25 751.112C3216.16 735.963 3232.79 714.187 3244.16 685.783C3255.52 657.379 3261.2 623.295 3261.2 583.53C3261.2 544.305 3255.52 509.95 3244.16 480.465C3233.07 450.979 3216.56 428.12 3194.65 411.89C3173.01 395.389 3146.37 387.138 3114.72 387.138C3081.98 387.138 3054.66 395.659 3032.75 412.701C3010.84 429.744 2994.34 453.143 2983.25 482.899C2972.16 512.385 2966.61 545.929 2966.61 583.53C2966.61 621.672 2972.16 655.08 2983.25 683.754C2994.61 712.158 3011.25 734.34 3033.16 750.3C3055.34 765.99 3082.53 773.835 3114.72 773.835ZM3647.08 906.927C3622.47 906.927 3601.37 898.271 3583.78 880.958C3566.2 863.645 3557.54 842.545 3557.82 817.658C3557.54 793.312 3566.2 772.482 3583.78 755.17C3601.37 737.857 3622.47 729.2 3647.08 729.2C3670.89 729.2 3691.58 737.857 3709.17 755.17C3727.02 772.482 3736.08 793.312 3736.35 817.658C3736.08 834.159 3731.75 849.173 3723.37 862.698C3715.25 876.224 3704.43 887.044 3690.91 895.16C3677.65 903.004 3663.04 906.927 3647.08 906.927ZM3888.01 274.74H4034.9V933.708C4034.9 978.613 4026.38 1015.67 4009.33 1044.89C3992.29 1074.1 3967.67 1095.88 3935.48 1110.22C3903.29 1124.55 3864.2 1131.72 3818.22 1131.72C3812.81 1131.72 3807.8 1131.59 3803.2 1131.32C3798.6 1131.32 3793.6 1131.18 3788.19 1130.91V1011.21C3792.25 1011.48 3795.9 1011.62 3799.15 1011.62C3802.39 1011.89 3805.77 1012.02 3809.29 1012.02C3837.42 1012.02 3857.58 1005.12 3869.75 991.327C3881.92 977.801 3888.01 957.918 3888.01 931.679V274.74ZM3961.05 186.283C3937.51 186.283 3917.36 178.573 3900.59 163.154C3884.09 147.464 3875.84 128.664 3875.84 106.752C3875.84 84.5701 3884.09 65.7695 3900.59 50.3503C3917.36 34.6606 3937.51 26.8158 3961.05 26.8158C3984.31 26.8158 4004.19 34.6606 4020.7 50.3503C4037.47 65.7695 4045.85 84.5701 4045.85 106.752C4045.85 128.664 4037.47 147.464 4020.7 163.154C4004.19 178.573 3984.31 186.283 3961.05 186.283ZM4332.83 66.9868V898H4185.94V66.9868H4332.83Z" fill="currentColor"/>
+            <path d="M4076 108.5C4076 168.424 4027.42 217 3967.5 217C3907.58 217 3859 168.424 3859 108.5C3859 48.5762 3907.58 0 3967.5 0C4027.42 0 4076 48.5762 4076 108.5Z" fill="#389725"/>
+            <path d="M3755 814.5C3755 874.424 3706.42 923 3646.5 923C3586.58 923 3538 874.424 3538 814.5C3538 754.576 3586.58 706 3646.5 706C3706.42 706 3755 754.576 3755 814.5Z" fill="#9457B1"/>
+            <path d="M2030 108.5C2030 168.424 1981.42 217 1921.5 217C1861.58 217 1813 168.424 1813 108.5C1813 48.5762 1861.58 0 1921.5 0C1981.42 0 2030 48.5762 2030 108.5Z" fill="#CA3B33"/>
+        </svg>
+    </a>
+    <!-- <a class="ext-navbar-title" href="https://turinglang.org/">Turing.jl</a> -->
+    
+    <ul class="ext-nav-links">
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/getting-started/">Get Started</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/tutorials/">Tutorials</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/faq/">FAQ</a></li>
+        <li>
+            <p class="ext-nav-link" id="library-handler">Libraries</p>
+            <div class="ext-dropdown" id="ext-dropdown-items">
+                <ul>
+                    <li class="ext-dropdown-item-heading">Modelling Languages</li>
+                    <a href="https://turinglang.org/DynamicPPL.jl/"><li>DynamicPPL</li></a>
+                    <a href="https://turinglang.org/JuliaBUGS.jl/"><li>JuliaBUGS</li></a>
+                    <a href="https://turinglang.org/TuringGLM.jl/"><li>TuringGLM</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">MCMC</li>
+                    <a href="https://turinglang.org/AdvancedHMC.jl/"><li>AdvancedHMC</li></a>
+                    <a href="https://turinglang.org/AbstractMCMC.jl/"><li>AbstractMCMC</li></a>
+                    <a href="https://github.com/theogf/ThermodynamicIntegration.jl"><li>ThermodynamicIntegration</li></a>
+                    <a href="https://turinglang.org/AdvancedPS.jl/"><li>AdvancedPS</li></a>
+                    <a href="https://turinglang.org/SliceSampling.jl/"><li>SliceSampling</li></a>
+                    <a href="https://turinglang.org/EllipticalSliceSampling.jl/"><li>EllipticalSliceSampling</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Diagnostics</li>
+                    <a href="https://turinglang.org/MCMCChains.jl/"><li>MCMCChains</li></a>
+                    <a href="https://turinglang.org/MCMCDiagnosticTools.jl/"><li>MCMCDiagnosticTools</li></a>
+                    <a href="https://chalk-lab.github.io/ParetoSmooth.jl/"><li>ParetoSmooth</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Gaussian Processes</li>
+                    <a href="https://juliagaussianprocesses.github.io/AbstractGPs.jl/"><li>AbstractGPs</li></a>
+                    <a href="https://juliagaussianprocesses.github.io/KernelFunctions.jl/"><li>KernelFunctions</li></a>
+                    <a href="https://juliagaussianprocesses.github.io/ApproximateGPs.jl/"><li>ApproximateGPs</li></a>
+                </ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/Bijectors.jl/">Bijectors</a></li></ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/TuringCallbacks.jl/">TuringCallbacks</a></li></ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/Deprecated/TuringBenchmarking/">TuringBenchmarking</a><span class="deprecated-badge">Deprecated</span></li></ul>
+            </div>
+        </li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/news/">News</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/team/">Team</a></li>
+    </ul>
+
+    <div class="ext-navbar-icons">
+        <a href="https://x.com/TuringLang" aria-label="Turing on X"><i class="fa-brands fa-x-twitter"></i></a>
+        <a href="https://discourse.julialang.org/c/domain/probprog/48" aria-label="Turing on Discourse"><i class="fa-brands fa-discourse"></i></a>
+        <a href="https://julialang.slack.com/archives/CCYDC34A0" aria-label="Turing on Slack"><i class="fa-brands fa-slack"></i></a>
+        <a href="https://github.com/TuringLang/" aria-label="Turing.jl on GitHub"><i class="fa-brands fa-github"></i></a>
+    </div>
+
+    <span class="ext-menu-toggle"><i class="fa-solid fa-bars"></i></span>
+</nav>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const menuToggle = document.querySelector(".ext-menu-toggle");
+        const navLinks = document.querySelector(".ext-nav-links");
+        const nav = document.querySelector(".ext-navigation");
+        const libraryHandler = document.getElementById("library-handler");
+        const dropdownContainer = document.getElementById("ext-dropdown-items");
+        let lastScrollY = window.scrollY;
+
+        function closeDropdown() {
+            if (dropdownContainer.classList.contains("show")) {
+                libraryHandler.classList.remove("open");
+                dropdownContainer.classList.remove("show");
+                setTimeout(() => {
+                    if (!dropdownContainer.classList.contains("show")) {
+                        dropdownContainer.style.display = "none";
+                    }
+                }, 300);
+            }
+        }
+
+        function openDropdown() {
+            dropdownContainer.style.display = "grid";
+            libraryHandler.classList.add("open");
+            setTimeout(() => {
+                dropdownContainer.classList.add("show");
+            }, 10);
+        }
+
+        function setAppropriateHeight() {
+            if (window.innerWidth <= 768) {
+                const viewportHeight = window.innerHeight;
+                const navHeight = nav.offsetHeight;
+                navLinks.style.maxHeight = `${viewportHeight - navHeight}px`;
+                navLinks.style.overflowY = "auto";
+            } else {
+                navLinks.style.maxHeight = "";
+                navLinks.style.overflowY = "";
+            }
+        }
+
+        menuToggle.addEventListener("click", (event) => {
+            event.stopPropagation();
+            navLinks.classList.toggle("show");
+            if (navLinks.classList.contains("show")) {
+                setAppropriateHeight();
+                closeDropdown();
+                dropdownContainer.style.display = "none";
+            }
+        });
+
+        libraryHandler.addEventListener("click", (event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            if (dropdownContainer.classList.contains("show")) {
+                closeDropdown();
+            } else {
+                openDropdown();
+            }
+            setAppropriateHeight();
+        });
+
+        // Close all menus if a click is registered outside the navigation bar.
+        document.addEventListener("click", (event) => {
+            if (!nav.contains(event.target)) {
+                navLinks.classList.remove("show");
+                closeDropdown();
+            }
+        });
+
+        // Hide navigation bar on scroll down in mobile view.
+        window.addEventListener("scroll", () => {
+            if (window.innerWidth <= 768) {
+                if (window.scrollY > lastScrollY && window.scrollY > nav.offsetHeight){
+                    nav.classList.add("hide");
+                } else {
+                    nav.classList.remove("hide");
+                }
+                lastScrollY = window.scrollY;
+            }
+        });
+
+        window.addEventListener("resize", setAppropriateHeight);
+    });
+</script>
+<!-- NAVBAR END -->
+
+
+
+<div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">JuliaBUGS.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../example/">Getting Started</a></li><li><span class="tocitem">Modeling</span><ul><li><a class="tocitem" href="../two_macros/">Two Macros: <code>@bugs</code> &amp; <code>@model</code></a></li><li><a class="tocitem" href="../model_macro/"><code>@model</code> Macro</a></li><li><a class="tocitem" href="../of_design_doc/"><code>of</code> Type System</a></li><li class="is-active"><a class="tocitem" href>Model as a Distribution</a><ul class="internal"><li><a class="tocitem" href="#Quick-Example"><span>Quick Example</span></a></li><li><a class="tocitem" href="#Interface-Reference"><span>Interface Reference</span></a></li><li><a class="tocitem" href="#Semantics"><span>Semantics</span></a></li><li><a class="tocitem" href="#Design-notes-/-decisions"><span>Design notes / decisions</span></a></li><li><a class="tocitem" href="#Limitations-and-non-goals"><span>Limitations and non-goals</span></a></li><li><a class="tocitem" href="#API"><span>API</span></a></li></ul></li></ul></li><li><span class="tocitem">Inference</span><ul><li><a class="tocitem" href="../inference/ad/">Automatic Differentiation</a></li><li><a class="tocitem" href="../inference/evaluation_modes/">Evaluation Modes</a></li><li><a class="tocitem" href="../inference/auto_marginalization/">Auto-Marginalization</a></li><li><a class="tocitem" href="../inference/generated_quantities/">Generated Quantities</a></li><li><a class="tocitem" href="../inference/fixing/">Fixing Variables (<code>fix</code> / <code>unfix</code>)</a></li><li><a class="tocitem" href="../inference/slice_sampling/">Slice Sampling</a></li><li><a class="tocitem" href="../inference/parallel/">Parallel &amp; Distributed Sampling</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../api/api/">General</a></li><li><a class="tocitem" href="../api/functions/">Functions</a></li><li><a class="tocitem" href="../api/distributions/">Distributions</a></li></ul></li><li><span class="tocitem">Guides</span><ul><li><a class="tocitem" href="../guides/differences/">Differences from Other BUGS</a></li><li><a class="tocitem" href="../guides/pitfalls/">Pitfalls</a></li><li><a class="tocitem" href="../guides/tricks/">Implementation Tricks</a></li></ul></li><li><a class="tocitem" href="../graph_plotting/">Plotting</a></li><li><a class="tocitem" href="../R_interface/">R Interface</a></li><li><span class="tocitem">For Developers</span><ul><li><a class="tocitem" href="../developers/parser/">Parser</a></li><li><a class="tocitem" href="../developers/source_gen/">Source Code Generation</a></li><li><a class="tocitem" href="../developers/BUGS_notes/">Notes on BUGS Implementations</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Modeling</a></li><li class="is-active"><a href>Model as a Distribution</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Model as a Distribution</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/TuringLang/JuliaBUGS.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/TuringLang/JuliaBUGS.jl/blob/main/JuliaBUGS/docs/src/model_as_distribution.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Model-as-a-Distribution"><a class="docs-heading-anchor" href="#Model-as-a-Distribution">Model as a Distribution</a><a id="Model-as-a-Distribution-1"></a><a class="docs-heading-anchor-permalink" href="#Model-as-a-Distribution" title="Permalink"></a></h1><p><code>to_distribution</code> wraps a compiled <code>BUGSModel</code> as a <code>Distributions.Distribution</code> whose variate is a <code>NamedTuple</code>. This lets you treat a model&#39;s joint density as an ordinary distribution object: you can <code>rand</code> a draw and evaluate <code>logpdf</code> / <code>pdf</code> / <code>loglikelihood</code> on a <code>NamedTuple</code> keyed by the model&#39;s parameter symbols.</p><p>The wrapper is deliberately a <em>constrained-space</em> view of the model. It always evaluates in the model&#39;s original parameter space, always uses graph evaluation, and <code>logpdf</code> returns the <strong>full joint</strong> density (prior plus the likelihood of any observed data baked into the model). It is <strong>not</strong> an unconstrained-space target for gradient-based samplers — see the <a href="#Limitations-and-non-goals">Limitations</a> admonition below.</p><p>You obtain a <code>BUGSModel</code> by calling a model definition with your data (see <a href="../example/">Getting Started</a> and <a href="../two_macros/">Two Macros: <code>@bugs</code> &amp; <code>@model</code></a>), then pass it to <code>to_distribution</code>.</p><h2 id="Quick-Example"><a class="docs-heading-anchor" href="#Quick-Example">Quick Example</a><a id="Quick-Example-1"></a><a class="docs-heading-anchor-permalink" href="#Quick-Example" title="Permalink"></a></h2><pre><code class="language-julia hljs">using JuliaBUGS, Distributions, Random
+Random.seed!(123)  # make the draw below reproducible
+
+normal_model = @bugs begin
+    x ~ dnorm(0, 1)
+    y ~ dnorm(x, 1)
+end
+
+# `y` is observed data; `x` is the only free parameter.
+model = normal_model((; y = 1.0))
+d = to_distribution(model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">BUGSModelDistribution{(:x,)}(…)</code></pre><p>A draw is a <code>NamedTuple</code> keyed by the parameter symbol:</p><pre><code class="language-julia hljs">nt = rand(d)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(x = -1.4632513788889214,)</code></pre><p><code>logpdf</code> returns the log joint density:</p><pre><code class="language-julia hljs">logpdf(d, nt)   # logprior(x) + loglikelihood(y | x)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-5.9422330431185975</code></pre><p><code>pdf</code> is its exponential, and <code>loglikelihood</code> is an alias for the <em>same</em> joint (not a data-only likelihood) — so it equals <code>logpdf</code>:</p><pre><code class="language-julia hljs">pdf(d, nt), loglikelihood(d, nt) == logpdf(d, nt)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(0.002626158772714837, true)</code></pre><p><code>rand(d)</code> performs ancestral sampling and returns one <code>NamedTuple</code> field per unique parameter symbol; <code>logpdf(d, nt)</code> accepts the same shape and returns the log joint density in the model&#39;s original (constrained) parameter space.</p><h2 id="Interface-Reference"><a class="docs-heading-anchor" href="#Interface-Reference">Interface Reference</a><a id="Interface-Reference-1"></a><a class="docs-heading-anchor-permalink" href="#Interface-Reference" title="Permalink"></a></h2><h3 id="The-variate-type"><a class="docs-heading-anchor" href="#The-variate-type">The variate type</a><a id="The-variate-type-1"></a><a class="docs-heading-anchor-permalink" href="#The-variate-type" title="Permalink"></a></h3><p><code>to_distribution(model)</code> returns a <code>BUGSModelDistribution{names,M,S,T} &lt;: Distribution{NamedTupleVariate{names},S}</code>. The variate is a <code>NamedTuple</code> whose fields are the <strong>unique top-level parameter symbols</strong> of the model. The keys are derived by iterating <code>parameters(model)</code>, taking <code>AbstractPPL.getsym(vn)</code> for each parameter <code>VarName</code>, and deduplicating while preserving graph evaluation order.</p><p>There is exactly one field per top-level symbol. An array parameter is therefore a single whole-array field (e.g. <code>(x = [v1, v2, v3],)</code>) — never one key per element. A <code>NamedTuple</code>&#39;s field names must be plain <code>Symbol</code>s, so indexed names like <code>Symbol(&quot;x[1]&quot;)</code> are not used (and would not resolve as <code>@varname(x[1])</code>).</p><h3 id="Type-parameters"><a class="docs-heading-anchor" href="#Type-parameters">Type parameters</a><a id="Type-parameters-1"></a><a class="docs-heading-anchor-permalink" href="#Type-parameters" title="Permalink"></a></h3><table><tr><th style="text-align: right">Param</th><th style="text-align: right">Meaning</th></tr><tr><td style="text-align: right"><code>names</code></td><td style="text-align: right">Tuple of <code>Symbol</code>s — the unique parameter symbols, from <code>getsym</code> over <code>parameters(model)</code> in graph evaluation order, duplicates removed. These are the <code>NamedTuple</code> keys.</td></tr><tr><td style="text-align: right"><code>M</code></td><td style="text-align: right"><code>M &lt;: BUGSModel</code> — the concrete type of the wrapped model. The struct has a single field <code>model::M</code>.</td></tr><tr><td style="text-align: right"><code>S</code></td><td style="text-align: right"><code>S &lt;: Distributions.ValueSupport</code> — computed over the <strong>free</strong> (stochastic, unobserved) nodes by <code>promote_type</code> of each node&#39;s <code>value_support</code>. Defaults to <code>Continuous</code> when there are no free stochastic nodes; mixed discrete/continuous promotes to <code>Continuous</code>.</td></tr><tr><td style="text-align: right"><code>T</code></td><td style="text-align: right">The <code>NamedTuple</code> eltype <code>NamedTuple{names,Tuple{Ts...}}</code>, where each <code>Ts[i]</code> is the concrete type of <code>getfield(model.evaluation_env, names[i])</code> (e.g. a full array type). Returned by <code>eltype(d)</code> and used to allocate the array in the <code>dims</code>-form <code>rand</code>.</td></tr></table><h3 id="Sampling-and-density-methods"><a class="docs-heading-anchor" href="#Sampling-and-density-methods">Sampling and density methods</a><a id="Sampling-and-density-methods-1"></a><a class="docs-heading-anchor-permalink" href="#Sampling-and-density-methods" title="Permalink"></a></h3><table><tr><th style="text-align: right">Method</th><th style="text-align: right">Behavior</th></tr><tr><td style="text-align: right"><code>rand(rng, d)</code></td><td style="text-align: right">Ancestral sampling via <code>evaluate_with_rng!!(rng, model; transformed=false)</code>; returns a <code>NamedTuple{names}</code> reading each symbol from the resulting evaluation environment by <code>getfield</code>.</td></tr><tr><td style="text-align: right"><code>rand(rng, d, dims::Dims)</code></td><td style="text-align: right">Allocates <code>Array{eltype(d)}(undef, dims)</code> and fills each element with a scalar <code>rand(rng, d)</code>. This explicit form exists because <code>Random.rand</code> has no built-in array fallback for <code>Distribution{NamedTupleVariate}</code> (without it the call would recurse to a <code>StackOverflowError</code>).</td></tr><tr><td style="text-align: right"><code>Distributions._rand!(rng, d, xs)</code></td><td style="text-align: right">Fills <code>xs</code> in place with scalar draws over <code>eachindex(xs)</code>. No shape validation beyond <code>eachindex</code>.</td></tr><tr><td style="text-align: right"><code>logpdf(d, x::NamedTuple)</code></td><td style="text-align: right">Returns the full joint <code>logprior + loglikelihood</code> in constrained space (no Jacobian). Reads only free parameters from <code>x</code>; throws <code>ArgumentError</code> for a missing free parameter.</td></tr><tr><td style="text-align: right"><code>pdf(d, x::NamedTuple)</code></td><td style="text-align: right"><code>exp(logpdf(d, x))</code>.</td></tr><tr><td style="text-align: right"><code>loglikelihood(d, x::NamedTuple)</code></td><td style="text-align: right">Direct alias for <code>logpdf(d, x)</code> — the full joint, <strong>not</strong> a data-only likelihood.</td></tr><tr><td style="text-align: right"><code>loglikelihood(d, xs::AbstractArray{&lt;:NamedTuple})</code></td><td style="text-align: right"><code>sum</code> of per-sample joint <code>logpdf</code>s with <code>init=0.0</code> (treats samples as iid; empty array gives <code>0.0</code>).</td></tr><tr><td style="text-align: right"><code>eltype(d)</code></td><td style="text-align: right">The type parameter <code>T</code> (the <code>NamedTuple</code> eltype).</td></tr><tr><td style="text-align: right"><code>show(io, d)</code></td><td style="text-align: right">Prints <code>BUGSModelDistribution{&lt;names&gt;}(…)</code>; does not print the wrapped model.</td></tr></table><p><code>logpdf</code> (and thus <code>pdf</code> / <code>loglikelihood</code>) throws</p><pre><code class="nohighlight hljs">ArgumentError: logpdf: missing value for parameter `$vn` in NamedTuple input</code></pre><p>when <code>AbstractPPL.hasvalue(x, vn)</code> is false for any free-parameter <code>VarName</code>.</p><h2 id="Semantics"><a class="docs-heading-anchor" href="#Semantics">Semantics</a><a id="Semantics-1"></a><a class="docs-heading-anchor-permalink" href="#Semantics" title="Permalink"></a></h2><h3 id="rand-bakes-observed-data-into-whole-arrays"><a class="docs-heading-anchor" href="#rand-bakes-observed-data-into-whole-arrays"><code>rand</code> bakes observed data into whole arrays</a><a id="rand-bakes-observed-data-into-whole-arrays-1"></a><a class="docs-heading-anchor-permalink" href="#rand-bakes-observed-data-into-whole-arrays" title="Permalink"></a></h3><p><code>rand(rng, d)</code> runs ancestral sampling and then reads each parameter symbol back out of the evaluation environment with <code>getfield</code>. Because it reads the whole top-level symbol, for a partially-observed array the returned field is the <strong>full array</strong> — free slots filled by the sampled values, observed slots holding the model&#39;s baked-in data. The draw is therefore ready to be fed straight back into <code>logpdf</code>.</p><h3 id="logpdf-reads-only-the-free-parameters"><a class="docs-heading-anchor" href="#logpdf-reads-only-the-free-parameters"><code>logpdf</code> reads only the free parameters</a><a id="logpdf-reads-only-the-free-parameters-1"></a><a class="docs-heading-anchor-permalink" href="#logpdf-reads-only-the-free-parameters" title="Permalink"></a></h3><p><code>logpdf</code> starts from an isolated copy of the model&#39;s evaluation environment (<code>smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)</code>, <em>not</em> the live env, to avoid mutating the model&#39;s deterministic array nodes), which already contains the observed data. It then overlays <strong>only the free parameters</strong>: for each <code>vn in parameters(model)</code> it reads the value from <code>x</code> by that <code>VarName</code>&#39;s optic (<code>AbstractPPL.getvalue</code>) and writes it with <code>BangBang.setindex!!(env, value, vn)</code>. Observed data (already in <code>env</code>) and deterministic nodes (recomputed during evaluation) are never read from <code>x</code>.</p><p>A direct consequence: <code>logpdf</code> is <strong>invariant</strong> to whatever you place in observed or deterministic slots of the input. For a partially-observed array, only the free-parameter slots affect the result; the observed slots are ignored and the model&#39;s own data is scored instead.</p><pre><code class="language-julia hljs">using JuliaBUGS, Distributions
+
+array_model = @bugs begin
+    for i in 1:3
+        x[i] ~ dnorm(0, 1)
+    end
+end
+
+# x[1] observed, x[2] and x[3] free.
+model = array_model((; x = [1.0, missing, missing]))
+d = to_distribution(model)
+
+# Pass a full-shaped array. The first slot&#39;s value is ignored — the model&#39;s
+# observed x[1] = 1.0 is scored regardless of what you put there:
+logpdf(d, (x = [999.0, 0.5, -0.5],)) == logpdf(d, (x = [1.0, 0.5, -0.5],))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">true</code></pre><p>The cleanest usage is to start from a <code>rand(d)</code> draw and modify only the free positions before calling <code>logpdf</code>.</p><div class="admonition is-warning" id="Scoring-different-data-requires-a-new-model-9adae861c61b6c6a"><header class="admonition-header">Scoring different data requires a new model<a class="admonition-anchor" href="#Scoring-different-data-requires-a-new-model-9adae861c61b6c6a" title="Permalink"></a></header><div class="admonition-body"><p>Tweaking an observed or deterministic slot is <strong>inert</strong> — the observed data is part of the distribution&#39;s <em>identity</em>. To evaluate the density under <em>different</em> observed data, construct a new model — call the model definition with the new data — and call <code>to_distribution</code> again; you cannot do it by changing the values you pass to <code>logpdf</code>. (This is also why a value passed for a <em>deterministic</em> node is discarded: such a node is a function of the parameters and is always recomputed.)</p></div></div><h3 id="Constrained-space,-no-Jacobian"><a class="docs-heading-anchor" href="#Constrained-space,-no-Jacobian">Constrained space, no Jacobian</a><a id="Constrained-space,-no-Jacobian-1"></a><a class="docs-heading-anchor-permalink" href="#Constrained-space,-no-Jacobian" title="Permalink"></a></h3><p>Both <code>rand</code> and <code>logpdf</code> force <code>transformed=false</code>, regardless of <code>model.transformed</code>. <code>logpdf</code> adds <strong>no log-abs-det-Jacobian</strong>: it returns a density with respect to the natural (constrained) variate the user supplies and receives. This makes the wrapper a faithful density over the <code>NamedTuple</code> it accepts, but means it is not, on its own, a correct unconstrained-space target.</p><h3 id="Full-joint-density"><a class="docs-heading-anchor" href="#Full-joint-density">Full joint density</a><a id="Full-joint-density-1"></a><a class="docs-heading-anchor-permalink" href="#Full-joint-density" title="Permalink"></a></h3><p><code>logpdf</code> returns the untempered joint <code>log_densities.logprior + log_densities.loglikelihood</code> (independent of any temperature default), with observed data baked into the model. Two models that differ only in their observed data are different <code>BUGSModelDistribution</code>s and give different <code>logpdf</code> values for the same free-parameter input. <code>loglikelihood(d, x::NamedTuple)</code> is an alias for this joint <code>logpdf</code> — it is <em>not</em> a prior-only or data-only quantity. Use the underlying model API if you need those terms separately.</p><h3 id="Value-support-reduction"><a class="docs-heading-anchor" href="#Value-support-reduction">Value support reduction</a><a id="Value-support-reduction-1"></a><a class="docs-heading-anchor-permalink" href="#Value-support-reduction" title="Permalink"></a></h3><p>The <code>S</code> type parameter is computed by collecting the <code>value_support</code> of every free (stochastic, unobserved) node&#39;s distribution and reducing with <code>promote_type</code>. A model whose free parameters mix discrete and continuous distributions therefore reports <code>Continuous</code>; a model with no free stochastic nodes defaults to <code>Continuous</code>. This reported support is lossy and is cosmetic for density evaluation — each node still uses its true distribution — but generic code dispatching on <code>value_support(typeof(d))</code> should be aware of the collapse.</p><h3 id="Always-graph-evaluation;-evaluation_mode-warning"><a class="docs-heading-anchor" href="#Always-graph-evaluation;-evaluation_mode-warning">Always graph evaluation; <code>evaluation_mode</code> warning</a><a id="Always-graph-evaluation;-evaluation_mode-warning-1"></a><a class="docs-heading-anchor-permalink" href="#Always-graph-evaluation;-evaluation_mode-warning" title="Permalink"></a></h3><p>The wrapper always uses graph evaluation (<code>UseGraph</code>) and ignores <code>model.evaluation_mode</code>. If the model&#39;s mode is not a <code>UseGraph</code>, <code>to_distribution</code> emits a one-time (<code>maxlog=1</code>) <code>@warn</code> noting that it ignores the mode and that its <code>logpdf</code> may differ from <code>LogDensityProblems.logdensity</code> for such a model (e.g. a marginalized one). See <a href="../inference/evaluation_modes/">Evaluation Modes</a> and <a href="../inference/auto_marginalization/">Auto-Marginalization</a> for the modes this concerns.</p><h2 id="Design-notes-/-decisions"><a class="docs-heading-anchor" href="#Design-notes-/-decisions">Design notes / decisions</a><a id="Design-notes-/-decisions-1"></a><a class="docs-heading-anchor-permalink" href="#Design-notes-/-decisions" title="Permalink"></a></h2><h3 id="Symbol-grouped-NamedTuple-variate"><a class="docs-heading-anchor" href="#Symbol-grouped-NamedTuple-variate">Symbol-grouped <code>NamedTuple</code> variate</a><a id="Symbol-grouped-NamedTuple-variate-1"></a><a class="docs-heading-anchor-permalink" href="#Symbol-grouped-NamedTuple-variate" title="Permalink"></a></h3><p>The variate keys are top-level symbols, not per-element optics. A <code>NamedTuple</code>&#39;s fields must be plain <code>Symbol</code>s, so they can only carry top-level identifiers; <code>getsym</code> is exactly the function that maps a <code>VarName</code> back to its top-level symbol, and deduplicating with a membership check (rather than a <code>Set</code>) keeps a stable, reproducible field ordering tied to graph evaluation order.</p><p>The tradeoff is intrinsic to choosing a <code>NamedTuple</code> variate: it cannot distinguish a loop-declared array <code>x[i]</code> from a single multivariate node <code>x[1:3]</code> (both become <code>(x = Vector,)</code>), and it cannot key individual array elements. Callers needing per-element addressing must use a container with real <code>VarName</code> keys (e.g. a <code>Dict{VarName}</code>), which is outside this interface.</p><h3 id="Observed-data-sourced-from-the-model"><a class="docs-heading-anchor" href="#Observed-data-sourced-from-the-model">Observed data sourced from the model</a><a id="Observed-data-sourced-from-the-model-1"></a><a class="docs-heading-anchor-permalink" href="#Observed-data-sourced-from-the-model" title="Permalink"></a></h3><p><code>logpdf</code> overlays only free parameters by their precise <code>VarName</code> optic and leaves observed and deterministic entries to the model. An earlier implementation overlaid whole top-level symbols by bare <code>Symbol</code> (<code>setindex!!(env, x.x, :x)</code>), which clobbered the observed slots of a partially-observed array with caller-supplied values — making the density depend on junk in observed positions. Addressing each free parameter by <code>VarName</code> touches exactly the stochastic-unobserved slots; using <code>smart_copy</code> rather than the live env keeps <code>logpdf</code> free of observable side effects on the model&#39;s deterministic array nodes.</p><h3 id="Full-joint-semantics-and-the-loglikelihood-alias"><a class="docs-heading-anchor" href="#Full-joint-semantics-and-the-loglikelihood-alias">Full-joint semantics and the <code>loglikelihood</code> alias</a><a id="Full-joint-semantics-and-the-loglikelihood-alias-1"></a><a class="docs-heading-anchor-permalink" href="#Full-joint-semantics-and-the-loglikelihood-alias" title="Permalink"></a></h3><p>Because observed data is part of the model rather than the variate, the natural density over the free-parameter <code>NamedTuple</code> is the joint (prior times the likelihood of the baked-in data). Defining <code>Distributions.loglikelihood</code> as an alias for the joint <code>logpdf</code> populates the Distributions interface without inventing a separate, ambiguous data-only quantity the wrapper cannot cleanly express.</p><h3 id="Always-UseGraph"><a class="docs-heading-anchor" href="#Always-UseGraph">Always <code>UseGraph</code></a><a id="Always-UseGraph-1"></a><a class="docs-heading-anchor-permalink" href="#Always-UseGraph" title="Permalink"></a></h3><p>Graph evaluation is the well-defined path for ancestral sampling and for overlaying free parameters by <code>VarName</code>, giving a consistent, predictable joint density. Other modes (e.g. marginalization) compute a different quantity, so the wrapper fixes the mode rather than silently producing a number whose meaning depends on a mode the caller may not be tracking; the rate-limited warning informs without spamming. For a marginalized model, <code>logpdf(d, nt)</code> can disagree with <code>LogDensityProblems.logdensity(model, ...)</code> — the warning flags this, but the divergence is real.</p><h3 id="Partially-observed-arrays"><a class="docs-heading-anchor" href="#Partially-observed-arrays">Partially-observed arrays</a><a id="Partially-observed-arrays-1"></a><a class="docs-heading-anchor-permalink" href="#Partially-observed-arrays" title="Permalink"></a></h3><p>A symbol-grouped variate forces one field per array, so the contract is: pass a full-shaped array (exactly what <code>rand(d)</code> returns), and the wrapper extracts only the free-parameter slots it actually needs. This makes <code>rand</code>/<code>logpdf</code> round-trip cleanly while remaining invariant to observed-slot contents. The surprise is that some supplied entries are silently ignored; the cleanest usage is to modify a <code>rand(d)</code> draw in place.</p><h2 id="Limitations-and-non-goals"><a class="docs-heading-anchor" href="#Limitations-and-non-goals">Limitations and non-goals</a><a id="Limitations-and-non-goals-1"></a><a class="docs-heading-anchor-permalink" href="#Limitations-and-non-goals" title="Permalink"></a></h2><div class="admonition is-warning" id="Warning-d79a3afaf7ccaac9"><header class="admonition-header">Warning<a class="admonition-anchor" href="#Warning-d79a3afaf7ccaac9" title="Permalink"></a></header><div class="admonition-body"><ul><li><strong>Not an unconstrained-space / HMC target.</strong> The wrapper ignores <code>model.transformed</code> and adds <strong>no log-abs-det-Jacobian</strong> (constrained-space density). Handing it to a gradient-based unconstrained sampler would sample the wrong distribution for any constrained parameter. Use the model&#39;s <code>LogDensityProblems</code> interface (see <a href="../example/">Getting Started</a>) for an HMC/NUTS target instead.</li><li><strong><code>logpdf</code> is the full joint, not a likelihood.</strong> <code>loglikelihood(d, x)</code> is an alias for the joint <code>logpdf</code> (prior plus likelihood of baked-in data), not a data-only likelihood.</li><li><strong>Always <code>UseGraph</code>.</strong> <code>model.evaluation_mode</code> is ignored; for a marginalized model <code>logpdf</code> can differ from <code>LogDensityProblems.logdensity</code>.</li><li><strong>Observed/deterministic input slots are ignored.</strong> Only free-parameter slots are read from the input <code>NamedTuple</code>. Partially-observed arrays must be passed full-shaped (as <code>rand</code> returns); their observed slots are inert.</li><li><strong>Mixed support collapses to <code>Continuous</code>.</strong> A model mixing discrete and continuous free parameters reports <code>Continuous</code> for its <code>ValueSupport</code>.</li></ul></div></div><h2 id="API"><a class="docs-heading-anchor" href="#API">API</a><a id="API-1"></a><a class="docs-heading-anchor-permalink" href="#API" title="Permalink"></a></h2><article><details class="docstring" open="true"><summary id="JuliaBUGS.Model.to_distribution"><a class="docstring-binding" href="#JuliaBUGS.Model.to_distribution"><code>JuliaBUGS.Model.to_distribution</code></a> — <span class="docstring-category">Function</span></summary><section><div><pre><code class="language-julia hljs">to_distribution(model::BUGSModel)</code></pre><p>Wrap a <a href="../api/api/#JuliaBUGS.Model.BUGSModel"><code>BUGSModel</code></a> as a <code>Distributions.Distribution</code> over <code>NamedTuple</code>s.</p><p>The returned distribution&#39;s variate type is <code>NamedTupleVariate{names}</code>, where <code>names</code> are the unique symbols of the model parameters (in graph evaluation order). <code>rand(d)</code> performs ancestral sampling and returns a <code>NamedTuple</code> whose fields are the corresponding entries of the model evaluation environment. <code>logpdf(d, nt)</code> overlays the supplied free-parameter values into the evaluation environment and returns the log joint density in the original (constrained) parameter space.</p><p>The wrapper always operates in the model&#39;s original (constrained) parameter space: <code>model.transformed</code> is ignored and <strong>no log-abs-det-Jacobian is added</strong>, so the returned density is a constrained-space density and is not, on its own, a correct unconstrained-space (e.g. HMC) target. It also always uses graph evaluation (<code>UseGraph</code>) and ignores <code>model.evaluation_mode</code>, so for a marginalized model it can differ from <code>LogDensityProblems.logdensity</code>.</p><p><code>logpdf</code> returns the full joint (prior plus likelihood of any observed data baked into the model). The observed data is part of the distribution&#39;s <strong>identity</strong>: two models that differ only in their observed data are different <code>BUGSModelDistribution</code>s. Only the model&#39;s <em>free parameters</em> are read from the supplied <code>NamedTuple</code>, each addressed by its <code>VarName</code>; <strong>observed and deterministic entries in the input are ignored</strong> and taken from the model instead — observed slots hold the baked-in data, and deterministic nodes are functions of the parameters and are recomputed. For a partially-observed array this means <code>logpdf</code> is invariant to whatever you place in the observed slots: <code>logpdf(d, (x = [999.0, …],))</code> equals <code>logpdf(d, (x = [&lt;data&gt;, …],))</code>. Pass a full-shaped array (as <code>rand</code> returns); only the free-parameter slots affect the result.</p><div class="admonition is-warning" id="Warning-69c362c371902f78"><header class="admonition-header">Warning<a class="admonition-anchor" href="#Warning-69c362c371902f78" title="Permalink"></a></header><div class="admonition-body"><p>Tweaking an observed (or deterministic) slot is <strong>inert</strong> — it cannot change the result. To score the model against <em>different</em> observed data you must <code>compile</code> a new model and wrap it again; you cannot do it by changing the values you pass to <code>logpdf</code>.</p></div></div><p><code>loglikelihood(d, x)</code> is an alias for this joint <code>logpdf</code>, not a data-only likelihood. For a model that mixes discrete and continuous parameters the value support reduces to <code>Continuous</code>.</p><p><strong>Example</strong></p><pre><code class="language-julia hljs">model_def = @bugs begin
+    x ~ dnorm(0, 1)
+    y ~ dnorm(x, 1)
+end
+model = compile(model_def, (; y = 1.0))
+d = to_distribution(model)
+nt = rand(d)             # (x = ...,)
+logpdf(d, nt)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1e3bd2c1990a653a2354a19694b2339bd261800/JuliaBUGS/src/model/to_distribution.jl#L17-L71">source</a></section></details></article><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+mermaid.initialize({
+    startOnLoad: true,
+    theme: "neutral"
+});
+</script></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../of_design_doc/">« <code>of</code> Type System</a><a class="docs-footer-nextpage" href="../inference/ad/">Automatic Differentiation »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Wednesday 1 July 2026 16:48">Wednesday 1 July 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
