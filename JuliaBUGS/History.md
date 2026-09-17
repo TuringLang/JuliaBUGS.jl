@@ -1,12 +1,21 @@
 # JuliaBUGS Changelog
 
+## 0.18.0
+
+### Highlights
+
+- Use MistyClosures for world-age-safe model evaluation, including models compiled and evaluated in the same function, late AD loading, and package restoration (#541). Mooncake differentiates the ordinary source functions.
+
+### Breaking Changes
+
+- Cached model specializations can retain earlier helper definitions. After redefining a helper or custom primitive, recompile the model and prepare its gradients again; continued evaluation of the old model is unsupported.
+- Preparing `BUGSModelWithGradient` during package precompilation now throws an `ArgumentError`. Store the base model and prepare gradients after package loading.
+- The serialized representation of `BUGSModelWithGradient` has changed. Recreate gradient wrappers saved by earlier versions rather than loading them directly.
+
 ## 0.17.1
 
 ### Bug Fixes
 
-- Use MistyClosures for world-age-safe model evaluation, including models compiled
-  and evaluated in the same function, late AD loading, and package restoration.
-  Mooncake differentiates the ordinary source functions.
 - `chain_type = VNChain` works with DynamicPPL loaded (#536). The generic `bundle_samples` is the more specific in the model argument and FlexiChains's DynamicPPL extension is the more specific in `chain_type`, so with both loaded neither won and sampling any model into a `FlexiChain` raised an ambiguous-method error. Every sampler was affected, and so was every session using JuliaBUGS alongside Turing, which loads DynamicPPL. The tests now load DynamicPPL, which is the condition that triggers it.
 
 ## 0.17.0
