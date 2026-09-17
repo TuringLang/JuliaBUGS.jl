@@ -4,6 +4,8 @@ This example comes from Volume 1 of the classic [BUGS examples](https://www.mult
 
 The question is how the risk of recurrence depends on patient characteristics: age, sex, and the type of underlying disease (coded as "other", GN, AN, or PKD). The model is a Weibull survival regression with a patient-level random effect, so that the two observations from the same patient are allowed to be correlated and unexplained differences between patients are absorbed by a normally distributed "frailty" term. This is the classic Bayesian analogue of a shared-frailty proportional-hazards survival model.
 
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.kidney`, which ships with the package.
+
 ## Model
 
 For patient ``i`` and recurrence ``j``, the recurrence time ``t_{ij}`` follows a Weibull distribution whose scale depends on the covariates through a log link, with a per-patient random effect ``b_i``:
@@ -20,35 +22,15 @@ The disease effect uses a corner-point constraint: the first level is fixed to z
 
 ```@example kidney
 using JuliaBUGS
-using Distributions
 
-# `censored` comes from Distributions; make it available inside `@bugs`:
-JuliaBUGS.@bugs_primitive censored
+example = JuliaBUGS.BUGSExamples.VOLUME_1.kidney
+example.model_def
+```
 
-kidney = @bugs begin
-    for i in 1:N
-        for j in 1:M
-            # Survival times bounded below by censoring times:
-            t[i, j] ~ censored(dweib(r, mu[i, j]), var"t.cen"[i, j], nothing)
-            mu[i, j] = exp(alpha + var"beta.age" * age[i, j] + var"beta.sex" * sex[i] +
-                           var"beta.dis"[disease[i]] + b[i])
-        end
-        # Random effects:
-        b[i] ~ dnorm(0.0, tau)
-    end
+The program as it appears in the original BUGS distribution:
 
-    # Priors:
-    alpha ~ dnorm(0.0, 0.0001)
-    var"beta.age" ~ dnorm(0.0, 0.0001)
-    var"beta.sex" ~ dnorm(0.0, 0.0001)
-    # beta.dis[1] <- 0; # corner-point constraint
-    for k in 2:4
-        var"beta.dis"[k] ~ dnorm(0.0, 0.0001)
-    end
-    tau ~ dgamma(1.0E-3, 1.0E-3)
-    r ~ dgamma(1.0, 1.0E-3)
-    sigma = 1 / sqrt(tau) # s.d. of random effects
-end
+```@example kidney
+print(example.original_syntax_program)
 ```
 
 Names such as `var"beta.age"` and `var"t.cen"` are R-style dotted variable names carried over verbatim from the original BUGS program; Julia's `var"..."` syntax lets us keep the exact original names.
@@ -58,14 +40,17 @@ Names such as `var"beta.age"` and `var"t.cen"` are R-style dotted variable names
 The data set is large, so we load the bundled copy rather than typing it out:
 
 ```@example kidney
-data  = JuliaBUGS.BUGSExamples.VOLUME_1.kidney.data
-inits = JuliaBUGS.BUGSExamples.VOLUME_1.kidney.inits
-model = kidney(data, inits)
+data = example.data
 ```
 
-We pass the example's published initial values as the second argument to `kidney` rather than calling `kidney(data)` alone: with a censored survival likelihood and vague priors, values drawn at random from the priors can land outside the valid range, so a sensible starting point makes construction and sampling reliable.
+```@example kidney
+inits = example.inits
+model = compile(example.model_def, data, inits)
+```
 
-Here `N = 38` is the number of patients and `M = 2` is the maximum number of recurrences per patient. `t` holds the recurrence times (with `missing` entries where the observation is censored), `t.cen` holds the corresponding censoring times, `age` is the patient's age at each observation, `sex` is a 0/1 indicator, and `disease` codes the underlying disease type as an integer from 1 to 4. All of the classic examples ship with the package in `JuliaBUGS.BUGSExamples`, bundling the model, data, initial values, and reference results together.
+We pass the example's published initial values to `compile` rather than compiling from the data alone: with a censored survival likelihood and vague priors, values drawn at random from the priors can land outside the valid range, so a sensible starting point makes construction and sampling reliable.
+
+Here `N = 38` is the number of patients and `M = 2` is the maximum number of recurrences per patient. `t` holds the recurrence times (with `missing` entries where the observation is censored), `t.cen` holds the corresponding censoring times, `age` is the patient's age at each observation, `sex` is a 0/1 indicator, and `disease` codes the underlying disease type as an integer from 1 to 4.
 
 ## Sampling
 
@@ -75,7 +60,7 @@ With the model compiled, we attach a gradient backend and draw posterior samples
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = kidney(data, inits; adtype=AutoMooncake(; config=nothing))
+model = compile(example.model_def, data, inits; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)

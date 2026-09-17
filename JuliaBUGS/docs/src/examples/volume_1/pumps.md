@@ -4,6 +4,8 @@ This example concerns failure records for 10 power plant pumps. For each pump we
 
 The failure counts are modeled as Poisson, and because the gamma prior on the rates is conjugate to the Poisson likelihood, this is the classic conjugate gamma-Poisson hierarchical model. It is one of the examples from [Volume 1 of the classic BUGS examples](https://www.multibugs.org/examples/latest/VolumeI.html); the original write-up is also available in the [OpenBUGS documentation](https://chjackson.github.io/openbugsdoc/Examples/Pumps.html).
 
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.pumps`, which ships with the package.
+
 ## Model
 
 For pump ``i`` with operation time ``t_i`` and failure count ``x_i``:
@@ -17,20 +19,19 @@ x_i &\sim \text{Poisson}(\theta_i \, t_i), \qquad i = 1, \ldots, N \\
 \end{aligned}
 ```
 
-In JuliaBUGS the model is written with the `@bugs` macro, which accepts the BUGS program almost unchanged:
+The model definition as JuliaBUGS holds it, parsed from the BUGS program below:
 
 ```@example pumps
 using JuliaBUGS
 
-pumps = @bugs begin
-    for i in 1:N
-        theta[i] ~ dgamma(alpha, beta)
-        lambda[i] = theta[i] * t[i]
-        x[i] ~ dpois(lambda[i])
-    end
-    alpha ~ dexp(1)
-    beta ~ dgamma(0.1, 1.0)
-end
+example = JuliaBUGS.BUGSExamples.VOLUME_1.pumps
+example.model_def
+```
+
+The program as it appears in the original BUGS distribution:
+
+```@example pumps
+print(example.original_syntax_program)
 ```
 
 ## Data
@@ -38,16 +39,12 @@ end
 The data are a `NamedTuple` with the operation times `t` (thousands of hours), the observed failure counts `x`, and the number of pumps `N`. Calling the model definition with the data builds the model:
 
 ```@example pumps
-data = (
-    t = [94.3, 15.7, 62.9, 126, 5.24, 31.4, 1.05, 1.05, 2.1, 10.5],
-    x = [5, 1, 5, 14, 3, 19, 1, 1, 4, 22],
-    N = 10
-)
-
-model = pumps(data)
+data = example.data
 ```
 
-All of the classic Volume 1 examples ship with the package in `JuliaBUGS.BUGSExamples` — for each example you get the model definition, the data, the initial values, and (where recorded) the reference results; this one is `JuliaBUGS.BUGSExamples.VOLUME_1.pumps`.
+```@example pumps
+model = compile(example.model_def, data)
+```
 
 ## Sampling
 
@@ -57,7 +54,7 @@ To draw posterior samples, rebuild the model with gradient support and run the N
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = pumps(data; adtype=AutoMooncake(; config=nothing))
+model = compile(example.model_def, data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)

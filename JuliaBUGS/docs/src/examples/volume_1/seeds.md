@@ -11,6 +11,8 @@ This example demonstrates:
 - translating BUGS link-function syntax into Julia-native syntax, and
 - starting a model from supplied initial values.
 
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.seeds`, which ships with the package.
+
 ## Model
 
 Let $p_i$ be the germination probability on plate $i$. The model is
@@ -25,25 +27,19 @@ r_i &\sim \text{Binomial}(n_i, p_i)
 
 Here ``\alpha_0`` is the baseline log-odds of germination, ``\alpha_1`` and ``\alpha_2`` are the main effects of seed type and root extract, and ``\alpha_{12}`` is their interaction. The plate effects ``b_i`` capture variation left unexplained by those factors. The regression coefficients receive vague priors, as does the random-effect precision `tau`; the derived quantity `sigma = 1 / sqrt(tau)` is the standard deviation of the plate effects.
 
-Here is the model written with the `@bugs` macro. Because Julia treats `f(x) = ...` as a function definition, the BUGS link-function form `logit(p[i]) <- ...` is written by applying the inverse link (`logistic`) on the right-hand side. JuliaBUGS can also run the original BUGS program directly; see [Migrating from WinBUGS, OpenBUGS, and JAGS](../../guides/differences.md) for that workflow.
+The model definition as JuliaBUGS holds it, parsed from the BUGS program below. Because Julia treats `f(x) = ...` as a function definition, the BUGS link-function form `logit(p[i]) <- ...` becomes the inverse link (`logistic`) applied on the right-hand side. See [Migrating from WinBUGS, OpenBUGS, and JAGS](../../guides/differences.md) for how BUGS programs are parsed.
 
 ```@example seeds
 using JuliaBUGS
 
-seeds = @bugs begin
-    for i in 1:N
-        r[i] ~ dbin(p[i], n[i])
-        b[i] ~ dnorm(0.0, tau)
-        p[i] = logistic(alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] +
-                        b[i])
-    end
-    alpha0 ~ dnorm(0.0, 1.0e-6)
-    alpha1 ~ dnorm(0.0, 1.0e-6)
-    alpha2 ~ dnorm(0.0, 1.0e-6)
-    alpha12 ~ dnorm(0.0, 1.0e-6)
-    tau ~ dgamma(0.001, 0.001)
-    sigma = 1 / sqrt(tau)
-end
+example = JuliaBUGS.BUGSExamples.VOLUME_1.seeds
+example.model_def
+```
+
+The program as it appears in the original BUGS distribution:
+
+```@example seeds
+print(example.original_syntax_program)
 ```
 
 ## Data
@@ -51,18 +47,12 @@ end
 The data are supplied as a `NamedTuple`. `r` and `n` are the germinated and total seed counts on each of the `N = 21` plates, while `x1` and `x2` are the (0/1) indicators for seed type and root extract.
 
 ```@example seeds
-data = (
-    r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],
-    n = [39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7],
-    x1 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    x2 = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
-    N = 21
-)
-
-model = seeds(data)
+data = example.data
 ```
 
-All of the classic examples ship with the package under `JuliaBUGS.BUGSExamples`, bundling the model definition, data, initial values, and published reference results (this one is `JuliaBUGS.BUGSExamples.VOLUME_1.seeds`).
+```@example seeds
+model = compile(example.model_def, data)
+```
 
 ## Initial values
 
@@ -70,8 +60,8 @@ The initial values published with the classic example set the regression coeffic
 the random-effect precision to 10:
 
 ```@example seeds
-inits = (alpha0=0.0, alpha1=0.0, alpha2=0.0, alpha12=0.0, tau=10.0)
-model = seeds(data, inits)
+inits = example.inits
+model = compile(example.model_def, data, inits)
 nothing # hide
 ```
 
@@ -87,7 +77,7 @@ To draw posterior samples, construct the model with gradient support and run the
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = seeds(data; adtype=AutoMooncake(; config=nothing))
+model = compile(example.model_def, data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)

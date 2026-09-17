@@ -4,6 +4,8 @@ This is the classic *LSAT* example from [Volume 1 of the BUGS examples](https://
 
 The question is how to separate the difficulty of each test item from the ability of each student. The data are analysed with the one-parameter **Rasch model**, a foundational item response model: the probability that student `j` answers item `k` correctly follows a logistic function of an item difficulty parameter `alpha[k]` and a latent ability `theta[j]`, with abilities assumed normally distributed in the student population. The scale parameter `beta` (constrained to be positive) governs the spread of the ability distribution. Because the location of the difficulties is only identified relative to the mean ability (fixed at zero), the model also computes centred difficulties `a[k] = alpha[k] - mean(alpha)`, which can be compared with the marginal maximum likelihood estimates of Bock and Aitkin (1981).
 
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.lsat`, which ships with the package.
+
 ## Model
 
 Writing $p_{jk}$ for the probability that student $j$ answers item $k$ correctly, the model is
@@ -23,38 +25,14 @@ The data arrive as 32 aggregated response patterns rather than individual answer
 ```@example lsat
 using JuliaBUGS
 
-lsat = @bugs begin
-    # Calculate individual (binary) responses to each test from Multinomial data
-    for j in 1:culm[1]
-        for k in 1:T
-            r[j, k] = response[1, k]
-        end
-    end
+example = JuliaBUGS.BUGSExamples.VOLUME_1.lsat
+example.model_def
+```
 
-    for i in 2:R
-        for j in (culm[i - 1] + 1):culm[i]
-            for k in 1:T
-                r[j, k] = response[i, k]
-            end
-        end
-    end
+The program as it appears in the original BUGS distribution:
 
-    # Rasch model
-    for j in 1:N
-        for k in 1:T
-            p[j, k] = logistic(beta * theta[j] - alpha[k])
-            r[j, k] ~ dbern(p[j, k])
-        end
-        theta[j] ~ dnorm(0, 1)
-    end
-
-    # Priors
-    for k in 1:T
-        alpha[k] ~ dnorm(0, 0.0001)
-        a[k] = alpha[k] - mean(alpha[:])
-    end
-    beta ~ dunif(0, 1000)
-end
+```@example lsat
+print(example.original_syntax_program)
 ```
 
 ## Data
@@ -62,50 +40,12 @@ end
 The data are supplied as a `NamedTuple`. `N = 1000` is the number of students, `T = 5` the number of test items, and `R = 32` the number of distinct response patterns. Each row of `response` is one pattern of five 0/1 answers, and `culm` gives the cumulative number of students whose answers match patterns up to and including that row.
 
 ```@example lsat
-data = (
-    N = 1000,
-    R = 32,
-    T = 5,
-    culm = [3, 9, 11, 22, 23, 24, 27, 31, 32, 40, 40, 56, 56, 59, 61, 76, 86, 115,
-        129, 210, 213, 241, 256, 336, 352, 408, 429, 602, 613, 674, 702, 1000],
-    response = [0 0 0 0 0
-                0 0 0 0 1
-                0 0 0 1 0
-                0 0 0 1 1
-                0 0 1 0 0
-                0 0 1 0 1
-                0 0 1 1 0
-                0 0 1 1 1
-                0 1 0 0 0
-                0 1 0 0 1
-                0 1 0 1 0
-                0 1 0 1 1
-                0 1 1 0 0
-                0 1 1 0 1
-                0 1 1 1 0
-                0 1 1 1 1
-                1 0 0 0 0
-                1 0 0 0 1
-                1 0 0 1 0
-                1 0 0 1 1
-                1 0 1 0 0
-                1 0 1 0 1
-                1 0 1 1 0
-                1 0 1 1 1
-                1 1 0 0 0
-                1 1 0 0 1
-                1 1 0 1 0
-                1 1 0 1 1
-                1 1 1 0 0
-                1 1 1 0 1
-                1 1 1 1 0
-                1 1 1 1 1]
-)
-
-model = lsat(data)
+data = example.data
 ```
 
-All of the classic examples ship with the package under `JuliaBUGS.BUGSExamples`, bundling the model definition, data, initial values, and reference results (this one is `JuliaBUGS.BUGSExamples.VOLUME_1.lsat`).
+```@example lsat
+model = compile(example.model_def, data)
+```
 
 ## Sampling
 
@@ -115,7 +55,7 @@ To draw posterior samples, construct the model with gradient support and run the
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = lsat(data; adtype=AutoMooncake(; config=nothing))
+model = compile(example.model_def, data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)

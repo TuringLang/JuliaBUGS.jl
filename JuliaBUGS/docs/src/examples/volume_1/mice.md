@@ -6,6 +6,8 @@ The goal is to describe how survival varies across the four treatment groups. Su
 
 This is one of the classic examples from Volume 1 of the BUGS examples; see the [MultiBUGS Volume I collection](https://www.multibugs.org/examples/latest/VolumeI.html) and the matching [OpenBUGS Mice page](https://chjackson.github.io/openbugsdoc/Examples/Mice.html).
 
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.mice`, which ships with the package.
+
 ## Model
 
 Writing $r$ for the shared Weibull shape, $\beta_i$ for the coefficient of group $i$, and $\mu_i = \exp(\beta_i)$ for the corresponding Weibull scale parameter, the model is
@@ -24,27 +26,15 @@ where the Normal prior on each $\beta_i$ is written in BUGS' mean/precision para
 
 ```@example mice
 using JuliaBUGS
-using Distributions
 
-# `censored` comes from Distributions; make it available inside `@bugs`:
-JuliaBUGS.@bugs_primitive censored
+example = JuliaBUGS.BUGSExamples.VOLUME_1.mice
+example.model_def
+```
 
-mice = @bugs begin
-    for i in 1:M
-        for j in 1:N
-            t[i, j] ~ censored(dweib(r, mu[i]), var"t.cen"[i, j], nothing)
-        end
-        mu[i] = exp(beta[i])
-        beta[i] ~ dnorm(0.0, 0.001)
-        median[i] = pow(log(2) * exp(-(beta[i])), 1 / r)
-    end
+The program as it appears in the original BUGS distribution:
 
-    # r ~ dexp(0.001)
-    r ~ dunif(0.1, 10)
-    var"veh.control" = beta[2] - beta[1]
-    var"test.sub" = beta[3] - beta[1]
-    var"pos.control" = beta[4] - beta[1]
-end
+```@example mice
+print(example.original_syntax_program)
 ```
 
 The names `var"t.cen"`, `var"veh.control"`, `var"test.sub"`, and `var"pos.control"` are R-style dotted names carried over verbatim from the original BUGS program; Julia allows such non-standard identifiers through its `var"..."` syntax.
@@ -54,23 +44,12 @@ The names `var"t.cen"`, `var"veh.control"`, `var"test.sub"`, and `var"pos.contro
 The data hold the survival times and censoring information for the `M = 4` groups of `N = 20` mice each. In the `t` matrix, a `missing` entry marks an animal whose survival time was censored; the corresponding entry of `var"t.cen"` gives the time at which that animal was last known to be alive (a value of `0` means the animal's survival time was observed exactly).
 
 ```@example mice
-data = (
-    t = [12 1 21 25 11 26 27 30 13 12 21 20 23 25 23 29 35 missing 31 36
-         32 27 23 12 18 missing missing 38 29 30 missing 32 missing missing missing missing 25 30 37 27
-         22 26 missing 28 19 15 12 35 35 10 22 18 missing 12 missing missing 31 24 37 29
-         27 18 22 13 18 29 28 missing 16 22 26 19 missing missing 17 28 26 12 17 26],
-    var"t.cen" = [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 40 0 0
-                  0 0 0 0 0 40 40 0 0 0 40 0 40 40 40 40 0 0 0 0
-                  0 0 10 0 0 0 0 0 0 0 0 0 24 0 40 40 0 0 0 0
-                  0 0 0 0 0 0 0 20 0 0 0 0 29 10 0 0 0 0 0 0],
-    M = 4,
-    N = 20
-)
-
-model = mice(data)
+data = example.data
 ```
 
-All of the classic examples ship with the package inside `JuliaBUGS.BUGSExamples` — each entry bundles the model definition, data, initial values, and reference results, so you can load `JuliaBUGS.BUGSExamples.VOLUME_1.mice` directly instead of retyping the data above.
+```@example mice
+model = compile(example.model_def, data)
+```
 
 ## Sampling
 
@@ -80,7 +59,7 @@ With the model constructed, we attach an automatic-differentiation backend and d
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = mice(data; adtype=AutoMooncake(; config=nothing))
+model = compile(example.model_def, data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)

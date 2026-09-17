@@ -4,6 +4,8 @@ This example comes from the Solomon-Wynne avoidance-learning experiment, in whic
 
 The model answers the question of *how* that learning accumulates: it lets each previous avoidance and each previous shock multiply the probability of being shocked on the current trial by its own constant factor. This is a loglinear model for binary data — the log of the shock probability is a linear function of how many shocks the dog has so far avoided and how many it has received. It is one of the examples in [Volume 1 of the classic BUGS examples](https://www.multibugs.org/examples/latest/VolumeI.html); see also the [OpenBUGS version of this example](https://chjackson.github.io/openbugsdoc/Examples/Dogs.html).
 
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.dogs`, which ships with the package.
+
 ## Model
 
 Let $x^{a}_{ij}$ be the number of shocks dog $i$ has *avoided* before trial $j$ and $x^{s}_{ij} = (j-1) - x^{a}_{ij}$ the number of shocks it has *received*. Writing $p_{ij}$ for the probability that dog $i$ is shocked on trial $j$, the model is
@@ -20,25 +22,14 @@ where $y_{ij} = 1 - Y_{ij}$ is the indicator that a shock occurred on trial $j$.
 ```@example dogs
 using JuliaBUGS
 
-dogs = @bugs begin
-    for i in 1:Dogs
-        xa[i, 1] = 0
-        xs[i, 1] = 0
-        p[i, 1] = 0
+example = JuliaBUGS.BUGSExamples.VOLUME_1.dogs
+example.model_def
+```
 
-        for j in 2:Trials
-            xa[i, j] = sum(Y[i, 1:(j - 1)])
-            xs[i, j] = j - 1 - xa[i, j]
-            p[i, j] = exp(alpha * xa[i, j] + beta * xs[i, j])
-            y[i, j] = 1 - Y[i, j]
-            y[i, j] ~ dbern(p[i, j])
-        end
-    end
-    alpha ~ dunif(-10, -0.00001)
-    beta ~ dunif(-10, -0.00001)
-    A = exp(alpha)
-    B = exp(beta)
-end
+The program as it appears in the original BUGS distribution:
+
+```@example dogs
+print(example.original_syntax_program)
 ```
 
 ## Data
@@ -46,45 +37,12 @@ end
 The data are supplied as a `NamedTuple`: the number of dogs `Dogs`, the number of trials per dog `Trials`, and the 30-by-25 matrix `Y`, whose entry `Y[i, j]` is 1 if dog `i` avoided the shock on trial `j` and 0 if it was shocked.
 
 ```@example dogs
-data = (
-    Dogs = 30,
-    Trials = 25,
-    Y = [0 0 1 0 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 1 1 0 1 1 0 0 1 1 0 1 0 1 1 1 1 1 1 1 1
-         0 1 1 0 0 1 1 1 1 0 1 0 1 0 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 0 1 1 1 1 0 0 1 0 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 1 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 0 0 1 1 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 1 0 1 0 1 1 0 1 0 0 0 1 1 1 1 1 0 1 1 0
-         0 0 0 0 1 0 0 1 1 0 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 1 1 1 1 1 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 1 1 0 1 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 1 0 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 1 0 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 1 0 1 0 0 0 1 0 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 1 0 1 0 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1
-         0 1 0 0 0 0 1 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 1 1 0 1 0 1 1 0 1 0 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 1 0 1 0 1 1 1 1 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1
-         0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 0 0 0 0 1 1 1 0 1 0 0 0 1 1 0 1 1 1 1 1 1
-         0 0 0 0 0 0 1 1 0 1 1 1 0 1 0 1 1 1 1 1 1 1 1 1 1
-         0 0 1 0 1 1 1 0 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 1 0 1 0 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-         0 0 0 0 1 1 0 0 1 1 1 0 1 0 1 0 1 0 1 1 1 1 1 1 1
-         0 0 0 0 1 1 1 1 1 1 0 1 0 1 1 1 1 1 1 1 1 1 1 1 1]
-)
-
-model = dogs(data)
+data = example.data
 ```
 
-All of the classic examples ship with the package in `JuliaBUGS.BUGSExamples`, so the model definition, data, and initial values above are also available directly as `JuliaBUGS.BUGSExamples.VOLUME_1.dogs`.
+```@example dogs
+model = compile(example.model_def, data)
+```
 
 ## Sampling
 
@@ -94,7 +52,7 @@ We draw posterior samples with the NUTS sampler from AdvancedHMC, rebuilding the
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = dogs(data; adtype=AutoMooncake(; config=nothing))
+model = compile(example.model_def, data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)

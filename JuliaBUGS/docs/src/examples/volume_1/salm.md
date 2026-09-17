@@ -16,6 +16,8 @@ through both a `log(dose + 10)` term (the offset of 10 keeps the term finite at 
 dose) and a linear dose term, so this is a log-linear Poisson regression with random effects
 — a Poisson–lognormal model.
 
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.salm`, which ships with the package.
+
 ## Model
 
 ```math
@@ -35,20 +37,14 @@ therefore extremely vague, and each plate effect `lambda[i, j]` has precision `t
 ```@example salm
 using JuliaBUGS
 
-salm = @bugs begin
-    for i in 1:doses
-        for j in 1:plates
-            y[i, j] ~ dpois(mu[i, j])
-            mu[i, j] = exp(alpha + beta * log(x[i] + 10) + gamma * x[i] + lambda[i, j])
-            lambda[i, j] ~ dnorm(0.0, tau)
-        end
-    end
-    alpha ~ dnorm(0.0, 1.0e-6)
-    beta ~ dnorm(0.0, 1.0e-6)
-    gamma ~ dnorm(0.0, 1.0e-6)
-    tau ~ dgamma(0.001, 0.001)
-    sigma = 1 / sqrt(tau)
-end
+example = JuliaBUGS.BUGSExamples.VOLUME_1.salm
+example.model_def
+```
+
+The program as it appears in the original BUGS distribution:
+
+```@example salm
+print(example.original_syntax_program)
 ```
 
 ## Data
@@ -58,24 +54,12 @@ the count matrix `y` (six doses by three replicate plates), and `x` holds the si
 in µg per plate.
 
 ```@example salm
-data = (
-    doses = 6,
-    plates = 3,
-    y = [15 21 29;
-         16 18 21;
-         16 26 33;
-         27 41 60;
-         33 38 41;
-         20 27 42],
-    x = [0, 10, 33, 100, 333, 1000]
-)
-
-model = salm(data)
+data = example.data
 ```
 
-All of the classic examples ship with the package in `JuliaBUGS.BUGSExamples` — each entry
-bundles the model definition, the data, a set of initial values, and (where available)
-reference results.
+```@example salm
+model = compile(example.model_def, data)
+```
 
 ## Sampling
 
@@ -86,7 +70,7 @@ sampler:
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = salm(data; adtype=AutoMooncake(; config=nothing))
+model = compile(example.model_def, data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)

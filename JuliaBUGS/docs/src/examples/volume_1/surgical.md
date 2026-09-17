@@ -4,6 +4,8 @@ This example concerns mortality rates in 12 hospitals performing cardiac surgery
 
 The example fits two models to the same data. The first treats the hospitals as completely independent, giving each mortality probability its own uniform Beta prior. The second, more realistic model is hierarchical: the log-odds of mortality are drawn from a common normal population distribution, so the hospitals share information and each estimate is shrunk towards the population mean. Comparing the two shows the effect of partial pooling — for instance, hospital 1 records 0 deaths in 47 operations, and the hierarchical model tempers the implausibly optimistic estimate the independent model gives it.
 
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.surgical_simple` and `JuliaBUGS.BUGSExamples.VOLUME_1.surgical_realistic`, which ship with the package.
+
 ## Model
 
 ### Independent binomial model
@@ -20,12 +22,14 @@ r_i &\sim \text{Binomial}(n_i, p_i), \quad i = 1, \ldots, N
 ```@example surgical_simple
 using JuliaBUGS
 
-surgical_simple = @bugs begin
-    for i in 1:N
-        p[i] ~ dbeta(1.0, 1.0)
-        r[i] ~ dbin(p[i], n[i])
-    end
-end
+example = JuliaBUGS.BUGSExamples.VOLUME_1.surgical_simple
+example.model_def
+```
+
+The program as it appears in the original BUGS distribution:
+
+```@example surgical_simple
+print(example.original_syntax_program)
 ```
 
 ### Hierarchical (random effects) model
@@ -46,17 +50,14 @@ The original BUGS program uses the R-style dotted name `pop.mean` for the popula
 ```@example surgical_realistic
 using JuliaBUGS
 
-surgical_realistic = @bugs begin
-    for i in 1:N
-        b[i] ~ dnorm(mu, tau)
-        r[i] ~ dbin(p[i], n[i])
-        p[i] = logistic(b[i])
-    end
-    var"pop.mean" = exp(mu) / (1 + exp(mu))
-    mu ~ dnorm(0.0, 1.0e-6)
-    sigma = 1 / sqrt(tau)
-    tau ~ dgamma(0.001, 0.001)
-end
+example = JuliaBUGS.BUGSExamples.VOLUME_1.surgical_realistic
+example.model_def
+```
+
+The program as it appears in the original BUGS distribution:
+
+```@example surgical_realistic
+print(example.original_syntax_program)
 ```
 
 ## Data
@@ -64,38 +65,32 @@ end
 Both models use the same data: the number of operations `n` and the number of deaths `r` in each of the `N = 12` hospitals. Compiling the independent model is a single call with the data as a `NamedTuple`:
 
 ```@example surgical_simple
-data = (
-    n = [47, 148, 119, 810, 211, 196, 148, 215, 207, 97, 256, 360],
-    r = [0, 18, 8, 46, 8, 13, 9, 31, 14, 8, 29, 24],
-    N = 12
-)
+data = example.data
+```
 
-model = surgical_simple(data)
+```@example surgical_simple
+model = compile(example.model_def, data)
 ```
 
 The hierarchical model compiles against the identical data:
 
 ```@example surgical_realistic
-data = (
-    n = [47, 148, 119, 810, 211, 196, 148, 215, 207, 97, 256, 360],
-    r = [0, 18, 8, 46, 8, 13, 9, 31, 14, 8, 29, 24],
-    N = 12
-)
-
-model = surgical_realistic(data)
+data = example.data
 ```
 
-All of the classic examples ship with the package in `JuliaBUGS.BUGSExamples`: this page's two variants are available as `JuliaBUGS.BUGSExamples.VOLUME_1.surgical_simple` and `JuliaBUGS.BUGSExamples.VOLUME_1.surgical_realistic`, each bundling the model definition, data, initial values, and (where available) reference results.
+```@example surgical_realistic
+model = compile(example.model_def, data)
+```
 
 ## Sampling
 
-The same recipe draws posterior samples for either model — here we rebuild the hierarchical model with gradient support and hand it to the NUTS sampler (swap in `surgical_simple` for the independent model):
+The same recipe draws posterior samples for either model — here we rebuild the hierarchical model with gradient support and hand it to the NUTS sampler (use the `surgical_simple` example for the independent model):
 
 ```julia
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = surgical_realistic(data; adtype=AutoMooncake(; config=nothing))
+model = compile(example.model_def, data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)

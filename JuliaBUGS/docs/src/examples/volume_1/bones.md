@@ -4,6 +4,8 @@ This example comes from Volume 1 of the classic [BUGS examples](https://www.mult
 
 The model treats each child's skeletal age as an unknown latent trait and combines the 34 graded indicators to estimate it. This is a latent trait model (equivalently, a graded-response item response model): the probability of scoring above a given threshold on an indicator rises smoothly with the child's skeletal age. The data, from Thissen (1986), cover 13 boys ranging from 6 months to 18 years old, and some of the recorded grades are missing and are treated as further unknowns to be estimated.
 
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.bones`, which ships with the package.
+
 ## Model
 
 Let ``\theta_i`` be the latent skeletal age of child ``i``. For indicator ``j`` with discriminability ``\delta_j`` and thresholds ``\gamma_{jk}``, the cumulative probability of scoring above grade ``k`` is
@@ -17,29 +19,19 @@ p_{ijk} &= Q_{ij,k-1} - Q_{ijk} \\
 \end{aligned}
 ```
 
-where the individual grade probabilities ``p_{ijk}`` are obtained by differencing the cumulative probabilities (with the first and last categories handled at the boundaries). The prior on ``\theta_i`` is a diffuse normal (precision ``0.001``, i.e. variance ``1000``). Here is the model written with the `@bugs` macro:
+where the individual grade probabilities ``p_{ijk}`` are obtained by differencing the cumulative probabilities (with the first and last categories handled at the boundaries). The prior on ``\theta_i`` is a diffuse normal (precision ``0.001``, i.e. variance ``1000``). The model definition as JuliaBUGS holds it, parsed from the BUGS program below:
 
 ```@example bones
 using JuliaBUGS
 
-bones = @bugs begin
-    for i in 1:nChild
-        theta[i] ~ dnorm(0.0, 0.001)
-        for j in 1:nInd
-            for k in 1:(ncat[j] - 1)
-                Q[i, j, k] = logistic(delta[j] * (theta[i] - gamma[j, k]))
-            end
-        end
-        for j in 1:nInd
-            p[i, j, 1] = 1 - Q[i, j, 1]
-            for k in 2:(ncat[j] - 1)
-                p[i, j, k] = Q[i, j, k - 1] - Q[i, j, k]
-            end
-            p[i, j, ncat[j]] = Q[i, j, ncat[j] - 1]
-            grade[i, j] ~ dcat(p[i, j, 1:ncat[j]])
-        end
-    end
-end
+example = JuliaBUGS.BUGSExamples.VOLUME_1.bones
+example.model_def
+```
+
+The program as it appears in the original BUGS distribution:
+
+```@example bones
+print(example.original_syntax_program)
 ```
 
 ## Data
@@ -47,11 +39,14 @@ end
 The dataset is a little large to type out, so we load it from the copy that ships with the package:
 
 ```@example bones
-data = JuliaBUGS.BUGSExamples.VOLUME_1.bones.data
-model = bones(data)
+data = example.data
 ```
 
-The data contain `nChild` (13 children) and `nInd` (34 skeletal maturity indicators). For each indicator, `delta` gives the calibrated discriminability, `gamma` gives the grade thresholds, and `ncat` gives the number of grades. The observed scores are held in `grade`, a 13-by-34 matrix in which some entries are missing; those missing scores become additional unknowns that the model estimates alongside the children's skeletal ages. All of the classic examples ship with the package in `JuliaBUGS.BUGSExamples`, bundling the model, data, initial values, and reference results together.
+```@example bones
+model = compile(example.model_def, data)
+```
+
+The data contain `nChild` (13 children) and `nInd` (34 skeletal maturity indicators). For each indicator, `delta` gives the calibrated discriminability, `gamma` gives the grade thresholds, and `ncat` gives the number of grades. The observed scores are held in `grade`, a 13-by-34 matrix in which some entries are missing; those missing scores become additional unknowns that the model estimates alongside the children's skeletal ages.
 
 ## Sampling
 
@@ -61,7 +56,7 @@ With the model built, we hand it to a Hamiltonian Monte Carlo sampler; the recip
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = bones(data; adtype=AutoMooncake(; config=nothing))
+model = compile(example.model_def, data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)

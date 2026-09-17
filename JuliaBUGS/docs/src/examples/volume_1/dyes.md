@@ -4,6 +4,8 @@ The Dyes example, from [Volume 1 of the classic BUGS examples](https://www.multi
 
 The model is a one-way random effects (variance components) model: each measurement varies normally around its batch mean, and the batch means themselves vary normally around an overall mean yield. Comparing the two variance components tells us whether batch-to-batch differences matter relative to within-batch noise. A fuller description is available on the [OpenBUGS Dyes page](https://chjackson.github.io/openbugsdoc/Examples/Dyes.html).
 
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.dyes`, which ships with the package.
+
 ## Model
 
 Writing ``\sigma^2_{\text{with}}`` and ``\sigma^2_{\text{btw}}`` for the within-batch and between-batch variances, the model is
@@ -20,19 +22,14 @@ with a vague normal prior on the overall mean ``\theta`` and vague gamma priors 
 ```@example dyes
 using JuliaBUGS
 
-dyes = @bugs begin
-    for i in 1:batches
-        mu[i] ~ dnorm(theta, var"tau.btw")
-        for j in 1:samples
-            y[i, j] ~ dnorm(mu[i], var"tau.with")
-        end
-    end
-    var"sigma2.with" = 1 / var"tau.with"
-    var"sigma2.btw" = 1 / var"tau.btw"
-    var"tau.with" ~ dgamma(0.001, 0.001)
-    var"tau.btw" ~ dgamma(0.001, 0.001)
-    theta ~ dnorm(0.0, 1.0e-10)
-end
+example = JuliaBUGS.BUGSExamples.VOLUME_1.dyes
+example.model_def
+```
+
+The program as it appears in the original BUGS distribution:
+
+```@example dyes
+print(example.original_syntax_program)
 ```
 
 Names such as `var"tau.btw"` are the R-style dotted names from the original BUGS program (`tau.btw`), written with Julia's `var"..."` syntax so the dot can be kept in the variable name.
@@ -42,21 +39,12 @@ Names such as `var"tau.btw"` are the R-style dotted names from the original BUGS
 The data are the 30 yield measurements (in grams of standard colour), arranged as a 6 × 5 matrix with one row per batch.
 
 ```@example dyes
-data = (
-    batches = 6,
-    samples = 5,
-    y = [1545 1440 1440 1520 1580
-         1540 1555 1490 1560 1495
-         1595 1550 1605 1510 1560
-         1445 1440 1595 1465 1545
-         1595 1630 1515 1635 1625
-         1520 1455 1450 1480 1445]
-)
-
-model = dyes(data)
+data = example.data
 ```
 
-All of the classic examples ship with the package in `JuliaBUGS.BUGSExamples`: for this example, `JuliaBUGS.BUGSExamples.VOLUME_1.dyes` bundles the model definition, data, initial values, and reference results.
+```@example dyes
+model = compile(example.model_def, data)
+```
 
 ## Sampling
 
@@ -66,7 +54,7 @@ To draw posterior samples, build the model with gradient support and run the NUT
 using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
 using LogDensityProblems
 
-model = dyes(data; adtype=AutoMooncake(; config=nothing))
+model = compile(example.model_def, data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model)
