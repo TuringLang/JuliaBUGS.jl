@@ -1,0 +1,52 @@
+name: BUGSExamples snapshot
+
+# Publishes the current BUGSExamples/ as the artifact an installed JuliaBUGS reads.
+# The release tag comes from the content, so a rerun on unchanged examples does nothing.
+# When Artifacts.toml has to move to the new snapshot, a pull request carries the change.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency: bugsexamples-snapshot
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+
+      - name: Build the snapshot
+        id: build
+        run: |
+          julia BUGSExamples/snapshot.jl out | tee snapshot.log
+          echo "tag=$(awk '$1 == "tag" {print $2}' snapshot.log)" >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.build.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists" >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh release create "$TAG" out/BUGSExamples.tar.gz \
+              --target "$GITHUB_SHA" --title "$TAG" \
+              --notes "Snapshot of BUGSExamples/ at $GITHUB_SHA, read by JuliaBUGS as the BUGSExamples artifact."
+            echo "created $TAG" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Point Artifacts.toml at it
+        uses: peter-evans/create-pull-request@v7
+        with:
+          add-paths: JuliaBUGS/Artifacts.toml
+          branch: bugsexamples-snapshot
+          commit-message: Point the BUGSExamples artifact at ${{ steps.build.outputs.tag }}
+          title: Point the BUGSExamples artifact at ${{ steps.build.outputs.tag }}
+          body: Snapshot of `BUGSExamples/` at ${{ github.sha }}, published as release `${{ steps.build.outputs.tag }}`.
