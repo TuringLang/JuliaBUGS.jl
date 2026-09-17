@@ -65,6 +65,17 @@ struct BUGSModelDef
     model_def::Expr
 end
 
+"""
+    BUGSModelDef(program::String; replace_period=true, no_enclosure=false)
+
+Parse a BUGS program held in a string at runtime, with the same result as `@bugs` on that
+string as a literal. Pass `replace_period=false` to keep dotted names such as `tau.c` as
+`var"tau.c"` rather than rewriting them to `tau_c`.
+"""
+function BUGSModelDef(program::String; replace_period::Bool=true, no_enclosure::Bool=false)
+    return BUGSModelDef(Parser._bugs_string_input(program, replace_period, no_enclosure))
+end
+
 Base.show(io::IO, ::BUGSModelDef) = print(io, "BUGSModelDef(…)")
 
 function Base.show(io::IO, ::MIME"text/plain", m::BUGSModelDef)
