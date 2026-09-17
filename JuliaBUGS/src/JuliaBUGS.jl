@@ -193,7 +193,7 @@ include("advanced_mh.jl")
 
 include("source_gen.jl")
 
-include("BUGSExamples/BUGSExamples.jl")
+include("BUGSExamples.jl")
 
 function check_input(input::NamedTuple)
     valid_pairs = Pair{Symbol,Any}[]
