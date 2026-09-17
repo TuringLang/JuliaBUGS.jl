@@ -555,10 +555,7 @@ function _compute_node_types(model::BUGSModel)
         if !gd.is_stochastic_vals[i]
             node_types[i] = :deterministic
         else
-            # Use invokelatest to avoid world age issues with runtime-generated functions
-            dist = Base.invokelatest(
-                gd.node_function_vals[i], model.evaluation_env, gd.loop_vars_vals[i]
-            )
+            dist = gd.node_function_vals[i](model.evaluation_env, gd.loop_vars_vals[i])
             node_types[i] = _classify_node_type(dist)
         end
     end

@@ -12,6 +12,7 @@ using Graphs, MetaGraphsNext
 using LinearAlgebra
 using LogDensityProblems
 using MacroTools
+using MistyClosures
 using OrderedCollections: OrderedDict
 using Random
 using Serialization: Serialization
@@ -99,6 +100,7 @@ macro bugs(prog::String, replace_period::Bool=true, no_enclosure::Bool=false)
 end
 
 include("graphs.jl")
+include("misty_closure.jl")
 include("compiler_pass.jl")
 
 """
@@ -440,7 +442,7 @@ function compile(
 
     # If adtype provided, wrap with gradient capabilities
     if adtype !== nothing
-        return Base.invokelatest(Model.BUGSModelWithGradient, base_model, adtype)
+        return Model.BUGSModelWithGradient(base_model, adtype)
     end
 
     return base_model

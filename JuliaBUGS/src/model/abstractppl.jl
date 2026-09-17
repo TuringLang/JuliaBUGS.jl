@@ -814,6 +814,7 @@ function _regenerate_log_density_function(
     graph::BUGSGraph,
     evaluation_env::NamedTuple,
     graph_evaluation_data::GraphEvaluationData,
+    owner_module::Module,
 )
     lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
         model_def,
@@ -825,10 +826,10 @@ function _regenerate_log_density_function(
 
     if !isnothing(lowered_model_def)
         log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
-            lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
+            lowered_model_def, evaluation_env
         )
-        new_log_density_computation_function = Core.eval(
-            JuliaBUGS, log_density_computation_expr
+        new_log_density_computation_function = JuliaBUGS._make_misty_closure(
+            log_density_computation_expr, JuliaBUGS, owner_module
         )
 
         # Collect sorted nodes from the reconstructed model def to ensure correct parameter ordering
@@ -897,7 +898,11 @@ overwrites it if a new one can be generated. Returns the updated model (or the o
 """
 function regenerate_log_density_function(model::BUGSModel; force::Bool=false)
     new_fn, updated_graph_eval_data = _regenerate_log_density_function(
-        model.model_def, model.g, model.evaluation_env, model.graph_evaluation_data
+        model.model_def,
+        model.g,
+        model.evaluation_env,
+        model.graph_evaluation_data,
+        model.compile_options.eval_module,
     )
     # Always refresh graph_evaluation_data from regeneration helper (it may refine ordering)
     model = BangBang.setproperty!!(model, :graph_evaluation_data, updated_graph_eval_data)
