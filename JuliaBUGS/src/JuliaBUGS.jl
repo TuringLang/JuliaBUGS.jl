@@ -78,10 +78,29 @@ end
 
 Base.show(io::IO, ::BUGSModelDef) = print(io, "BUGSModelDef(…)")
 
+# Printed as the `@bugs begin ... end` block that builds it, so what a user sees is what
+# they would type. `Expr` printing would show `quote` and `for i = 1:N` instead.
 function Base.show(io::IO, ::MIME"text/plain", m::BUGSModelDef)
-    println(io, "BUGSModelDef:")
-    return print(io, m.model_def)
+    println(io, "@bugs begin")
+    show_statements(io, m.model_def, 4)
+    return print(io, "end")
 end
+
+function show_statements(io::IO, ex::Expr, indent::Int)
+    if ex.head === :block
+        for arg in ex.args
+            arg isa LineNumberNode || show_statements(io, arg, indent)
+        end
+    elseif ex.head === :for
+        var, range = ex.args[1].args
+        println(io, " "^indent, "for ", var, " in ", range)
+        show_statements(io, ex.args[2], indent + 4)
+        println(io, " "^indent, "end")
+    else
+        println(io, " "^indent, ex)
+    end
+end
+show_statements(io::IO, x, indent::Int) = println(io, " "^indent, x)
 
 """
     @bugs(program::Expr)

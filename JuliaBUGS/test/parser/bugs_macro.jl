@@ -281,6 +281,27 @@ end
     @test model_def isa JuliaBUGS.BUGSModelDef
     @test model_def.model_def isa Expr
 
+    # it prints as the block that builds it
+    nested = @bugs begin
+        for i in 1:N
+            for j in 1:T
+                y[i, j] ~ dnorm(mu[i], var"tau.c")
+            end
+            mu[i] = alpha + beta * x[i]
+        end
+        alpha ~ dnorm(0, 1)
+    end
+    @test sprint(show, MIME("text/plain"), nested) == """
+        @bugs begin
+            for i in 1:N
+                for j in 1:T
+                    y[i, j] ~ dnorm(mu[i], var"tau.c")
+                end
+                mu[i] = alpha + beta * x[i]
+            end
+            alpha ~ dnorm(0, 1)
+        end"""
+
     # calling it compiles: `model_def(data)` is equivalent to `compile(model_def, data)`
     @test model_def((; y=1.0)) isa JuliaBUGS.BUGSModel
     @test compile(model_def, (; y=1.0)) isa JuliaBUGS.BUGSModel  # back-compat
