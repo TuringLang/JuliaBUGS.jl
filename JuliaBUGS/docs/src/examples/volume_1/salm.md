@@ -47,6 +47,16 @@ The program as it appears in the original BUGS distribution:
 print(example.original_syntax_program)
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="salm" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data are small enough to write out in full. `doses` and `plates` give the dimensions of
@@ -108,6 +118,10 @@ point estimates:
 These are maximum quasi-likelihood point estimates rather than posterior summaries, but the
 posterior means from a correctly converged chain should land close to them, up to Monte Carlo
 error and the mild differences between the two estimation approaches.
+
+```@raw html
+<div class="mcmc-run" data-example="salm"></div>
+```
 
 See also: the [gallery overview](../index.md) and the
 [getting-started tutorial](../../getting_started.md).

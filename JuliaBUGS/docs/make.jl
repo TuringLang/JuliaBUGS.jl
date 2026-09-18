@@ -8,7 +8,9 @@ using JuliaBUGS.BUGSPrimitives
 makedocs(;
     sitename="JuliaBUGS.jl",
     warnonly=[:cross_references, :doctest],
-    format=Documenter.HTML(; collapselevel=1),
+    format=Documenter.HTML(;
+        assets=["assets/examples.css", "assets/examples.js"], collapselevel=1
+    ),
     pages=[
         "Home" => "index.md",
         "Get Started" => "getting_started.md",

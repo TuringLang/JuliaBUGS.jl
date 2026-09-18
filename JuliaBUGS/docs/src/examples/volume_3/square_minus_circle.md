@@ -34,3 +34,7 @@ model = JuliaBUGS.compile(example.model_def, example.data, example.inits)
 The example's own initial values are passed in here. Several of these models fail from random starting values, so `example.inits` is not optional in practice; a second set is available as `example.inits_alternative`.
 
 See [Getting Started](../../getting_started.md) for the recipe that takes a compiled model to posterior samples.
+
+```@raw html
+<div class="mcmc-run" data-example="square_minus_circle"></div>
+```

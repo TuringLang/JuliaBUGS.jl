@@ -77,4 +77,8 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 This example does not ship with a stored table of reference posterior summaries (`reference_results` is `nothing` in the packaged example), so there is no bundled reference table to reproduce here. The quantities of interest are the 13 latent skeletal ages `theta`, one per child; the published OpenBUGS/MultiBUGS results report their posterior means and standard deviations for comparison. A correctly converged chain's `summarystats` output for `theta` should match those published values up to Monte Carlo error.
 
+```@raw html
+<div class="mcmc-run" data-example="bones"></div>
+```
+
 See also: the [Example Gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

@@ -70,4 +70,8 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 This example does not ship packaged reference posterior summaries — its `reference_results` field is `nothing` — so there is no built-in table to reproduce here. Published posterior summaries for the two learning coefficients $\alpha$ and $\beta$ (and the derived per-event multipliers $A$ and $B$) are given on the [MultiBUGS](https://www.multibugs.org/examples/latest/VolumeI.html) and [OpenBUGS](https://chjackson.github.io/openbugsdoc/Examples/Dogs.html) Dogs pages. A correctly converged chain's `summarystats` should reproduce those published values up to Monte Carlo error.
 
+```@raw html
+<div class="mcmc-run" data-example="dogs"></div>
+```
+
 See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

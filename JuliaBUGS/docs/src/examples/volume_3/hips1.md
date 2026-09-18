@@ -42,3 +42,7 @@ model = JuliaBUGS.compile(example.model_def, example.data)
 ```
 
 See [Getting Started](../../getting_started.md) for the recipe that takes a compiled model to posterior samples.
+
+```@raw html
+<div class="mcmc-run" data-example="hips1"></div>
+```

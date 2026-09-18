@@ -34,6 +34,16 @@ The program as it appears in the original BUGS distribution:
 print(example.original_syntax_program)
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="equiv" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data record the `N = 10` subjects and `P = 2` periods, the response matrix `Y`, the treatment-order indicator `group`, and the sign vector `sign` used to flip the treatment and period contributions. We supply everything as a `NamedTuple` and construct the model by calling the model definition with it:
@@ -80,5 +90,9 @@ The published reference posterior summaries for this example are:
 | sigma1 | 0.1102 | 0.03268 |
 
 A correctly converged chain's `summarystats` output should match these values up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="equiv"></div>
+```
 
 See also: the [gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

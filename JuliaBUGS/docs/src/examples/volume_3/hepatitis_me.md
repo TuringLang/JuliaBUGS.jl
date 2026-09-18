@@ -54,3 +54,7 @@ converged chain should reproduce these up to Monte Carlo error.
 ```@example volume_3_hepatitis_me
 example.reference_results
 ```
+
+```@raw html
+<div class="mcmc-run" data-example="hepatitis_me"></div>
+```

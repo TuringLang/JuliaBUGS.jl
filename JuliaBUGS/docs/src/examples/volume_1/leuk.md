@@ -77,4 +77,8 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 No reference posterior summaries ship with this example in `JuliaBUGS.BUGSExamples`. Published results for the quantities of interest, including the treatment effect `beta` and the survivor functions `S.treat` and `S.placebo`, are available on the [OpenBUGS page for this example](https://chjackson.github.io/openbugsdoc/Examples/Leuk.html), and a correctly converged chain's `summarystats` should reproduce them up to Monte Carlo error.
 
+```@raw html
+<div class="mcmc-run" data-example="leuk"></div>
+```
+
 See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

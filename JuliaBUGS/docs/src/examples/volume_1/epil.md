@@ -40,6 +40,16 @@ The program as it appears in the original BUGS distribution:
 print(example.original_syntax_program)
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="epil" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data set is too large to display comfortably here, so we load it from the copy that ships with JuliaBUGS. It contains `N = 59` patients and `T = 4` visits, the `59 × 4` matrix `y` of seizure counts, the treatment indicator `Trt` (0 = placebo, 1 = active treatment), the baseline seizure count `Base`, each patient's `Age` in years, and `V4`, an indicator that equals 1 only at the fourth visit.
@@ -80,5 +90,9 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 ## Results
 
 JuliaBUGS does not ship reference results for this example. For published estimates, see the [OpenBUGS documentation page](https://chjackson.github.io/openbugsdoc/Examples/Epil.html), which reports results alongside the approximate-likelihood fit of Breslow and Clayton (1993); a correctly converged chain's `summarystats` should agree with those values up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="epil"></div>
+```
 
 See also: the [example gallery overview](../index.md) and the [getting started tutorial](../../getting_started.md).

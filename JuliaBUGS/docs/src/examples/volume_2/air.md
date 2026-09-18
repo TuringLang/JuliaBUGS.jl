@@ -55,3 +55,7 @@ converged chain should reproduce these up to Monte Carlo error.
 ```@example volume_2_air
 example.reference_results
 ```
+
+```@raw html
+<div class="mcmc-run" data-example="air"></div>
+```

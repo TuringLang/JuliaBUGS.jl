@@ -42,6 +42,16 @@ The program as it appears in the original BUGS distribution:
 print(example.original_syntax_program)
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="seeds" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data are supplied as a `NamedTuple`. `r` and `n` are the germinated and total seed counts on each of the `N = 21` plates, while `x1` and `x2` are the (0/1) indicators for seed type and root extract.
@@ -102,6 +112,10 @@ The published reference posterior summaries for this example are:
 | sigma | 0.2922 | 0.1467 |
 
 A correctly converged chain's `summarystats` output should match these values up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="seeds"></div>
+```
 
 See also: [gallery overview](../index.md), [getting-started tutorial](../../getting_started.md), and
 [migration guide](../../guides/differences.md).

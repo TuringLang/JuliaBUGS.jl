@@ -37,6 +37,16 @@ print(example.original_syntax_program)
 
 The original BUGS program uses the R-style dotted name `delta.new`; in Julia such names are written with the `var"delta.new"` syntax, and they refer to exactly the same variable.
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="blockers" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data are a `NamedTuple` with, for each of the 22 trials, the deaths and patient counts in the treated arm (`rt`, `nt`) and in the control arm (`rc`, `nc`), plus the number of trials `Num`. Calling the model definition with the data builds the model:
@@ -74,5 +84,9 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 ## Results
 
 Reference posterior summaries are not bundled with the package for this example; the published results table can be found on the [OpenBUGS Blockers page](https://chjackson.github.io/openbugsdoc/Examples/Blockers.html). The quantities of interest are the pooled treatment effect `d`, the predictive effect for a new trial `var"delta.new"`, and the between-trial standard deviation `sigma`. A correctly converged chain's `summarystats(chain)` should match the published values up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="blockers"></div>
+```
 
 See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

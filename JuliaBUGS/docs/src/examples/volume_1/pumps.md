@@ -34,6 +34,16 @@ The program as it appears in the original BUGS distribution:
 print(example.original_syntax_program)
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="pumps" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data are a `NamedTuple` with the operation times `t` (thousands of hours), the observed failure counts `x`, and the number of pumps `N`. Calling the model definition with the data builds the model:
@@ -71,5 +81,9 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 ## Results
 
 Reference posterior summaries are not bundled with the package for this example; the published results table can be found on the [OpenBUGS Pumps page](https://chjackson.github.io/openbugsdoc/Examples/Pumps.html). The quantities of interest are the hyperparameters `alpha` and `beta` and the pump-specific failure rates `theta[1]` through `theta[10]`. A correctly converged chain's `summarystats(chain)` should match the published values up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="pumps"></div>
+```
 
 See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

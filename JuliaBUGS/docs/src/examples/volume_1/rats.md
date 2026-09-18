@@ -33,6 +33,16 @@ print(example.original_syntax_program)
 
 Names such as `var"tau.c"` are the R-style dotted variable names from the original BUGS program, written with Julia's `var"..."` syntax so they can be kept exactly as they appear in the classic example.
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="rats" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data are supplied as a `NamedTuple`: the measurement ages `x`, their mean `xbar`, the number of rats `N`, the number of measurement occasions `T`, and the 30-by-5 matrix `Y` of weights.
@@ -78,5 +88,9 @@ The published reference posterior summaries for this example are:
 | `sigma`   | 6.093 | 0.4643 |
 
 A correctly converged chain's `summarystats` should reproduce these values up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="rats"></div>
+```
 
 See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

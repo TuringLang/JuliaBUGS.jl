@@ -34,6 +34,16 @@ print(example.original_syntax_program)
 
 Names such as `var"tau.btw"` are the R-style dotted names from the original BUGS program (`tau.btw`), written with Julia's `var"..."` syntax so the dot can be kept in the variable name.
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="dyes" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data are the 30 yield measurements (in grams of standard colour), arranged as a 6 × 5 matrix with one row per batch.
@@ -71,5 +81,9 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 ## Results
 
 No reference posterior table is bundled with this example (`JuliaBUGS.BUGSExamples.VOLUME_1.dyes.reference_results` is `nothing`), so compare your output against the published summaries on the [OpenBUGS Dyes page](https://chjackson.github.io/openbugsdoc/Examples/Dyes.html). As points of reference, the classical analysis of these data gives ``\sigma^2_{\text{with}} = 2451`` and ``\sigma^2_{\text{btw}} = 1764``, and the overall mean yield ``\theta`` is close to the sample grand mean of about 1527. Note that the posterior of the between-batch variance has a very long upper tail, so its posterior mean sits well above its median; a correctly converged chain's `summarystats` should agree with the published BUGS results up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="dyes"></div>
+```
 
 See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

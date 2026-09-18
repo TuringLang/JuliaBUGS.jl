@@ -39,6 +39,16 @@ print(example.original_syntax_program)
 
 The names `var"t.cen"`, `var"veh.control"`, `var"test.sub"`, and `var"pos.control"` are R-style dotted names carried over verbatim from the original BUGS program; Julia allows such non-standard identifiers through its `var"..."` syntax.
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="mice" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data hold the survival times and censoring information for the `M = 4` groups of `N = 20` mice each. In the `t` matrix, a `missing` entry marks an animal whose survival time was censored; the corresponding entry of `var"t.cen"` gives the time at which that animal was last known to be alive (a value of `0` means the animal's survival time was observed exactly).
@@ -79,5 +89,9 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 ## Results
 
 Unlike some of the other Volume 1 examples, this one does not ship with a tabulated reference posterior summary — `JuliaBUGS.BUGSExamples.VOLUME_1.mice.reference_results` is `nothing`, so there are no stored means and standard deviations to reproduce here. The published estimates for the shape parameter `r`, the group medians, and the treatment contrasts are reported on the [OpenBUGS Mice page](https://chjackson.github.io/openbugsdoc/Examples/Mice.html) (obtained there from a burn-in of 1000 updates followed by 10000 further updates). Once your chain has converged, the posterior means and standard deviations from `summarystats(chain)` should agree with those published values up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="mice"></div>
+```
 
 See also: the [Example Gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

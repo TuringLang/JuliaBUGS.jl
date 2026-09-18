@@ -56,3 +56,7 @@ converged chain should reproduce these up to Monte Carlo error.
 ```@example volume_2_orange_trees
 example.reference_results
 ```
+
+```@raw html
+<div class="mcmc-run" data-example="orange_trees"></div>
+```

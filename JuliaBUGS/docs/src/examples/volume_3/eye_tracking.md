@@ -53,3 +53,7 @@ converged chain should reproduce these up to Monte Carlo error.
 ```@example volume_3_eye_tracking
 example.reference_results
 ```
+
+```@raw html
+<div class="mcmc-run" data-example="eye_tracking"></div>
+```

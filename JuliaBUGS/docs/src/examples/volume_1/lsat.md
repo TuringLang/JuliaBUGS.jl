@@ -73,4 +73,8 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 
 Reference posterior summaries are not bundled with the package for this example (the `reference_results` field of `JuliaBUGS.BUGSExamples.VOLUME_1.lsat` is empty). The published results — posterior summaries for the centred item difficulties `a[1]`–`a[5]` and the scale parameter `beta` — are shown in the [OpenBUGS write-up](https://chjackson.github.io/openbugsdoc/Examples/Lsat.html) of this example. A correctly converged chain's `summarystats` output should match those published values up to Monte Carlo error.
 
+```@raw html
+<div class="mcmc-run" data-example="lsat"></div>
+```
+
 See also: [gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

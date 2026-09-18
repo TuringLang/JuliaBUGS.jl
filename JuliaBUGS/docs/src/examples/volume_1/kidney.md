@@ -35,6 +35,16 @@ print(example.original_syntax_program)
 
 Names such as `var"beta.age"` and `var"t.cen"` are R-style dotted variable names carried over verbatim from the original BUGS program; Julia's `var"..."` syntax lets us keep the exact original names.
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="kidney" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data set is large, so we load the bundled copy rather than typing it out:
@@ -80,5 +90,9 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 ## Results
 
 The source file for this example ships with `reference_results = nothing`, so there is no bundled table of published posterior summaries to reproduce here. The MultiBUGS and OpenBUGS pages linked above report posterior means and standard deviations for `alpha`, `beta.age`, `beta.sex`, the disease effects `beta.dis[2]`–`beta.dis[4]`, the Weibull shape `r`, and the random-effect standard deviation `sigma`, obtained from a 1000-iteration burn-in followed by 10000 further iterations. A correctly converged chain's `summarystats` output should match those published values up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="kidney"></div>
+```
 
 See also: the [gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

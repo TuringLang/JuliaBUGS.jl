@@ -33,6 +33,16 @@ The program as it appears in the original BUGS distribution:
 print(example.original_syntax_program)
 ```
 
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="oxford" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
 ## Data
 
 The data are supplied as a `NamedTuple` with the number of strata `K`, the centred birth year `year` of each stratum, and the exposure counts among cases (`r1` out of `n1`) and among controls (`r0` out of `n0`).
@@ -70,5 +80,9 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 ## Results
 
 This transcription does not bundle a numeric reference table (`JuliaBUGS.BUGSExamples.VOLUME_1.oxford.reference_results` is `nothing`), so there is nothing to reproduce verbatim here. For published posterior summaries of $\alpha$, $\beta_1$, $\beta_2$, and $\sigma$, consult the [OpenBUGS Oxford example](https://chjackson.github.io/openbugsdoc/Examples/Oxford.html) and the original analysis by Breslow and Clayton (1993). A correctly converged chain's `summarystats` should agree with those published values up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="oxford"></div>
+```
 
 See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).

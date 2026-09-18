@@ -77,4 +77,8 @@ The published reference posterior summaries for this example are:
 
 A correctly converged chain's `summarystats` should reproduce these values up to Monte Carlo error.
 
+```@raw html
+<div class="mcmc-run" data-example="stacks"></div>
+```
+
 See also: the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).
