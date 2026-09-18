@@ -26,15 +26,16 @@ using JuliaBUGS: JuliaBUGS
 """
     Example
 
-One BUGS example. `model_def` is the parsed program, ready for `compile`, and
-`original_syntax_program` is the program text it was parsed from. `data`, `inits`, and
+One BUGS example. `model_def` is the parsed program as the `BUGSModelDef` that `@bugs`
+would return, ready for `compile`, and `original_syntax_program` is the program text it was
+parsed from. `data`, `inits`, and
 `inits_alternative` are `NamedTuple`s, empty when the example has none. `reference_results`
 is a `NamedTuple` of the summaries published with the example, or `nothing`. `path` is the
 directory the example was read from.
 """
 struct Example{DNT<:NamedTuple,INT<:NamedTuple,INT2<:NamedTuple,RNT}
     name::String
-    model_def::Expr
+    model_def::JuliaBUGS.BUGSModelDef
     original_syntax_program::String
     data::DNT
     inits::INT
@@ -97,7 +98,7 @@ Read the example stored in the directory `dir`.
 function load(dir::AbstractString)
     meta = read_toml(joinpath(dir, "example.toml"))
     program = read(tracked(joinpath(dir, "model.bugs")), String)
-    model_def = JuliaBUGS.Parser._bugs_string_input(program, false)
+    model_def = JuliaBUGS.BUGSModelDef(program; replace_period=false)
     data = something(read_optional(joinpath(dir, "data.json")), NamedTuple())
     inits = something(read_optional(joinpath(dir, "inits.json")), NamedTuple())
     inits_alternative = something(
