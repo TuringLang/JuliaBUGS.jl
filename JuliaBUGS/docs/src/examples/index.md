@@ -37,6 +37,93 @@ Volume 4 has one example in the repository, Methadone, whose data hold 240,776 o
 It is not loaded with the package; `JuliaBUGS.BUGSExamples.load(:methadone)` reads it on
 demand.
 
+## One model, three ways to write it
+
+JuliaBUGS accepts a model in three forms, and every example page shows two of them. Here is
+Rats in all three. The first is BUGS in Julia clothing, the `@bugs` block: `=` where BUGS
+writes `<-`, `for i in`, and the BUGS distribution names. This is the form the
+[getting-started tutorial](../getting_started.md) teaches and the form each example page
+prints under its Model heading.
+
+```@example three_ways
+using JuliaBUGS
+
+rats = @bugs begin
+    for i in 1:N
+        for j in 1:T
+            Y[i, j] ~ dnorm(mu[i, j], tau_c)
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)
+        end
+        alpha[i] ~ dnorm(alpha_c, alpha_tau)
+        beta[i] ~ dnorm(beta_c, beta_tau)
+    end
+    tau_c ~ dgamma(0.001, 0.001)
+    sigma = 1 / sqrt(tau_c)
+    alpha_c ~ dnorm(0.0, 1.0e-6)
+    alpha_tau ~ dgamma(0.001, 0.001)
+    beta_c ~ dnorm(0.0, 1.0e-6)
+    beta_tau ~ dgamma(0.001, 0.001)
+    alpha0 = alpha_c - xbar * beta_c
+end
+```
+
+The second is the original BUGS program, unchanged, parsed from a string. This is what each
+example page prints under "the program as it appears in the original BUGS distribution", and
+it is how the examples are stored. `replace_period=false` keeps dotted names such as `tau.c`
+as `var"tau.c"`; the default rewrites them to `tau_c`. See
+[Coming from WinBUGS, OpenBUGS, and JAGS](../guides/differences.md) for what the parser
+accepts.
+
+```@example three_ways
+example = JuliaBUGS.BUGSExamples.VOLUME_1.rats
+from_bugs = JuliaBUGS.BUGSModelDef(example.original_syntax_program)
+```
+
+The third is a Julia function with the `@model` macro, where the stochastic variables come
+in as a named tuple and everything else as ordinary arguments, and any Julia function is
+available in the body. The BUGS distribution names come from `JuliaBUGS.BUGSPrimitives`. See
+[Choosing `@bugs` or `@model`](../two_macros.md) and
+[Defining Models with `@model`](../model_macro.md).
+
+```@example three_ways
+using JuliaBUGS.BUGSPrimitives
+
+@model function rats_model(
+    (; Y, alpha, beta, tau_c, alpha_c, alpha_tau, beta_c, beta_tau), x, xbar, N, T
+)
+    for i in 1:N
+        for j in 1:T
+            Y[i, j] ~ dnorm(mu[i, j], tau_c)
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)
+        end
+        alpha[i] ~ dnorm(alpha_c, alpha_tau)
+        beta[i] ~ dnorm(beta_c, beta_tau)
+    end
+    tau_c ~ dgamma(0.001, 0.001)
+    sigma = 1 / sqrt(tau_c)
+    alpha_c ~ dnorm(0.0, 1.0e-6)
+    alpha_tau ~ dgamma(0.001, 0.001)
+    beta_c ~ dnorm(0.0, 1.0e-6)
+    beta_tau ~ dgamma(0.001, 0.001)
+    alpha0 = alpha_c - xbar * beta_c
+end
+nothing # hide
+```
+
+All three compile to a model with the same 65 parameters:
+
+```@example three_ways
+using LogDensityProblems
+
+data = example.data
+models = (
+    rats(data),
+    from_bugs(data),
+    rats_model((; Y=data.Y), data.x, data.xbar, data.N, data.T),
+)
+LogDensityProblems.dimension.(models)
+```
+
 ## Volume 1
 
 | Example | Model |
