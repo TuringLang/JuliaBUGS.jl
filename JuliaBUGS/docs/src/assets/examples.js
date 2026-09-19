@@ -66,6 +66,15 @@ async function fillRun(slot, run) {
         `The original used Gibbs sampling, so the posterior should agree but the Monte Carlo error will not.`,
     ),
   );
+  if (run.converged === false) {
+    const rhat = typeof run.rhat_max === "number" ? ` (largest R-hat ${run.rhat_max.toFixed(2)})` : "";
+    section.appendChild(
+      paragraph(
+        `<strong>This run did not converge</strong>${rhat}, so its summaries are not reliable. ` +
+          `It is published so the chains can be inspected.`,
+      ),
+    );
+  }
   const plots = await Promise.all([
     inlinePlot(`${BUNDLES}/${key}-trace.svg`, `Trace of the monitored parameters, one line per chain`),
     inlinePlot(`${BUNDLES}/${key}-density.svg`, `Posterior density of the monitored parameters, one curve per chain`),
