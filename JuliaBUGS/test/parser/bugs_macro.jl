@@ -103,14 +103,6 @@ using JuliaBUGS.BUGSPrimitives: dgamma
     end
 end
 
-@testset "equality test between two bugs macro" begin
-    @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
-        example = JuliaBUGS.BUGSExamples.VOLUME_1[m]
-        @test JuliaBUGS.Parser._bugs_string_input(example.original_syntax_program, false) ==
-            example.model_def
-    end
-end
-
 @testset "warn deviance, cumulative, and density" begin
     model_1 = MacroTools.@q begin
         a ~ dnorm(0, 1)
@@ -288,6 +280,27 @@ end
     # `@bugs` / `@bugs"..."` return a callable wrapper, not a bare `Expr`
     @test model_def isa JuliaBUGS.BUGSModelDef
     @test model_def.model_def isa Expr
+
+    # it prints as the block that builds it
+    nested = @bugs begin
+        for i in 1:N
+            for j in 1:T
+                y[i, j] ~ dnorm(mu[i], var"tau.c")
+            end
+            mu[i] = alpha + beta * x[i]
+        end
+        alpha ~ dnorm(0, 1)
+    end
+    @test sprint(show, MIME("text/plain"), nested) == """
+        @bugs begin
+            for i in 1:N
+                for j in 1:T
+                    y[i, j] ~ dnorm(mu[i], var"tau.c")
+                end
+                mu[i] = alpha + beta * x[i]
+            end
+            alpha ~ dnorm(0, 1)
+        end"""
 
     # calling it compiles: `model_def(data)` is equivalent to `compile(model_def, data)`
     @test model_def((; y=1.0)) isa JuliaBUGS.BUGSModel

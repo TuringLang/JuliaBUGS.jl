@@ -1,0 +1,10 @@
+{
+  "lambda": 0.5,
+  "beta": [0.5, 0.5, 0.5, 0.5],
+  "mu_source": 0.5,
+  "sd_epsilon": 1,
+  "sd_person": 1,
+  "sd_source": 1,
+  "sd_region": 1,
+  "sd_eta": 1
+}

@@ -1,0 +1,6 @@
+{
+  "mu": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
+  "tau": [null, null, 0.1, null, null, null],
+  "tau.sqrd": [null, 0.1, null, null, null, 0.1],
+  "inv.tau.sqrd": [0.1, null, null, null, null, null]
+}
