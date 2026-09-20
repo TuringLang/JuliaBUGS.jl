@@ -13,7 +13,9 @@ available as `JuliaBUGS.BUGSExamples.VOLUME_N.<key>`, bundling the model definit
 original BUGS program, the data, two sets of initial values, and, where they were published,
 reference results to compare against. The pages below pull everything they show from there.
 `JuliaBUGS.BUGSExamples.list()` prints the lot. The files themselves live in the
-`BUGSExamples/` directory of the repository, one folder per example.
+`BUGSExamples/` directory of the repository, one folder per example, and each folder is
+also a complete input for the [mcmcjs](https://github.com/mcmcjs/mcmcjs) command line:
+`mcmc run BUGSExamples/volume_1/rats` fits it with its own data and initial values.
 
 | Volume | Examples | |
 |---|---|---|

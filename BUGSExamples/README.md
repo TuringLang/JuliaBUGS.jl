@@ -22,6 +22,10 @@ volume_1/rats/
 - `reference.json` maps a parameter name to an object of summaries, such as `{"mean": 106.6, "std": 3.66}`.
 - `blocked = "..."` in `example.toml` says why JuliaBUGS cannot compile the example yet. `lazy = true` keeps an example out of the eagerly loaded volumes because its data is large. Both kinds can still be read with `JuliaBUGS.BUGSExamples.load`.
 
+## Running an example without Julia code
+
+Each folder is a complete input for the mcmcjs command line, from 0.35.0: `mcmc run volume_1/rats` fits the example with its data and published initial values, and stores the parameters plus the quantities the example published summaries for.
+
 ## Adding an example
 
 Create the folder under its volume and fill in the files above. Nothing registers it: JuliaBUGS reads the directory when it loads, and `JuliaBUGS.BUGSExamples.list()` shows what it found.
