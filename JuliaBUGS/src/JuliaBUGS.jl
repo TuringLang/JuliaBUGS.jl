@@ -12,7 +12,6 @@ using Graphs, MetaGraphsNext
 using LinearAlgebra
 using LogDensityProblems
 using MacroTools
-using MistyClosures
 using OrderedCollections: OrderedDict
 using Random
 using Serialization: Serialization
@@ -100,7 +99,7 @@ macro bugs(prog::String, replace_period::Bool=true, no_enclosure::Bool=false)
 end
 
 include("graphs.jl")
-include("misty_closure.jl")
+include("opaque_closure.jl")
 include("compiler_pass.jl")
 
 """

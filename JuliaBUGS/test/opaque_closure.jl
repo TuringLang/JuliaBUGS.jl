@@ -1,12 +1,12 @@
 using Test, JuliaBUGS, LogDensityProblems, ADTypes, Serialization
 
 # A fresh process loads package models before any AD backend.
-if length(ARGS) == 2 && ARGS[1] == "--misty-lifecycle"
+if length(ARGS) == 2 && ARGS[1] == "--opaque-lifecycle"
     pushfirst!(LOAD_PATH, ARGS[2])
-    using MistyNormalA, MistyNormalB
+    using OpaqueNormalA, OpaqueNormalB
 
-    const models = (MistyNormalA.model, MistyNormalB.model)
-    const generated = (MistyNormalA.generated, MistyNormalB.generated)
+    const models = (OpaqueNormalA.model, OpaqueNormalB.model)
+    const generated = (OpaqueNormalA.generated, OpaqueNormalB.generated)
     const x = [0.5]
     expected(mean) = -log(2pi) - ((x[1] - mean)^2 + (1 - x[1]^2)^2) / 2
     expected_gradient(mean) = [-(x[1] - mean) + 2x[1] * (1 - x[1]^2)]
@@ -74,23 +74,25 @@ if length(ARGS) == 2 && ARGS[1] == "--misty-lifecycle"
     exit()
 end
 
-@testset "MistyClosure calls" begin
+@testset "OpaqueClosure calls" begin
     env = (x=2.0,)
     loop_vars = (i=1,)
-    f = JuliaBUGS._make_misty_closure(:((env, loop_vars) -> env.x + loop_vars.i), JuliaBUGS)
+    f = JuliaBUGS._make_opaque_closure(
+        :((env, loop_vars) -> env.x + loop_vars.i), JuliaBUGS
+    )
     @test f(env, loop_vars) == 3.0
     @test f((x=2.0f0,), loop_vars) === 3.0f0
-    @test JuliaBUGS._make_misty_closure(:((env, vars) -> typeof(env.x)), JuliaBUGS)(
+    @test JuliaBUGS._make_opaque_closure(:((env, vars) -> typeof(env.x)), JuliaBUGS)(
         env, loop_vars
     ) === Float64
 
-    constant = JuliaBUGS._make_misty_closure(:((env, loop_vars) -> dnorm(0, 1)), JuliaBUGS)
+    constant = JuliaBUGS._make_opaque_closure(:((env, loop_vars) -> dnorm(0, 1)), JuliaBUGS)
     @test constant(env, loop_vars) == dnorm(0, 1)
 end
 
 @testset "Constant results preserve effects" begin
     env = (calls=Ref(0),)
-    f = JuliaBUGS._make_misty_closure(
+    f = JuliaBUGS._make_opaque_closure(
         :((env, loop_vars) -> begin
             env.calls[] += 1
             dnorm(0, 1)
@@ -100,16 +102,16 @@ end
     @test env.calls[] == 1
 end
 
-module MistyClosureTestContext
+module OpaqueClosureTestContext
 transform_value(x) = x * x
 dnorm(args...) = :caller_namespace
 end
 
 @testset "Source ownership and specialization" begin
     expr = :((env, loop_vars) -> transform_value(env.x))
-    f = JuliaBUGS._make_misty_closure(expr, MistyClosureTestContext)
-    other = JuliaBUGS._make_misty_closure(
-        :((env, loop_vars) -> 3env.x), MistyClosureTestContext
+    f = JuliaBUGS._make_opaque_closure(expr, OpaqueClosureTestContext)
+    other = JuliaBUGS._make_opaque_closure(
+        :((env, loop_vars) -> 3env.x), OpaqueClosureTestContext
     )
     @test f((x=2.0,), (;)) == 4.0
     @test other((x=2.0,), (;)) == 6.0
@@ -118,7 +120,7 @@ end
 end
 
 @testset "Concurrent specializations" begin
-    f = JuliaBUGS._make_misty_closure(:((env, vars) -> env.x^2), JuliaBUGS)
+    f = JuliaBUGS._make_opaque_closure(:((env, vars) -> env.x^2), JuliaBUGS)
     tasks = [Threads.@spawn(f((x=x,), (;))) for x in (2.0, 3.0f0, 4, 5.0)]
     @test fetch.(tasks) == [4.0, 9.0f0, 16, 25.0]
     @test f((x=3.0f0,), (;)) === 9.0f0
@@ -126,15 +128,15 @@ end
 
 @testset "Generated source keeps JuliaBUGS namespace" begin
     expr = :((env, vars) -> dnorm(env.x, 1))
-    f = JuliaBUGS._make_misty_closure(expr, JuliaBUGS, MistyClosureTestContext)
+    f = JuliaBUGS._make_opaque_closure(expr, JuliaBUGS, OpaqueClosureTestContext)
     @test f((x=2.0,), (;)) == dnorm(2, 1)
 end
 
-@testset "MistyClosure lifecycle in fresh processes" begin
+@testset "OpaqueClosure lifecycle in fresh processes" begin
     project = dirname(Base.active_project())
     script = @__FILE__
     mktempdir() do packages
-        for (name, mean) in (("MistyNormalA", 0), ("MistyNormalB", 3))
+        for (name, mean) in (("OpaqueNormalA", 0), ("OpaqueNormalB", 3))
             src = joinpath(packages, name, "src")
             mkpath(src)
             write(
@@ -163,7 +165,7 @@ end
             cmd = `$(Base.julia_cmd()) --startup-file=no --project=$project -e $("pushfirst!(LOAD_PATH, " * repr(packages) * "); using " * name)`
             @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
         end
-        cmd = `$(Base.julia_cmd()) --startup-file=no --project=$project $script --misty-lifecycle $packages`
+        cmd = `$(Base.julia_cmd()) --startup-file=no --project=$project $script --opaque-lifecycle $packages`
         @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
     end
 end

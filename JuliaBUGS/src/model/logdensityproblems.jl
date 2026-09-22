@@ -121,7 +121,7 @@ function BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
     # Check AD backend compatibility with evaluation mode
     model = _check_ad_compatibility(model, adtype)
 
-    prep = JuliaBUGS._prepare_misty_gradient(adtype, model, x)
+    prep = JuliaBUGS._prepare_opaque_gradient(adtype, model, x)
     return BUGSModelWithGradient(adtype, prep, model)
 end
 

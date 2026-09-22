@@ -4,7 +4,7 @@
 
 ### Highlights
 
-- Use MistyClosures for world-age-safe model evaluation, including models compiled and evaluated in the same function, late AD loading, and package restoration (#541). Mooncake differentiates the ordinary source functions.
+- Use OpaqueClosures for world-age-safe model evaluation, including models compiled and evaluated in the same function, late AD loading, and package restoration (#541). Mooncake differentiates the ordinary source functions.
 
 ### Breaking Changes
 

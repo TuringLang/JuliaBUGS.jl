@@ -8,7 +8,7 @@ A compiled BUGS model represents a fixed program **assuming the BUGS primitives 
 
 Purity does not prevent a Julia method from being redefined. Definitions must also retain their meaning for the lifetime of a compiled model and when loading it from a saved file.
 
-Stable helper semantics were already needed for reproducibility before the MistyClosure implementation (on `main` at commit `5b7bee3`). That implementation did not snapshot helper definitions: evaluation could observe redefinitions, and loading a saved model recompiled against the available definitions. MistyClosures make the timing different: cached specializations may retain old helper behavior, while new specializations or gradient preparation may use newer definitions. Neither implementation guarantees preservation of old helper behavior after redefinition.
+Stable helper semantics were already needed for reproducibility before the OpaqueClosure implementation (on `main` at commit `5b7bee3`). That implementation did not snapshot helper definitions: evaluation could observe redefinitions, and loading a saved model recompiled against the available definitions. OpaqueClosures make the timing different: cached specializations may retain old helper behavior, while new specializations or gradient preparation may use newer definitions. Neither implementation guarantees preservation of old helper behavior after redefinition.
 
 ### Source functions and execution
 
@@ -20,13 +20,13 @@ source = (evaluation_env, parameters) -> begin
 end
 ```
 
-Here `evaluation_env` holds model values, including data. The wrapper retains the function object as `f.source`; it is not source text, typed SSA IR, or a Julia `@generated` function. Julia infers typed SSA IR for particular argument types and builds a cached MistyClosure. For example, `Float64` and `Float32` arguments may require separate specializations.
+Here `evaluation_env` holds model values, including data. The wrapper retains the function object as `f.source`; it is not source text, typed SSA IR, or a Julia `@generated` function. Julia infers typed SSA IR for particular argument types and builds a cached OpaqueClosure. For example, `Float64` and `Float32` arguments may require separate specializations.
 
 Mooncake differentiates `f.source` using available AD rules, rather than differentiating the execution caches. AD backends may be loaded after compiling the base model, before preparing its gradient wrapper. Loading a backend does not require recompiling the base model.
 
 ### Saving and loading
 
-Saving a model retains its definition, data, and settings needed to reconstruct its functions; it does not preserve executable closures or the original Julia world age. When a saved model is loaded, for example in a new Julia session, JuliaBUGS reconstructs its ordinary Julia functions. MistyClosure specializations are then built as needed using the Julia methods available when they are prepared. Reproducing the same density and gradients requires compatible package and helper definitions and unchanged model data. Loading a saved gradient-enabled model also prepares its gradients again, so load the required AD backend before deserializing it.
+Saving a model retains its definition, data, and settings needed to reconstruct its functions; it does not preserve executable closures or the original Julia world age. When a saved model is loaded, for example in a new Julia session, JuliaBUGS reconstructs its ordinary Julia functions. OpaqueClosure specializations are then built as needed using the Julia methods available when they are prepared. Reproducing the same density and gradients requires compatible package and helper definitions and unchanged model data. Loading a saved gradient-enabled model also prepares its gradients again, so load the required AD backend before deserializing it.
 
 ### Editing helpers and package precompilation
 
@@ -43,7 +43,7 @@ new_gradient_model = JuliaBUGS.BUGSModelWithGradient(
 
 Continued evaluation of an older model after such edits is unsupported. Pinning a Julia world age alone would not preserve helper definitions across Julia sessions, and world ages do not freeze mutable model data.
 
-For a package-level model constant, define its `@model` constructor in that package, or pass `eval_module=@__MODULE__` to `compile`, with `using JuliaBUGS.BUGSPrimitives` in that module. During package precompilation, node evaluation uses ordinary Julia functions; MistyClosures are created after loading the package. Prepare gradient wrappers at runtime. Generated evaluation continues to resolve model functions in the `JuliaBUGS` namespace; register custom primitives there before using that mode.
+For a package-level model constant, define its `@model` constructor in that package, or pass `eval_module=@__MODULE__` to `compile`, with `using JuliaBUGS.BUGSPrimitives` in that module. During package precompilation, node evaluation uses ordinary Julia functions; OpaqueClosures are created after loading the package. Prepare gradient wrappers at runtime. Generated evaluation continues to resolve model functions in the `JuliaBUGS` namespace; register custom primitives there before using that mode.
 
 ## Available Modes
 

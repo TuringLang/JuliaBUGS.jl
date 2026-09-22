@@ -828,7 +828,7 @@ function _regenerate_log_density_function(
         log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
             lowered_model_def, evaluation_env
         )
-        new_log_density_computation_function = JuliaBUGS._make_misty_closure(
+        new_log_density_computation_function = JuliaBUGS._make_opaque_closure(
             log_density_computation_expr, JuliaBUGS, owner_module
         )
 
