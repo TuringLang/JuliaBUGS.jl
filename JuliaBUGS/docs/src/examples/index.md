@@ -1,21 +1,15 @@
 # Example Gallery
 
-The classic BUGS examples, rewritten as JuliaBUGS pages. Each page states the model, shows
-the data, and points at the published reference results, so you can read the model and
-reproduce the numbers in one place. If you know these examples from WinBUGS, OpenBUGS, or
-JAGS they should feel familiar; the original write-ups live on the MultiBUGS examples pages
-for [Volume 1](https://www.multibugs.org/examples/latest/VolumeI.html),
-[Volume 2](https://www.multibugs.org/examples/latest/VolumeII.html), and
-[Volume 3](https://www.multibugs.org/examples/latest/VolumeIII.html).
+The classic BUGS examples as JuliaBUGS pages.
+Each page states the model, shows the data, and points at the published reference results, so you can read the model and reproduce the numbers in one place.
+If you know these examples from WinBUGS, OpenBUGS, or JAGS they will look familiar.
+The original write-ups are on the MultiBUGS pages for [Volume 1](https://www.multibugs.org/examples/latest/VolumeI.html), [Volume 2](https://www.multibugs.org/examples/latest/VolumeII.html), and [Volume 3](https://www.multibugs.org/examples/latest/VolumeIII.html).
 
-Every example ships with the package, so you do not need to retype anything. Each one is
-available as `JuliaBUGS.BUGSExamples.VOLUME_N.<key>`, bundling the model definition, the
-original BUGS program, the data, two sets of initial values, and, where they were published,
-reference results to compare against. The pages below pull everything they show from there.
-`JuliaBUGS.BUGSExamples.list()` prints the lot. The files themselves live in the
-`BUGSExamples/` directory of the repository, one folder per example, and each folder is
-also a complete input for the [mcmcjs](https://github.com/mcmcjs/mcmcjs) command line:
-`mcmc run BUGSExamples/volume_1/rats` fits it with its own data and initial values.
+Every example ships with the package, so nothing here needs retyping.
+Each one is `JuliaBUGS.BUGSExamples.VOLUME_N.<key>`, holding the model definition, the original BUGS program, the data, two sets of initial values, and the published reference results where there are any.
+The pages below pull everything they show from there, and `JuliaBUGS.BUGSExamples.list()` prints the lot.
+The files live in the `BUGSExamples/` directory of the repository, one folder per example.
+Each folder is also a complete input for the [mcmcjs](https://github.com/mcmcjs/mcmcjs) command line: `mcmc run BUGSExamples/volume_1/rats` fits it with its own data and initial values.
 
 | Volume | Examples | |
 |---|---|---|
@@ -23,9 +17,8 @@ also a complete input for the [mcmcjs](https://github.com/mcmcjs/mcmcjs) command
 | Volume 2 | 16 | [browse](volume_2/index.md) |
 | Volume 3 | 14 | [browse](volume_3/index.md) |
 
-Some examples in the collection use language features JuliaBUGS does not support yet. They
-are on disk, marked blocked, and left out of the volumes above, so their pages are absent
-rather than broken:
+Some examples use language features JuliaBUGS does not support yet.
+They are on disk, marked blocked, and left out of the volumes above, so their pages are absent rather than broken:
 
 | Example | Blocked by |
 |---|---|
@@ -36,16 +29,15 @@ rather than broken:
 | Volume 3, Jama and St Veit Klinglberg | `interp.lin` is not an allowed function in `@bugs` |
 
 Volume 4 has one example in the repository, Methadone, whose data hold 240,776 observations.
-It is not loaded with the package; `JuliaBUGS.BUGSExamples.load(:methadone)` reads it on
-demand.
+It is not loaded with the package.
+`JuliaBUGS.BUGSExamples.load(:methadone)` reads it on demand.
 
 ## One model, three ways to write it
 
-JuliaBUGS accepts a model in three forms, and every example page shows two of them. Here is
-Rats in all three. The first is BUGS in Julia clothing, the `@bugs` block: `=` where BUGS
-writes `<-`, `for i in`, and the BUGS distribution names. This is the form the
-[getting-started tutorial](../getting_started.md) teaches and the form each example page
-prints under its Model heading.
+JuliaBUGS accepts a model in three forms, and every example page shows two of them.
+Here is Rats in all three.
+The first is the `@bugs` block, BUGS in Julia clothing: `=` where BUGS writes `<-`, `for i in`, and the BUGS distribution names.
+This is the form the [getting-started tutorial](../getting_started.md) teaches and the form each example page prints under its Model heading.
 
 ```@example three_ways
 using JuliaBUGS
@@ -69,23 +61,20 @@ rats = @bugs begin
 end
 ```
 
-The second is the original BUGS program, unchanged, parsed from a string. This is what each
-example page prints under "the program as it appears in the original BUGS distribution", and
-it is how the examples are stored. `replace_period=false` keeps dotted names such as `tau.c`
-as `var"tau.c"`; the default rewrites them to `tau_c`. See
-[Coming from WinBUGS, OpenBUGS, and JAGS](../guides/differences.md) for what the parser
-accepts.
+The second is the original BUGS program, unchanged, parsed from a string.
+This is what each example page prints as the program from the original BUGS distribution, and it is how the examples are stored.
+`replace_period=false` keeps dotted names such as `tau.c` as `var"tau.c"`, and the default rewrites them to `tau_c`.
+See [Coming from WinBUGS, OpenBUGS, and JAGS](../guides/differences.md) for what the parser accepts.
 
 ```@example three_ways
 example = JuliaBUGS.BUGSExamples.VOLUME_1.rats
 from_bugs = JuliaBUGS.BUGSModelDef(example.original_syntax_program)
 ```
 
-The third is a Julia function with the `@model` macro, where the stochastic variables come
-in as a named tuple and everything else as ordinary arguments, and any Julia function is
-available in the body. The BUGS distribution names come from `JuliaBUGS.BUGSPrimitives`. See
-[Choosing `@bugs` or `@model`](../two_macros.md) and
-[Defining Models with `@model`](../model_macro.md).
+The third is a Julia function with the `@model` macro.
+The stochastic variables come in as a named tuple, everything else as ordinary arguments, and any Julia function is available in the body.
+The BUGS distribution names come from `JuliaBUGS.BUGSPrimitives`.
+See [Choosing `@bugs` or `@model`](../two_macros.md) and [Defining Models with `@model`](../model_macro.md).
 
 ```@example three_ways
 using JuliaBUGS.BUGSPrimitives
@@ -150,6 +139,8 @@ LogDensityProblems.dimension.(models)
 | [Leuk: Cox Regression](volume_1/leuk.md) | Cox proportional-hazards survival model in counting-process form for censored leukemia remission times |
 | [LeukFr: Cox Regression with Random Effects](volume_1/leukfr.md) | Cox proportional-hazards survival model with a normal pair-level frailty (random effect) for the Freireich leukaemia remission data. |
 
-New to the workflow these pages assume? See [Getting Started](../getting_started.md) for the model-to-samples walkthrough that every example page follows.
+New to the workflow these pages assume?
+[Getting Started](../getting_started.md) walks from a model to samples the way every example page does.
 
-Adding an example? The Volume 2 and 3 pages share one structure, and the script that produced it is kept in [issue #533](https://github.com/TuringLang/JuliaBUGS.jl/issues/533) rather than in the repository, since the pages are written and maintained by hand from here.
+The Volume 2 and 3 pages share one structure.
+The script that produced it is in [issue #533](https://github.com/TuringLang/JuliaBUGS.jl/issues/533), and the pages are maintained by hand.

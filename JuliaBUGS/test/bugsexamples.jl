@@ -71,8 +71,8 @@ using JuliaBUGS: BUGSExamples
         @test occursin("[load on demand]", out)
     end
 
-    # Volume 1 is compiled by test/model/bugsmodel.jl. Most of these need their own initial
-    # values, and a few only compile without them, so try inits first and fall back to bare.
+    # Volume 1 is compiled by test/model/bugsmodel.jl. Some of these compile only from
+    # their initial values and a few only without them.
     @testset "every Volume 2 and 3 example compiles" begin
         for volume in (:volume_2, :volume_3),
             (key, ex) in pairs(BUGSExamples.volumes()[volume])

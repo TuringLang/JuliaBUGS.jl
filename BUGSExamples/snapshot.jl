@@ -1,11 +1,8 @@
-# Packs the example volumes into the artifact that ships with JuliaBUGS and points
-# JuliaBUGS/Artifacts.toml at it. The release tag is derived from the content, so running
-# this twice on the same files gives the same tag, tarball, and hashes.
+# Packs the example volumes into the artifact an installed JuliaBUGS reads and points
+# JuliaBUGS/Artifacts.toml at it. The release tag is the content hash, so the same files
+# always give the same tag, tarball, and hashes.
 #
 #     julia BUGSExamples/snapshot.jl out/
-#
-# writes out/BUGSExamples.tar.gz and prints the tag to upload it under. The
-# BUGSExamplesSnapshot workflow does both on demand.
 
 using Pkg.Artifacts, SHA, Tar
 
@@ -27,7 +24,7 @@ tar = joinpath(out, "BUGSExamples.tar")
 tarball = tar * ".gz"
 rm(tarball; force = true)
 Tar.create(artifact_path(tree), tar)
-# gzip -n leaves the timestamp out of the header, which is what makes the output reproducible.
+# gzip -n leaves the timestamp out of the header, which keeps the output reproducible.
 run(`gzip -n -9 $tar`)
 sha = bytes2hex(open(sha256, tarball))
 bind_artifact!(

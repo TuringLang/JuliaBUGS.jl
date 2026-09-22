@@ -1,20 +1,15 @@
 """
     BUGSExamples
 
-The classic BUGS examples, read from the `BUGSExamples/` directory at the root of the
-repository, or from the artifact snapshot of that directory when JuliaBUGS is installed on
-its own.
+The classic BUGS examples, read from the `BUGSExamples/` directory at the root of the repository, or from the artifact snapshot of that directory when JuliaBUGS is installed on its own.
 
-Each example is a folder holding `example.toml`, the original program as `model.bugs`,
-and `data.json`, `inits.json`, `inits_alternative.json`, and `reference.json` where the
-example has them. The folders are read when the package loads. `VOLUME_1`, `VOLUME_2`, and
-`VOLUME_3` hold the examples of each volume as `NamedTuple`s, and every example is also
-bound by its key, so `VOLUME_1.rats` and `rats` are the same [`Example`](@ref).
+Each example is a folder holding `example.toml`, the original program as `model.bugs`, and `data.json`, `inits.json`, `inits_alternative.json`, and `reference.json` where the example has them.
+The folders are read when the package loads.
+`VOLUME_1`, `VOLUME_2`, and `VOLUME_3` hold the examples of each volume as `NamedTuple`s, and every example is also bound by its key, so `VOLUME_1.rats` and `rats` are the same [`Example`](@ref).
 
-Examples marked `blocked` in `example.toml` use language features JuliaBUGS does not
-support yet, and examples marked `lazy` are too large to read at load time. Neither is in
-the `VOLUME_N` tuples; both can be read explicitly with [`load`](@ref) and are shown by
-[`list`](@ref).
+Examples marked `blocked` in `example.toml` use language features JuliaBUGS does not support yet, and examples marked `lazy` are too large to read at load time.
+Neither is in the `VOLUME_N` tuples.
+Both can be read explicitly with [`load`](@ref) and are shown by [`list`](@ref).
 """
 module BUGSExamples
 
@@ -26,12 +21,11 @@ using JuliaBUGS: JuliaBUGS
 """
     Example
 
-One BUGS example. `model_def` is the parsed program as the `BUGSModelDef` that `@bugs`
-would return, ready for `compile`, and `original_syntax_program` is the program text it was
-parsed from. `data`, `inits`, and
-`inits_alternative` are `NamedTuple`s, empty when the example has none. `reference_results`
-is a `NamedTuple` of the summaries published with the example, or `nothing`. `path` is the
-directory the example was read from.
+One BUGS example.
+`model_def` is the parsed program as the `BUGSModelDef` that `@bugs` would return, ready for `compile`, and `original_syntax_program` is the program text it was parsed from.
+`data`, `inits`, and `inits_alternative` are `NamedTuple`s, empty when the example has none.
+`reference_results` is a `NamedTuple` of the summaries published with the example, or `nothing`.
+`path` is the directory the example was read from.
 """
 struct Example{DNT<:NamedTuple,INT<:NamedTuple,INT2<:NamedTuple,RNT}
     name::String
@@ -60,8 +54,7 @@ function root()
     return artifact"BUGSExamples"
 end
 
-# Recorded as a precompilation dependency so that editing an example file in a checkout
-# rebuilds the cache.
+# A precompilation dependency, so an edited example file in a checkout rebuilds the cache.
 function tracked(path::AbstractString)
     Base.include_dependency(path)
     return path
@@ -75,7 +68,7 @@ from_json(x::AbstractDict) =
 from_json(::Nothing) = missing
 from_json(x) = x
 
-# Nested arrays are rows, so `[[1, 2], [3, 4]]` is the matrix `[1 2; 3 4]`.
+# Nested arrays are rows: `[[1, 2], [3, 4]]` is the matrix `[1 2; 3 4]`.
 function from_json(x::AbstractVector)
     if !isempty(x) && all(e -> e isa AbstractVector, x)
         rows = map(from_json, x)
@@ -184,8 +177,8 @@ end
 """
     volumes()
 
-The examples that load with the package, as a `NamedTuple` of `NamedTuple`s keyed by
-volume: `volumes().volume_1` is `VOLUME_1`.
+The examples that load with the package, as a `NamedTuple` of `NamedTuple`s keyed by volume.
+`volumes().volume_1` is `VOLUME_1`.
 """
 volumes() = VOLUMES
 

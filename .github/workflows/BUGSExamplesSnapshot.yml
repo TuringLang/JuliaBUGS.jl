@@ -1,10 +1,8 @@
 name: BUGSExamples snapshot
 
-# Publishes the current BUGSExamples/ as the artifact an installed JuliaBUGS reads.
-# The release tag comes from the content, so a rerun on unchanged examples does nothing.
-# When Artifacts.toml has to move to the new snapshot, a pull request carries the change.
-# Running on every merge that touches an example keeps a release from shipping an
-# Artifacts.toml that describes older files than the tree around it.
+# Publishes BUGSExamples/ as the artifact an installed JuliaBUGS reads. The tag is the
+# content hash, so a rerun on unchanged examples does nothing, and a pull request carries
+# the Artifacts.toml change when there is one.
 
 on:
   push:

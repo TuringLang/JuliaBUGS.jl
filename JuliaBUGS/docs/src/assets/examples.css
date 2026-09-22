@@ -1,4 +1,4 @@
-/* The published plots read these; inlining the SVG is what lets them apply. */
+/* The published plots read these once examples.js has inlined them. */
 :root {
   --mcmc-fg: #333;
   --mcmc-bg: #ffffff;
