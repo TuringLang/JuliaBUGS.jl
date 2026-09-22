@@ -1,13 +1,9 @@
-// Loaded on every docs page. Fills in the two things an example page can only get from
-// outside the repository: the DoodlePPL graph widget and the run published for it by the
-// BUGS example bundles. Both come from here, so a version or URL changes in one place.
-//
-// A page opts in with plain elements and no script tags:
-//   <doodle-ppl class="doodleppl-embed" model="rats" ...></doodle-ppl>
-//   <div class="mcmc-run" data-example="rats"></div>
+// The widget version and the mcmcjs URLs live here and nowhere else, so an example page
+// carries only a <doodle-ppl model=...> element and a <div class="mcmc-run" data-example=...> slot.
 const DOODLEPPL_SCRIPT = "https://unpkg.com/doodleppl@0.10/dist/doodleppl.global.js";
 const BUNDLES = "https://mcmcjs.github.io/bugs-examples";
 const REPORT = "https://mcmcjs.github.io/report/";
+const BACKENDS = { juliabugs: "JuliaBUGS", turing: "Turing", stan: "Stan" };
 
 function loadWidget() {
   if (!document.querySelector("doodle-ppl")) return;
@@ -17,8 +13,8 @@ function loadWidget() {
   document.head.appendChild(script);
 }
 
-// An <img> loads an SVG as its own document, so the page's CSS variables never reach it
-// and a plot would stay light on a dark page. Fetching and inlining lets them apply.
+// An <img> renders an SVG as its own document, out of reach of the page's CSS variables,
+// so a plot would stay light on a dark page. Inlining the SVG lets them apply.
 async function inlinePlot(url, label) {
   const response = await fetch(url);
   if (!response.ok) return null;
@@ -39,17 +35,21 @@ function paragraph(html) {
   return p;
 }
 
+// The bundle records the backend id and the Julia version it ran on.
 function describe(run) {
-  const s = run.sampler;
   const parts = [];
-  if (run.backend) parts.push(`${run.backend.id} ${run.backend.version}`);
+  if (run.backend) {
+    const name = BACKENDS[run.backend.id] ?? run.backend.id;
+    parts.push(run.backend.id === "stan" ? `${name} ${run.backend.version}` : `${name} on Julia ${run.backend.version}`);
+  }
+  const s = run.sampler;
   if (s) {
     parts.push(
-      `${s.algorithm}, ${s.chains} chains of ${s.draws} draws after ${s.warmup} warmup` +
+      `${s.algorithm} with ${s.chains} chains of ${s.draws} draws after ${s.warmup} warmup` +
         (s.thin > 1 ? `, thinned by ${s.thin}` : ""),
     );
   }
-  if (run.fitted_at) parts.push(`fitted ${run.fitted_at.slice(0, 10)}`);
+  if (run.fitted_at) parts.push(`on ${run.fitted_at.slice(0, 10)}`);
   return parts.join(", ");
 }
 
@@ -62,7 +62,7 @@ async function fillRun(slot, run) {
   section.appendChild(heading);
   section.appendChild(
     paragraph(
-      `JuliaBUGS fitted this example with ${describe(run)}. ` +
+      `This example was fitted with ${describe(run)}. ` +
         `The original used Gibbs sampling, so the posterior should agree but the Monte Carlo error will not.`,
     ),
   );
@@ -76,8 +76,8 @@ async function fillRun(slot, run) {
     );
   }
   const plots = await Promise.all([
-    inlinePlot(`${BUNDLES}/${key}-trace.svg`, `Trace of the monitored parameters, one line per chain`),
-    inlinePlot(`${BUNDLES}/${key}-density.svg`, `Posterior density of the monitored parameters, one curve per chain`),
+    inlinePlot(`${BUNDLES}/${key}-trace.svg`, "Trace of the monitored parameters, one line per chain"),
+    inlinePlot(`${BUNDLES}/${key}-density.svg`, "Posterior density of the monitored parameters, one curve per chain"),
   ]);
   for (const plot of plots) if (plot) section.appendChild(plot);
   const bundle = `${BUNDLES}/${run.file}`;
@@ -98,7 +98,7 @@ async function fillRuns() {
     const response = await fetch(`${BUNDLES}/index.json`);
     if (response.ok) runs = (await response.json()).runs || [];
   } catch {
-    // Offline or blocked: the pages read fine without the run sections.
+    // Offline, the page reads fine without its run section.
   }
   for (const slot of slots) {
     const run = runs.find((r) => r.key === slot.dataset.example);
