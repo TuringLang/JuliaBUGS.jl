@@ -62,6 +62,27 @@ using JuliaBUGS: BUGSExamples
         @test_throws ErrorException BUGSExamples.load(:no_such_example)
     end
 
+    # A key that names no variable is silently ignored, so a misspelled starting value
+    # leaves its parameter to a draw from the prior. That is how Hepatitis started from
+    # `tau_alpha` when its program says `tau.alpha`.
+    @testset "every initial value and reference result names a model variable" begin
+        for (volume, examples) in pairs(BUGSExamples.volumes()), (key, ex) in pairs(examples)
+            names = Set{Symbol}()
+            MacroTools.postwalk(ex.model_def.model_def) do e
+                e isa Symbol && push!(names, e)
+                e
+            end
+            base(k) = Symbol(first(split(string(k), '[')))
+            @testset "$volume.$key" begin
+                for field in (:inits, :inits_alternative, :reference_results)
+                    value = getfield(ex, field)
+                    value === nothing && continue
+                    @test isempty(filter(k -> base(k) ∉ names, collect(keys(value))))
+                end
+            end
+        end
+    end
+
     @testset "list prints every entry" begin
         out = sprint(BUGSExamples.list)
         for e in BUGSExamples.ENTRIES
