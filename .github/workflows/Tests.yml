@@ -84,6 +84,8 @@ jobs:
         with:
           project: JuliaBUGS
           coverage: ${{ matrix.version == '1.11' }}
+          # Dependabot forces OrderedCollections 2, but AbstractPPL 0.15 requires OrderedCollections 1.
+          force_latest_compatible_version: false
         env:
           TEST_GROUP: ${{ matrix.test_group }}
           JULIA_NUM_THREADS: ${{ matrix.test_group == 'parallel_sampling' && steps.threads.outputs.count || '1' }}
