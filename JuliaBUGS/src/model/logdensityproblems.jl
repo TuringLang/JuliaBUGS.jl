@@ -14,12 +14,17 @@ function _eval_logdensity(model, ::UseAutoMarginalization, x)
     return log_densities.tempered_logjoint
 end
 
+# A point outside the support, or one whose covariance matrix is not positive
+# definite once transformed back, has zero density, and a sampler must be able to
+# reject it rather than stop.
+is_impossible_point(e) = e isa DomainError || e isa LinearAlgebra.PosDefException
+
 function LogDensityProblems.logdensity(model::BUGSModel, x::AbstractArray)
     try
         return _eval_logdensity(model, model.evaluation_mode, x)
     catch e
         T = float(eltype(x))
-        e isa DomainError && return T(-Inf)
+        is_impossible_point(e) && return T(-Inf)
         rethrow(e)
     end
 end
@@ -248,7 +253,7 @@ function LogDensityProblems.logdensity_and_gradient(
         logp, grad = AbstractPPL.value_and_gradient!!(model.prep, x)
         return (logp, copy(grad))
     catch e
-        if e isa DomainError
+        if is_impossible_point(e)
             T = float(eltype(x))
             return (T(-Inf), fill(T(NaN), length(x)))
         end

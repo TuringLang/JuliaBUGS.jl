@@ -12,6 +12,10 @@
 - Preparing `BUGSModelWithGradient` during package precompilation now throws an `ArgumentError`. Store the base model and prepare gradients after package loading.
 - The serialized representation of `BUGSModelWithGradient` has changed. Recreate gradient wrappers saved by earlier versions rather than loading them directly.
 
+### Bug Fixes
+
+- A proposal whose covariance matrix is not positive definite once transformed back has log density `-Inf` instead of raising `PosDefException`, as a proposal outside the support already did. A sampler rejects it and moves on, where before one such step ended the fit. Birats, which failed during NUTS step-size search, now converges.
+
 ## 0.17.1
 
 ### Bug Fixes

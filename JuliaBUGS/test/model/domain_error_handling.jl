@@ -100,4 +100,23 @@
             @test all(isnan, grad)
         end
     end
+
+    @testset "Wishart: matrix that is not positive definite" begin
+        model_def = @bugs begin
+            Omega[1:2, 1:2] ~ dwish(R[:, :], 3)
+        end
+        model = compile(model_def, (; R=[1.0 0.0; 0.0 1.0]))
+
+        Base.invokelatest() do
+            grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
+            @test isfinite(LogDensityProblems.logdensity(model, zeros(3)))
+
+            # So far out that transforming back fails its Cholesky factorization.
+            far = fill(800.0, 3)
+            @test LogDensityProblems.logdensity(model, far) == -Inf
+            logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, far)
+            @test logp == -Inf
+            @test all(isnan, grad)
+        end
+    end
 end
