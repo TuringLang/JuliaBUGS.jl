@@ -12,6 +12,10 @@
 - Preparing `BUGSModelWithGradient` during package precompilation now throws an `ArgumentError`. Store the base model and prepare gradients after package loading.
 - The serialized representation of `BUGSModelWithGradient` has changed. Recreate gradient wrappers saved by earlier versions rather than loading them directly.
 
+### Bug Fixes
+
+- A censored BUGS observation with a missing value now carries its censored likelihood. `dweib(r, mu)C(c, )` was lowered to `censored(dweib(r, mu), c, nothing)`, which has its mass at `c` and a density everywhere above it, so a missing value sampled as a parameter ignored the bound. It also counted as a generated quantity, because nothing observed depends on it, and was left out of the log density altogether. `C()` now lowers to `bugs_censored`, whose density is that of the distribution inside the bounds and zero outside, and a censored node always counts toward the log density. Mice's posterior medians now match JAGS.
+
 ## 0.17.1
 
 ### Bug Fixes
