@@ -840,7 +840,7 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
     is_censored =
         is_stochastic &&
         Meta.isexpr(expr.args[3], :call) &&
-        expr.args[3].args[1] === :bugs_censored
+        expr.args[3].args[1] === :censored
 
     vn = if lhs isa Symbol
         AbstractPPL.VarName{lhs}()

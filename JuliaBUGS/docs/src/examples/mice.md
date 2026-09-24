@@ -28,7 +28,7 @@ using JuliaBUGS
 mice = @bugs begin
     for i in 1:M
         for j in 1:N
-            t[i, j] ~ bugs_censored(dweib(r, mu[i]), var"t.cen"[i, j], nothing)
+            t[i, j] ~ censored(dweib(r, mu[i]), var"t.cen"[i, j], nothing)
         end
         mu[i] = exp(beta[i])
         beta[i] ~ dnorm(0.0, 0.001)
@@ -91,7 +91,7 @@ summarystats(chain)
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.mice.inits` and can be applied with `initialize!(model, inits)`.
 
 !!! note "Censored observations"
-    Several survival times in this example are right-censored: the animal was still alive when the study ended, so its survival time is missing and known only to exceed the follow-up time `t.cen[i, j]`. `bugs_censored(dweib(r, mu[i]), var"t.cen"[i, j], nothing)` is the BUGS `dweib(r, mu[i])C(t.cen[i, j], )`. A censored animal then contributes the Weibull probability of surviving beyond `t.cen[i, j]`, rather than a density at an observed time.
+    Several survival times in this example are right-censored: the animal was still alive when the study ended, so its survival time is missing and known only to exceed the follow-up time `t.cen[i, j]`. Inside a model, `censored(dweib(r, mu[i]), var"t.cen"[i, j], nothing)` is the BUGS `dweib(r, mu[i])C(t.cen[i, j], )`. A censored animal then contributes the Weibull probability of surviving beyond `t.cen[i, j]`, rather than a density at an observed time.
 
 ## Results
 

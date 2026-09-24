@@ -32,6 +32,9 @@ export @of
 
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
+# Model code runs in this module, so `censored` there has the BUGS `C()` meaning rather
+# than that of `Distributions.censored`.
+using .BUGSPrimitives: censored
 
 include("parser/Parser.jl")
 using .Parser
@@ -598,8 +601,8 @@ function __init__()
     end
 
     # The string parser rewrites BUGS `T(l, u)` and `C(l, u)` to `truncated(...)` and
-    # `bugs_censored(...)`, and `censored` stays available to programs that call it.
-    for func in [:truncated, :censored, :bugs_censored]
+    # `censored(...)`, so those must be allowed for such programs to compile.
+    for func in [:truncated, :censored]
         push!(BUGS_ALLOWED_FUNCTIONS, func)
     end
 

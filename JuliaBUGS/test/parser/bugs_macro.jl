@@ -246,10 +246,10 @@ end
     end
 
     @testset "BUGS `T(,)` and `C(,)` compile without manual registration" begin
-        # The string parser rewrites `T(l, u)` / `C(l, u)` to `truncated` / `bugs_censored`;
+        # The string parser rewrites `T(l, u)` / `C(l, u)` to `truncated` / `censored`;
         # both must be in the default allowlist, or no program using them compiles.
         @test :truncated in JuliaBUGS.BUGS_ALLOWED_FUNCTIONS
-        @test :bugs_censored in JuliaBUGS.BUGS_ALLOWED_FUNCTIONS
+        @test :censored in JuliaBUGS.BUGS_ALLOWED_FUNCTIONS
 
         truncated_def = @bugs("model { x ~ dnorm(0, 1)T(0, ) }")
         model = compile(truncated_def, NamedTuple())
@@ -286,6 +286,23 @@ end
         model = compile(def, (; c=2.0, t=missing, y=1.0))
         @test isempty(model.graph_evaluation_data.generated_quantities)
         @test LogDensityProblems.dimension(model) == 2
+    end
+
+    @testset "`censored` in a model means BUGS `C()`, outside it `Distributions.censored`" begin
+        @test censored === Distributions.censored
+
+        data = (; lambda=0.7, c=2.0, t=missing)
+        from_string = compile(@bugs("model { t ~ dexp(lambda)C(c, ) }"), data)
+        from_julia = compile((@bugs begin
+            t ~ censored(dexp(lambda), c, nothing)
+        end), data)
+        ld(model, t) = Base.invokelatest(
+            LogDensityProblems.logdensity, JuliaBUGS.settrans(model, false), [t]
+        )
+        @test ld(from_julia, 3.0) ==
+            ld(from_string, 3.0) ==
+            logpdf(Exponential(1 / 0.7), 3.0)
+        @test ld(from_julia, 2.0) == logpdf(Exponential(1 / 0.7), 2.0)
     end
 
     @testset "Qualified names in @bugs" begin

@@ -25,7 +25,7 @@ kidney = @bugs begin
     for i in 1:N
         for j in 1:M
             # Survival times bounded below by censoring times:
-            t[i, j] ~ bugs_censored(dweib(r, mu[i, j]), var"t.cen"[i, j], nothing)
+            t[i, j] ~ censored(dweib(r, mu[i, j]), var"t.cen"[i, j], nothing)
             mu[i, j] = exp(alpha + var"beta.age" * age[i, j] + var"beta.sex" * sex[i] +
                            var"beta.dis"[disease[i]] + b[i])
         end
@@ -86,7 +86,7 @@ summarystats(chain)
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.kidney.inits` and can be applied with `initialize!(model, inits)`.
 
 !!! note "Censored observations"
-    Several recurrence times in this data set are censored: the time is missing and known only to exceed `t.cen[i, j]`, the time the patient was last seen without a recurrence. `bugs_censored(dweib(r, mu[i, j]), var"t.cen"[i, j], nothing)` is the BUGS `dweib(r, mu[i, j])C(t.cen[i, j], )`. A censored observation then contributes the Weibull probability of lasting beyond `t.cen[i, j]`, rather than a density at an observed time.
+    Several recurrence times in this data set are censored: the time is missing and known only to exceed `t.cen[i, j]`, the time the patient was last seen without a recurrence. Inside a model, `censored(dweib(r, mu[i, j]), var"t.cen"[i, j], nothing)` is the BUGS `dweib(r, mu[i, j])C(t.cen[i, j], )`. A censored observation then contributes the Weibull probability of lasting beyond `t.cen[i, j]`, rather than a density at an observed time.
 
 ## Results
 

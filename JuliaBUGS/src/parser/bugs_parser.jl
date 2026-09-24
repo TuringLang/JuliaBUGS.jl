@@ -490,7 +490,7 @@ function process_tilde_rhs!(ps::ProcessState)
         t_or_c = peek_raw(ps)
         discard!(ps) # discard the "T" or "C"
         expect_and_discard!(ps, "(")
-        push!(julia_token_vec, t_or_c == "C" ? " bugs_censored(" : " truncated(")
+        push!(julia_token_vec, t_or_c == "C" ? " censored(" : " truncated(")
         push!(julia_token_vec, buffer..., ", ")
         ps.julia_token_vec = julia_token_vec
         if peek_next_non_trivia(ps) == K","

@@ -182,21 +182,24 @@ function Distributions.truncated(::Flat, ::Nothing, r::Real)
 end
 
 """
-    bugs_censored(dist, lower, upper)
+    censored(dist, lower, upper)
 
-What BUGS's `x ~ dist C(lower, upper)` means: `x` lies between the bounds, with `dist`'s
-own density there. Either bound can be `nothing`. A missing censored observation becomes
-a parameter confined to the bounds, and integrating it out leaves `P(lower ≤ X ≤ upper)`,
-the censored likelihood.
+What BUGS's `x ~ dist C(lower, upper)` means, and what `censored` means in a JuliaBUGS
+model: `x` lies between the bounds, with `dist`'s own density there. Either bound can be
+`nothing`. A missing censored observation becomes a parameter confined to the bounds, and
+integrating it out leaves `P(lower ≤ X ≤ upper)`, the censored likelihood.
+
+Unlike `Distributions.censored`, it puts no mass on the bounds. Code outside a model still
+gets `Distributions.censored`.
 """
-bugs_censored(dist::UnivariateDistribution, lower, upper) = BUGSCensored(dist, lower, upper)
+censored(dist::UnivariateDistribution, lower, upper) = BUGSCensored(dist, lower, upper)
 
 """
     BUGSCensored
 
 `dist`'s density restricted to `[lower, upper]` and not renormalized, unlike `truncated`,
 and with no mass piled on the bounds, unlike `Distributions.censored`. See
-[`bugs_censored`](@ref).
+[`JuliaBUGS.BUGSPrimitives.censored`](@ref).
 """
 struct BUGSCensored{S<:ValueSupport,D<:UnivariateDistribution{S},L,U} <:
        UnivariateDistribution{S}

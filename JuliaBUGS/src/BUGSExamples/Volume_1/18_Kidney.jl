@@ -4,7 +4,7 @@ model_def = @bugs begin
     for i in 1:N
         for j in 1:M
             # Survival times bounded below by censoring times:
-            t[i, j] ~ bugs_censored(dweib(r, mu[i, j]), var"t.cen"[i, j], nothing)
+            t[i, j] ~ censored(dweib(r, mu[i, j]), var"t.cen"[i, j], nothing)
             mu[i, j] = exp(alpha + var"beta.age" * age[i, j] + var"beta.sex" * sex[i] +
                            var"beta.dis"[disease[i]] + b[i])
         end
