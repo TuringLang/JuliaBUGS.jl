@@ -101,22 +101,57 @@
         end
     end
 
-    @testset "Wishart: matrix that is not positive definite" begin
+    @testset "precision matrix that is not positive definite" begin
         model_def = @bugs begin
-            Omega[1:2, 1:2] ~ dwish(R[:, :], 3)
+            r ~ dnorm(0.0, 1.0)
+            Tau[1, 1] = 1.0
+            Tau[1, 2] = r
+            Tau[2, 1] = r
+            Tau[2, 2] = 1.0
+            y[1:2] ~ dmnorm(mu[:], Tau[:, :])
         end
-        model = compile(model_def, (; R=[1.0 0.0; 0.0 1.0]))
+        data = (; mu=[0.0, 0.0], y=[0.1, -0.2])
+        model = compile(model_def, data, (; r=0.5))
 
         Base.invokelatest() do
             grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
-            @test isfinite(LogDensityProblems.logdensity(model, zeros(3)))
+            @test isfinite(LogDensityProblems.logdensity(model, [0.5]))
 
-            # So far out that transforming back fails its Cholesky factorization.
-            far = fill(800.0, 3)
-            @test LogDensityProblems.logdensity(model, far) == -Inf
-            logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, far)
+            # r = 2 gives the finite but indefinite matrix [1 2; 2 1].
+            @test LogDensityProblems.logdensity(model, [2.0]) == -Inf
+            logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, [2.0])
             @test logp == -Inf
             @test all(isnan, grad)
+        end
+    end
+
+    # The inverse of a matrix of dual numbers is a rounding error away from symmetric,
+    # which `PDMat` would reject although the matrix is positive definite.
+    @testset "precision matrix computed by inverting a parameter-dependent one" begin
+        model_def = @bugs begin
+            s ~ dnorm(1, 1)
+            for i in 1:2
+                for j in 1:2
+                    Sigma[i, j] = s * S0[i, j]
+                end
+            end
+            Tau[1:2, 1:2] = inverse(Sigma[:, :])
+            y[1:2] ~ dmnorm(mu[:], Tau[:, :])
+        end
+        data = (; S0=[1.0 0.2; 0.2 1.0], mu=[0.0, 0.0], y=[0.1, -0.2])
+        model = compile(model_def, data, (; s=1.0))
+
+        Base.invokelatest() do
+            grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
+            logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, [1.0])
+            @test logp ≈ LogDensityProblems.logdensity(model, [1.0])
+            h = 1e-6
+            difference =
+                (
+                    LogDensityProblems.logdensity(model, [1.0 + h]) -
+                    LogDensityProblems.logdensity(model, [1.0 - h])
+                ) / 2h
+            @test grad[1] ≈ difference rtol = 1e-6
         end
     end
 end
