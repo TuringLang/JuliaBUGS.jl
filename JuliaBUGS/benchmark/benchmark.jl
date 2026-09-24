@@ -6,6 +6,7 @@ end
 using JuliaBUGS
 
 using ADTypes
+using ForwardDiff
 using Mooncake
 
 using MetaGraphsNext

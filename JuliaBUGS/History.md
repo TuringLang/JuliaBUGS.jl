@@ -1,5 +1,17 @@
 # JuliaBUGS Changelog
 
+## 0.18.0
+
+### Highlights
+
+- Use OpaqueClosures for world-age-safe model evaluation, including models compiled and evaluated in the same function, late AD loading, and package restoration (#541). Mooncake differentiates the ordinary source functions.
+
+### Breaking Changes
+
+- Cached model specializations can retain earlier helper definitions. After redefining a helper or custom primitive, recompile the model and prepare its gradients again; continued evaluation of the old model is unsupported.
+- Preparing `BUGSModelWithGradient` during package precompilation now throws an `ArgumentError`. Store the base model and prepare gradients after package loading.
+- The serialized representation of `BUGSModelWithGradient` has changed. Recreate gradient wrappers saved by earlier versions rather than loading them directly.
+
 ## 0.17.1
 
 ### Bug Fixes

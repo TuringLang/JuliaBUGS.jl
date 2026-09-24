@@ -27,29 +27,29 @@ end
 
 # Serialize BUGSModelWithGradient by storing the AD type and base model.
 function Serialization.serialize(
-    s::Serialization.AbstractSerializer,
-    gw::JuliaBUGS.Model.BUGSModelWithGradient,
+    s::Serialization.AbstractSerializer, gw::JuliaBUGS.Model.BUGSModelWithGradient
 )
     Serialization.writetag(s.io, Serialization.OBJECT_TAG)
     Serialization.serialize(s, JuliaBUGS.Model.BUGSModelWithGradient)
-    Serialization.serialize(s, (adtype = gw.adtype, base_model = gw.base_model))
+    # Write separately: a NamedTuple would retain the base model's concrete
+    # callable type, which changes when its executable code is reconstructed.
+    Serialization.serialize(s, gw.adtype)
+    Serialization.serialize(s, gw.base_model)
     return nothing
 end
 
 # Deserialize `BUGSModelWithGradient` and rebuild the gradient wrapper locally.
 function Serialization.deserialize(
-    s::Serialization.AbstractSerializer,
-    ::Type{<:JuliaBUGS.Model.BUGSModelWithGradient},
+    s::Serialization.AbstractSerializer, ::Type{<:JuliaBUGS.Model.BUGSModelWithGradient}
 )
-    state = Serialization.deserialize(s)
-    base_model = state.base_model
+    adtype = Serialization.deserialize(s)
+    base_model = Serialization.deserialize(s)
     try
-        # Gradient initialization is performed locally on this process.
-        # Use invokelatest because compile() (called during base_model deserialization)
-        # defines new methods that aren't visible in the current world age.
-        return Base.invokelatest(JuliaBUGS.Model.BUGSModelWithGradient, base_model, state.adtype)
+        return JuliaBUGS.Model.BUGSModelWithGradient(base_model, adtype)
     catch err
-        @warn "Failed to reconstruct BUGSModelWithGradient" exception=(err, catch_backtrace())
+        @warn "Failed to reconstruct BUGSModelWithGradient" exception = (
+            err, catch_backtrace()
+        )
         rethrow(err)
     end
 end
@@ -73,7 +73,7 @@ function Serialization.deserialize(s::Serialization.AbstractSerializer, ::Type{<
     try
         model = JuliaBUGS.Model.set_evaluation_mode(model, state.evaluation_mode)
     catch err
-        @warn "Failed to restore evaluation mode" exception=(err, catch_backtrace())
+        @warn "Failed to restore evaluation mode" exception = (err, catch_backtrace())
     end
 
     return model

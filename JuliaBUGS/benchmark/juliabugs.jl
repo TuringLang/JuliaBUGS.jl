@@ -71,12 +71,8 @@ function _create_JuliaBUGS_model(model_name::Symbol)
     return compile(model_def, data, inits)
 end
 
-# ! writing a _function_ to benchmark all models won't work because of world-age error
-
-function benchmark_JuliaBUGS_model_with_Mooncake(model::JuliaBUGS.BUGSModel)
-    # Use generated log density function for Mooncake
-    model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
-    ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
+function benchmark_JuliaBUGS_model(model::JuliaBUGS.BUGSModel, adtype)
+    ad_model = JuliaBUGS.BUGSModelWithGradient(model, adtype)
     dim = LogDensityProblems.dimension(model)
     params_values = JuliaBUGS.getparams(model)
     density_time = Chairmarks.@be LogDensityProblems.logdensity($ad_model, $params_values)
@@ -84,6 +80,34 @@ function benchmark_JuliaBUGS_model_with_Mooncake(model::JuliaBUGS.BUGSModel)
         $ad_model, $params_values
     )
     return BenchmarkResult(:juliabugs, dim, density_time, density_and_gradient_time)
+end
+
+function benchmark_generated_functions()
+    model_def = @bugs begin
+        μ ~ dnorm(0, 0.01)
+        τ ~ dgamma(2, 2)
+        for i in 1:N
+            y[i] ~ dnorm(μ, τ)
+        end
+    end
+    data = (N=10, y=collect(range(-1.0, 1.0; length=10)))
+    graph = compile(model_def, data, (μ=0.0, τ=1.0))
+    generated = JuliaBUGS.set_evaluation_mode(
+        graph, JuliaBUGS.UseGeneratedLogDensityFunction()
+    )
+    for (adtype, model) in (
+        (AutoForwardDiff(), graph),
+        (AutoMooncake(; config=nothing), graph),
+        (AutoMooncake(; config=nothing), generated),
+        (AutoMooncakeForward(; config=nothing), generated),
+    )
+        gradient_model = JuliaBUGS.BUGSModelWithGradient(model, adtype)
+        x = JuliaBUGS.getparams(gradient_model.base_model)
+        result = minimum(
+            Chairmarks.@be LogDensityProblems.logdensity_and_gradient($gradient_model, $x)
+        )
+        println((; backend=adtype, mode=model.evaluation_mode, result.time, result.bytes))
+    end
 end
 
 # function benchmark_JuliaBUGS_model_with_Enzyme(model::JuliaBUGS.BUGSModel)
