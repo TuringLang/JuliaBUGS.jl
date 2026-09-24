@@ -185,14 +185,11 @@ end
     bugs_censored(dist, lower, upper)
 
 What BUGS's `x ~ dist C(lower, upper)` means: `x` lies between the bounds, with `dist`'s
-own density there. Either bound can be `nothing`. For a continuous `dist` this is a
-[`BUGSCensored`](@ref), so a missing censored observation becomes a parameter confined to
-the bounds, and integrating it out leaves `P(lower < X < upper)`, the censored likelihood.
-Any other `dist` gets `Distributions.censored`.
+own density there. Either bound can be `nothing`. A missing censored observation becomes
+a parameter confined to the bounds, and integrating it out leaves `P(lower ≤ X ≤ upper)`,
+the censored likelihood.
 """
-bugs_censored(dist::Distributions.ContinuousUnivariateDistribution, lower, upper) =
-    BUGSCensored(dist, lower, upper)
-bugs_censored(dist, lower, upper) = censored(dist, lower, upper)
+bugs_censored(dist::UnivariateDistribution, lower, upper) = BUGSCensored(dist, lower, upper)
 
 """
     BUGSCensored
@@ -201,8 +198,8 @@ bugs_censored(dist, lower, upper) = censored(dist, lower, upper)
 and with no mass piled on the bounds, unlike `Distributions.censored`. See
 [`bugs_censored`](@ref).
 """
-struct BUGSCensored{D<:Distributions.ContinuousUnivariateDistribution,L,U} <:
-       Distributions.ContinuousUnivariateDistribution
+struct BUGSCensored{S<:ValueSupport,D<:UnivariateDistribution{S},L,U} <:
+       UnivariateDistribution{S}
     dist::D
     lower::L
     upper::U
@@ -226,7 +223,7 @@ Distributions.pdf(d::BUGSCensored, x::Real) = exp(logpdf(d, x))
 
 # Inverting on the log scale keeps a draw finite when the bound is far into the tail, where
 # `truncated` inverts a probability that has underflowed and returns `Inf`.
-function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored)
+function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored{Continuous})
     if d.upper === nothing && d.lower !== nothing
         x = invlogccdf(d.dist, logccdf(d.dist, d.lower) - Random.randexp(rng))
         return max(x, d.lower)
@@ -234,6 +231,9 @@ function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored)
         x = invlogcdf(d.dist, logcdf(d.dist, d.upper) - Random.randexp(rng))
         return min(x, d.upper)
     end
+    return rand(rng, truncated(d.dist, d.lower, d.upper))
+end
+function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored)
     return rand(rng, truncated(d.dist, d.lower, d.upper))
 end
 

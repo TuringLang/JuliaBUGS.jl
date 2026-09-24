@@ -77,3 +77,18 @@ end
     )
     @test all(x -> isfinite(x) && x <= -40, [rand(d) for _ in 1:1000])
 end
+
+@testset "C() keeps the density inside the bounds without renormalizing" begin
+    d = bugs_censored(dnorm(0, 1), -1, 2)
+    @test (minimum(d), maximum(d)) == (-1, 2)
+    @test logpdf(d, 0.5) == logpdf(Normal(), 0.5)
+    @test pdf(d, 3.0) == 0
+    @test all(x -> -1 <= x <= 2, [rand(d) for _ in 1:100])
+
+    # A missing count known to be at least 5 carries P(X >= 5).
+    p = bugs_censored(dpois(3), 5, nothing)
+    @test p isa DiscreteUnivariateDistribution
+    @test logpdf(p, 4) == -Inf
+    @test sum(k -> pdf(p, k), 5:100) ≈ ccdf(Poisson(3), 4)
+    @test all(>=(5), [rand(p) for _ in 1:100])
+end
