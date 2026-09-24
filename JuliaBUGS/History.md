@@ -14,7 +14,7 @@
 
 ### Bug Fixes
 
-- A censored BUGS observation with a missing value now carries its censored likelihood. `dweib(r, mu)C(c, )` was lowered to `censored(dweib(r, mu), c, nothing)`, which has its mass at `c` and a density everywhere above it, so a missing value sampled as a parameter ignored the bound. It also counted as a generated quantity, because nothing observed depends on it, and was left out of the log density altogether. `C()` now lowers to `bugs_censored`, whose density is that of the distribution inside the bounds and zero outside, and a censored node always counts toward the log density. Mice's posterior medians now match JAGS.
+- A censored BUGS observation with a missing value now carries its censored likelihood. `dweib(r, mu)C(c, )` was lowered to `censored(dweib(r, mu), c, nothing)`, which puts a point mass at `c`. A missing value started there about half the time, which is minus infinity in unconstrained space, so the sampler froze. It also counted as a generated quantity, because nothing observed depends on it, and was left out of the log density altogether. `C()` now lowers to `bugs_censored`, whose density is that of the distribution inside the bounds and zero outside, for continuous and discrete distributions alike, and a censored node always counts toward the log density. Mice's posterior medians now match JAGS.
 
 ## 0.17.1
 
