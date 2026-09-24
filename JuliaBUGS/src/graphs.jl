@@ -18,7 +18,7 @@ is_deterministic(g::BUGSGraph, v::VarName) = !g[v].is_stochastic
 
 is_censored(g::BUGSGraph, v::VarName) =
     g[v].is_stochastic && MacroTools.inexpr(g[v].node_function_expr, :bugs_censored)
-carries_likelihood(g::BUGSGraph, v::VarName) = is_observation(g, v) || is_censored(g, v)
+carries_likelihood(g, v) = is_observation(g, v) || is_censored(g, v)
 
 """
     find_generated_quantities_variables(g::BUGSGraph)
