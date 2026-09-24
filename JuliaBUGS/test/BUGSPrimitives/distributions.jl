@@ -61,3 +61,19 @@ end
     @test model.transformed_param_length == 1
     @test isfinite(LogDensityProblems.logdensity(model, [0.3]))
 end
+
+@testset "a C() draw stays finite with its bound far into the tail" begin
+    # dweib(1, 9) survives past 149 with probability exp(-1341), which underflows.
+    d = JuliaBUGS.BUGSPrimitives.bugs_censored(
+        JuliaBUGS.BUGSPrimitives.dweib(1, 9), 149, nothing
+    )
+    draws = [rand(d) for _ in 1:1000]
+    @test all(x -> isfinite(x) && x >= 149, draws)
+    # The excess over the bound is exponential with rate 9, the Weibull being memoryless at shape 1.
+    @test mean(draws .- 149) ≈ 1 / 9 rtol = 0.15
+
+    d = JuliaBUGS.BUGSPrimitives.bugs_censored(
+        JuliaBUGS.BUGSPrimitives.dnorm(0, 1), nothing, -40
+    )
+    @test all(x -> isfinite(x) && x <= -40, [rand(d) for _ in 1:1000])
+end

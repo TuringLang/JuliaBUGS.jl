@@ -224,7 +224,16 @@ function Distributions.logpdf(d::BUGSCensored, x::Real)
 end
 Distributions.pdf(d::BUGSCensored, x::Real) = exp(logpdf(d, x))
 
+# Inverting on the log scale keeps a draw finite when the bound is far into the tail, where
+# `truncated` inverts a probability that has underflowed and returns `Inf`.
 function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored)
+    if d.upper === nothing && d.lower !== nothing
+        x = invlogccdf(d.dist, logccdf(d.dist, d.lower) - Random.randexp(rng))
+        return max(x, d.lower)
+    elseif d.lower === nothing && d.upper !== nothing
+        x = invlogcdf(d.dist, logcdf(d.dist, d.upper) - Random.randexp(rng))
+        return min(x, d.upper)
+    end
     return rand(rng, truncated(d.dist, d.lower, d.upper))
 end
 
