@@ -109,7 +109,6 @@ const BUGS_DISTRIBUTIONS = [
     :RightTruncatedFlat,
     :TruncatedFlat,
     :bugs_censored,
-    :BUGSCensored,
 ]
 
 # functions
@@ -177,7 +176,6 @@ export dnorm,
     LeftTruncatedFlat,
     RightTruncatedFlat,
     TruncatedFlat,
-    bugs_censored,
-    BUGSCensored
+    bugs_censored
 
 end

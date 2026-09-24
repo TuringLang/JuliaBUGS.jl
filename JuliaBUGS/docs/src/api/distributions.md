@@ -7,6 +7,8 @@ ddexp
 dflat
 Flat
 TruncatedFlat
+bugs_censored
+JuliaBUGS.BUGSPrimitives.BUGSCensored
 dexp
 dchisqr
 dweib
