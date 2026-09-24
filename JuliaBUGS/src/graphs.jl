@@ -1,6 +1,7 @@
 struct NodeInfo{F}
     is_stochastic::Bool
     is_observed::Bool
+    is_censored::Bool
     node_function_expr::Expr
     node_function::F
     node_args::Tuple{Vararg{Symbol}}
@@ -16,8 +17,7 @@ is_model_parameter(g::BUGSGraph, v::VarName) = g[v].is_stochastic && !g[v].is_ob
 is_observation(g::BUGSGraph, v::VarName) = g[v].is_stochastic && g[v].is_observed
 is_deterministic(g::BUGSGraph, v::VarName) = !g[v].is_stochastic
 
-is_censored(g::BUGSGraph, v::VarName) =
-    g[v].is_stochastic && MacroTools.inexpr(g[v].node_function_expr, :bugs_censored)
+is_censored(g::BUGSGraph, v::VarName) = g[v].is_censored
 carries_likelihood(g, v) = is_observation(g, v) || is_censored(g, v)
 
 """
