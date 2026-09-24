@@ -99,6 +99,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "inference_mh" => () -> include("advanced_mh.jl"),
     "inference_slice_sampling" => () -> include("ext/JuliaBUGSSliceSamplingExt.jl"),
     "inference_marginalization" => () -> include("model/auto_marginalization_sampling.jl"),
+    "inference_nested_cut" => () -> include("nested_cut.jl"),
     "gibbs" => () -> include("gibbs.jl"),
     "parallel_sampling" => () -> include("parallel_sampling.jl"),
     "distributed_sampling" => () -> include("distributed_sampling.jl"),

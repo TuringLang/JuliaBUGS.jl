@@ -179,6 +179,9 @@ transition_params_and_stats(::BUGSModel, ::Any, ::Any) = nothing
 
 include("gibbs.jl")
 include("advanced_mh.jl")
+include("nested_cut.jl")
+
+export cut_upstream_model, cut_downstream_model, NestedCut
 
 include("source_gen.jl")
 

@@ -746,20 +746,24 @@ function _create_modified_model(
         model.graph_evaluation_data.fixed_parameters
     ),
     preserve_generated_quantities::Bool=true,
+    generated_quantities::Union{Nothing,Set{<:VarName}}=nothing,
 )
+    explicit_generated_quantities = generated_quantities
     # Preserve the generated-quantity policy, but only for variables that still
     # have no observed descendants in the modified graph. Conditioning a former
     # generated quantity makes it an observation, so its ancestors may need to
     # move back into the model-parameter partition.
     fixed_parameter_set = Set{VarName}(fixed_parameters)
-    generated_quantity_set = if preserve_generated_quantities
+    generated_quantity_set = if !isnothing(explicit_generated_quantities)
+        explicit_generated_quantities
+    elseif preserve_generated_quantities
         generated_quantity_policy_model = if isempty(fixed_parameter_set)
             isnothing(model.base_model) ? model : model.base_model
         else
             model
         end
         base_generated_quantities = Set(
-            generated_quantities(generated_quantity_policy_model)
+            JuliaBUGS.Model.generated_quantities(generated_quantity_policy_model)
         )
         surviving_generated_quantities = find_generated_quantities_variables(
             new_graph; fixed_parameters=fixed_parameter_set

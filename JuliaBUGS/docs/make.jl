@@ -32,6 +32,7 @@ makedocs(;
             "Working with Models" => [
                 "Generated Quantities" => "inference/generated_quantities.md",
                 "Fixing Variables (`fix` / `unfix`)" => "inference/fixing.md",
+                "Cut Inference (`cut` / `NestedCut`)" => "inference/cut.md",
                 "Model as a Distribution" => "model_as_distribution.md",
             ],
         ],

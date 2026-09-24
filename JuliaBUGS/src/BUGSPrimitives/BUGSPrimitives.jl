@@ -40,6 +40,7 @@ const BUGS_FUNCTIONS = (
     :cexpexp,
     :cloglog,
     :cos,
+    :cut,
     :equals,
     :exp,
     :icloglog,
@@ -113,6 +114,7 @@ const BUGS_DISTRIBUTIONS = [
 # functions
 export cloglog,
     cexpexp,
+    cut,
     equals,
     icloglog,
     ilogit,

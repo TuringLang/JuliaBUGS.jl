@@ -20,6 +20,7 @@ include("utils.jl")
 include("bugsmodel.jl")
 include("evaluation.jl")
 include("abstractppl.jl")
+include("cut.jl")
 include("logdensityproblems.jl")
 include("abstractmcmc.jl")
 include("to_distribution.jl")
@@ -28,6 +29,7 @@ include("to_distribution.jl")
 export parameters, variables, initialize!, getparams, settrans, to_distribution
 export set_evaluation_mode, set_observed_values!
 export model_parameters, generated_quantities, fixed_parameters, variable_type
+export cut_upstream_model, cut_downstream_model
 
 # Variable classification
 export VariableType, Observation, ModelParameter, TransformedParameter, GeneratedQuantity

@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## Unreleased
+
+### New Features
+
+- **Cut inference with `cut` and `NestedCut`**. `phi_cut = cut(phi)` marks the boundary between an upstream module and a downstream module, and `NestedCut(upstream_sampler, downstream_sampler)` samples the cut distribution `p(φ | Z) p(θ | φ, Y)` of Plummer (2015) by alternating one upstream transition with `inner_steps` downstream transitions at fixed `φ`. `cut_upstream_model` and `cut_downstream_model` expose the two derived models. Works with both `@bugs` and `@model`, and with any stage sampler a `Gibbs` block accepts, including `Gibbs` itself.
+
 ## 0.17.1
 
 ### Bug Fixes

@@ -254,6 +254,59 @@ struct GibbsState{E<:NamedTuple,C,T} <: AbstractGibbsState
     sub_states::T  # States from sub-samplers (HMC, NUTS, etc.)
 end
 
+function _prepare_gibbs_component_model(cond_model::BUGSModel, sampler, block_description)
+    sampler isa EnumeratedSampler || return cond_model
+    # Marginalization requires transformed mode; exact blocks are entirely discrete.
+    cond_model = settrans(cond_model, true)
+    cond_model = set_evaluation_mode(cond_model, UseAutoMarginalization())
+    cond_model.evaluation_mode isa UseAutoMarginalization || error(
+        "Could not construct the exact conditional for finite discrete Gibbs block " *
+        "$(block_description).",
+    )
+    return cond_model
+end
+
+function _component_log_density_model(cond_model::BUGSModel, sub_sampler)
+    if sub_sampler isa Tuple{<:AbstractMCMC.AbstractSampler,<:ADTypes.AbstractADType}
+        return AbstractMCMC.LogDensityModel(
+            Model.BUGSModelWithGradient(cond_model, last(sub_sampler))
+        )
+    end
+    return AbstractMCMC.LogDensityModel(cond_model)
+end
+
+# Retarget a persisted component state at the block's current values (other blocks moved).
+_sync_gibbs_component_state(::BUGSModel, _sampler, ::Nothing) = nothing
+function _sync_gibbs_component_state(cond_model::BUGSModel, sub_sampler, sub_state)
+    return AbstractMCMC.setparams!!(
+        _component_log_density_model(cond_model, sub_sampler),
+        sub_state,
+        getparams(cond_model),
+    )
+end
+function _sync_gibbs_component_state(cond_model::BUGSModel, ::Gibbs, sub_state::GibbsState)
+    return GibbsState(
+        cond_model.evaluation_env, sub_state.cached_conditioned_models, sub_state.sub_states
+    )
+end
+
+function update_gibbs_component(
+    rng::Random.AbstractRNG, cond_model::BUGSModel, sub_sampler, sub_state
+)
+    sub_state = _sync_gibbs_component_state(cond_model, sub_sampler, sub_state)
+    return gibbs_internal(rng, cond_model, sub_sampler, sub_state)
+end
+
+function gibbs_internal(
+    rng::Random.AbstractRNG, model::BUGSModel, sampler::Gibbs, state=nothing
+)
+    l_model = AbstractMCMC.LogDensityModel(model)
+    if isnothing(state)
+        _, state = AbstractMCMC.step(rng, l_model, sampler)
+    end
+    return AbstractMCMC.step(rng, l_model, sampler, state)
+end
+
 function gibbs_internal(
     rng::Random.AbstractRNG, cond_model::BUGSModel, ::EnumeratedSampler, _state=nothing
 )
@@ -452,17 +505,9 @@ function AbstractMCMC.step(
     for variables_to_update in keys(sampler.sampler_map)
         variables_to_condition_on = setdiff(model_parameters, variables_to_update)
         conditioned_model = AbstractPPL.condition(model, variables_to_condition_on)
-        if sampler.sampler_map[variables_to_update] isa EnumeratedSampler
-            # Marginalization requires transformed mode; exact blocks are entirely discrete.
-            conditioned_model = settrans(conditioned_model, true)
-            conditioned_model = set_evaluation_mode(
-                conditioned_model, UseAutoMarginalization()
-            )
-            conditioned_model.evaluation_mode isa UseAutoMarginalization || error(
-                "Could not construct the exact conditional for finite discrete Gibbs block " *
-                "$(variables_to_update).",
-            )
-        end
+        conditioned_model = _prepare_gibbs_component_model(
+            conditioned_model, sampler.sampler_map[variables_to_update], variables_to_update
+        )
         cached_conditioned_models[variables_to_update] = conditioned_model
     end
     sub_states = Dict{Any,Any}()
@@ -509,23 +554,7 @@ function AbstractMCMC.step(
         sub_sampler = sampler.sampler_map[variables_to_update]
         sub_state = get(state.sub_states, variables_to_update, nothing)
 
-        if !isnothing(sub_state)
-            θ_new = getparams(cond_model)
-
-            if sub_sampler isa
-                Tuple{<:AbstractMCMC.AbstractSampler,<:ADTypes.AbstractADType}
-                _, ad_backend = sub_sampler
-                logdensitymodel = AbstractMCMC.LogDensityModel(
-                    Model.BUGSModelWithGradient(cond_model, ad_backend)
-                )
-            else
-                logdensitymodel = AbstractMCMC.LogDensityModel(cond_model)
-            end
-
-            sub_state = AbstractMCMC.setparams!!(logdensitymodel, sub_state, θ_new)
-        end
-
-        evaluation_env, new_sub_state = gibbs_internal(
+        evaluation_env, new_sub_state = update_gibbs_component(
             rng, cond_model, sub_sampler, sub_state
         )
 

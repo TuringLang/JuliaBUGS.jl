@@ -152,6 +152,16 @@ function _step(x)
 end
 
 """
+    cut(x)
+
+Return `x` unchanged. Used as a marker in a model definition to separate an upstream
+module from a downstream module for cut inference (Plummer 2015); see `NestedCut`.
+"""
+function cut(x)
+    return x
+end
+
+"""
     arcsin(x)
 
 See [`asin`](@ref Base.Math.asin).
