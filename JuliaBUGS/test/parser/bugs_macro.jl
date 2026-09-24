@@ -278,6 +278,14 @@ end
             (sum(density, grid) - (density(first(grid)) + density(last(grid))) / 2) *
             step(grid)
         @test integral ≈ exp(-0.7 * 2.0) rtol = 1e-6
+
+        # Nothing observed depends on `t`, yet it must stay in the target.
+        def = @bugs(
+            "model { t ~ dexp(lambda)C(c, )\n lambda ~ dgamma(1, 1)\n y ~ dnorm(lambda, 1) }"
+        )
+        model = compile(def, (; c=2.0, t=missing, y=1.0))
+        @test isempty(model.graph_evaluation_data.generated_quantities)
+        @test LogDensityProblems.dimension(model) == 2
     end
 
     @testset "Qualified names in @bugs" begin
