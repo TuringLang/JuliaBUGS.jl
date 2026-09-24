@@ -3,7 +3,7 @@ name = "Mice: Weibull regression"
 model_def = @bugs begin
     for i in 1:M
         for j in 1:N
-            t[i, j] ~ censored(dweib(r, mu[i]), var"t.cen"[i, j], nothing)
+            t[i, j] ~ bugs_censored(dweib(r, mu[i]), var"t.cen"[i, j], nothing)
         end
         mu[i] = exp(beta[i])
         beta[i] ~ dnorm(0.0, 0.001)

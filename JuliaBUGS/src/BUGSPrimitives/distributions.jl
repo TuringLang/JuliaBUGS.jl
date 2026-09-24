@@ -182,6 +182,56 @@ function Distributions.truncated(::Flat, ::Nothing, r::Real)
 end
 
 """
+    bugs_censored(dist, lower, upper)
+
+What BUGS's `x ~ dist C(lower, upper)` means: `x` lies between the bounds, with `dist`'s
+own density there. Either bound can be `nothing`. For a continuous `dist` this is a
+[`BUGSCensored`](@ref), so a missing censored observation becomes a parameter confined to
+the bounds, and integrating it out leaves `P(lower < X < upper)`, the censored likelihood.
+Any other `dist` gets `Distributions.censored`.
+"""
+bugs_censored(dist::Distributions.ContinuousUnivariateDistribution, lower, upper) =
+    BUGSCensored(dist, lower, upper)
+bugs_censored(dist, lower, upper) = censored(dist, lower, upper)
+
+"""
+    BUGSCensored
+
+`dist`'s density restricted to `[lower, upper]` and not renormalized, unlike `truncated`,
+and with no mass piled on the bounds, unlike `Distributions.censored`. See
+[`bugs_censored`](@ref).
+"""
+struct BUGSCensored{D<:Distributions.ContinuousUnivariateDistribution,L,U} <:
+       Distributions.ContinuousUnivariateDistribution
+    dist::D
+    lower::L
+    upper::U
+end
+
+_above(d::BUGSCensored, x) = d.lower === nothing || x >= d.lower
+_below(d::BUGSCensored, x) = d.upper === nothing || x <= d.upper
+
+function Distributions.minimum(d::BUGSCensored)
+    return d.lower === nothing ? minimum(d.dist) : max(d.lower, minimum(d.dist))
+end
+function Distributions.maximum(d::BUGSCensored)
+    return d.upper === nothing ? maximum(d.dist) : min(d.upper, maximum(d.dist))
+end
+Distributions.insupport(d::BUGSCensored, x::Real) = _above(d, x) && _below(d, x)
+
+function Distributions.logpdf(d::BUGSCensored, x::Real)
+    return insupport(d, x) ? logpdf(d.dist, x) : oftype(float(logpdf(d.dist, x)), -Inf)
+end
+Distributions.pdf(d::BUGSCensored, x::Real) = exp(logpdf(d, x))
+
+function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored)
+    return rand(rng, truncated(d.dist, d.lower, d.upper))
+end
+
+Bijectors.bijector(d::BUGSCensored) =
+    Bijectors.bijector(truncated(d.dist, d.lower, d.upper))
+
+"""
     dexp(λ)
 
 Returns an instance of [Exponential](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Exponential) 

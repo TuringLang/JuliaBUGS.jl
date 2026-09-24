@@ -598,8 +598,8 @@ function __init__()
     end
 
     # The string parser rewrites BUGS `T(l, u)` and `C(l, u)` to `truncated(...)` and
-    # `censored(...)`, so those must be allowed for such programs to compile.
-    for func in [:truncated, :censored]
+    # `bugs_censored(...)`, and `censored` stays available to programs that call it.
+    for func in [:truncated, :censored, :bugs_censored]
         push!(BUGS_ALLOWED_FUNCTIONS, func)
     end
 

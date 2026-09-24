@@ -229,9 +229,9 @@ end
             true,
             true,
         ) == MacroTools.@q begin
-            a ~ censored(dwish(R[:, :], 4), 0, 1)
-            a ~ censored(dwish(R[:, :], 4), nothing, 1)
-            a ~ censored(dwish(R[:, :], 4), 0, nothing)
+            a ~ bugs_censored(dwish(R[:, :], 4), 0, 1)
+            a ~ bugs_censored(dwish(R[:, :], 4), nothing, 1)
+            a ~ bugs_censored(dwish(R[:, :], 4), 0, nothing)
             a ~ truncated(dwish(R[:, :], 4), 0, 1)
         end
     end

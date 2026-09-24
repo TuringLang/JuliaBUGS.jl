@@ -246,10 +246,10 @@ end
     end
 
     @testset "BUGS `T(,)` and `C(,)` compile without manual registration" begin
-        # The string parser rewrites `T(l, u)` / `C(l, u)` to `truncated` / `censored`;
+        # The string parser rewrites `T(l, u)` / `C(l, u)` to `truncated` / `bugs_censored`;
         # both must be in the default allowlist, or no program using them compiles.
         @test :truncated in JuliaBUGS.BUGS_ALLOWED_FUNCTIONS
-        @test :censored in JuliaBUGS.BUGS_ALLOWED_FUNCTIONS
+        @test :bugs_censored in JuliaBUGS.BUGS_ALLOWED_FUNCTIONS
 
         truncated_def = @bugs("model { x ~ dnorm(0, 1)T(0, ) }")
         model = compile(truncated_def, NamedTuple())
@@ -260,6 +260,24 @@ end
         model = compile(censored_def, (c=0.5,))
         @test model isa JuliaBUGS.BUGSModel
         @test model.evaluation_env.y <= 0.5
+    end
+
+    # BUGS reads `t ~ dexp(lambda)C(c, )` with `t` missing as "t exceeds c". The missing
+    # value is a parameter carrying the untruncated density above `c`, so integrating it
+    # out leaves the survival probability exp(-lambda c).
+    @testset "a missing value censored by C() carries the censored likelihood" begin
+        def = @bugs("model { t ~ dexp(lambda)C(c, ) }")
+        model = compile(def, (; lambda=0.7, c=2.0, t=missing))
+        @test JuliaBUGS.parameters(model) == [@varname(t)]
+
+        model = JuliaBUGS.settrans(model, false)
+        density(t) = exp(Base.invokelatest(LogDensityProblems.logdensity, model, [t]))
+        @test Base.invokelatest(LogDensityProblems.logdensity, model, [1.0]) == -Inf
+        grid = range(2.0, 60.0; length=100_001)
+        integral =
+            (sum(density, grid) - (density(first(grid)) + density(last(grid))) / 2) *
+            step(grid)
+        @test integral ≈ exp(-0.7 * 2.0) rtol = 1e-6
     end
 
     @testset "Qualified names in @bugs" begin
