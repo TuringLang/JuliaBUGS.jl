@@ -127,6 +127,7 @@ macro bugs(prog::String, replace_period::Bool=true, no_enclosure::Bool=false)
 end
 
 include("graphs.jl")
+include("opaque_closure.jl")
 include("compiler_pass.jl")
 
 """
@@ -468,7 +469,7 @@ function compile(
 
     # If adtype provided, wrap with gradient capabilities
     if adtype !== nothing
-        return Base.invokelatest(Model.BUGSModelWithGradient, base_model, adtype)
+        return Model.BUGSModelWithGradient(base_model, adtype)
     end
 
     return base_model
