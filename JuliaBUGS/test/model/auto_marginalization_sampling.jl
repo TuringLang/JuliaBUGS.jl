@@ -80,7 +80,7 @@ using JuliaBUGS.Model:
         progress=false,
         chain_type=MCMCChains.Chains,
         n_adapts=n_adapts,
-        init_params=θ0,
+        initial_params=θ0,
         discard_initial=n_adapts,
     )
 

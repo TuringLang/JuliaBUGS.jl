@@ -107,7 +107,7 @@ end
             n_samples,
             n_chains;
             n_adapts=n_adapts,
-            init_params=[rand(StableRNG(i), D) for i in 1:n_chains],
+            initial_params=[rand(StableRNG(i), D) for i in 1:n_chains],
             discard_initial=n_adapts,
             progress=false,
         )
