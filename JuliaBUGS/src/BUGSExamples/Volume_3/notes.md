@@ -1,13 +1,25 @@
-1. Camel has partially observed two dimensional Gaussian random variables. In general, this doesn't work, but in case of Gaussian, the analytical form is available
-2. discrete r.v. `S`
-3. `dloglike`
-4. several shapes, work
-5. works
-6. only deterministic computation
-7. has loops in coarse graph; step dependency with `var"pi"[k, t, s] = inprod(y[k, t - 1, :], Lambda[k, t, :, s])` and `y[k, t, 1:S] ~ dmulti(var"pi"[k, t, :], 1)`
-8. self loop: `pi[k, t, s] = inprod(pi[k, t - 1, :], Lambda[k, t, :, s])`
-9. self loop: `pi[n, k, t, s] = inprod(pi[n, k, t - 1, :], Lambda[n, k, t, :, s])`
-10. lots of loops; for instance `beta[1]` and `alpha[1]`; `interp.lin`
-11. works
-12. works
-13. similar to 10; contain loops; also `interp.lin`
+# Volume 3 notes
+
+Status of each source file in this directory. "Registered" means the file is included from
+`BUGSExamples.jl` and appears in `BUGSExamples.VOLUME_3`.
+
+| File | Key | Registered | Notes |
+|---|---|---|---|
+| 01_Camel | | no | Partially observed two-dimensional Gaussian (`Y[5, 1:2]`). Not supported in general; the Gaussian case has an analytic form, so this could be revisited. |
+| 02_Eye_Tracking | `eye_tracking` | yes | Dirichlet process prior with a discrete `S`. Compiles; 123 parameters. |
+| 03_Fire | | no | Uses `dloglik`, which is not in the `@bugs` function allowlist. |
+| 04_Circle, 04_HollowSquare, 04_Parallelogram, 04_Ring, 04_SquareMinusCircle | `circle`, `hollow_square`, `parallelogram`, `ring`, `square_minus_circle` | yes | The Fun Shapes set. Two parameters each, no observed data. |
+| 05_Hepatitis | `hepatitis` | yes | 248 parameters. |
+| 05_Hepatitis_ME | `hepatitis_me` | yes | The measurement-error variant. Its reference results used to be `05_Hepatitis.jl`'s, because the file passed `reference_results` rather than its own `reference_results_me`; fixed. |
+| 06_Hips1 | `hips1` | yes | Closed-form variant, so it compiles to zero free parameters. |
+| 07_Hips2 | `hips2` | yes | 720 parameters. |
+| 08_Hips3 | `hips3` | yes | 12 parameters. |
+| 09_Hips4 | `hips4` | yes | 20 parameters. |
+| 10_Jama | | no | Uses `interp.lin`, which is not in the `@bugs` function allowlist. |
+| 11_PigWeights | `pig_weights` | yes | 3 parameters. |
+| 12_Pines | `bayes_factors` | yes | Carlin and Chib pseudo-priors. 7 parameters. |
+| 13_St_Veit | | no | Uses `interp.lin`, as 10_Jama does. |
+
+Earlier revisions of this file recorded self-loops or coarse-graph loops as the blocker for
+Hips2 through Hips4 and a discrete-variable problem for Eye Tracking. Those four compile as
+written and are registered.

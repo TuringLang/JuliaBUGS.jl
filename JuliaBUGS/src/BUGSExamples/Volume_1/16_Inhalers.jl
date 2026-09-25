@@ -193,4 +193,5 @@ inits_alternative = (beta = 1, pi = 1, kappa = 0, a = [3, 4, 5], tau = 0.1)
 
 reference_results = nothing
 
-inhalers = Example(name, model_def, data, inits, inits_alternative, reference_results)
+inhalers = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)

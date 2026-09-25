@@ -25,7 +25,7 @@
 | 2 | Dugongs | Yes | |
 | 2 | Orange | No | |
 | 2 | MvOrange | No | Possible numerical issues or funnel effects |
-| 2 | Biopsies | Error | Type conversion issue between Int and Float for HMC |
+| 2 | Biopsies | Error | Type conversion issue between Int and Float for HMC. Note: until recently this example was also being given another example's initial values, because its own were misspelled `intis`; the HMC status here predates that fix and has not been rechecked. |
 | 2 | Eyes | Error | Same issue as Biopsies |
 | 2 | Hearts | Error | Same issue as Eyes |
 | 2 | Air | Yes | |
@@ -39,5 +39,9 @@
 | 2 | Endo | Yes | |
 | 2 | Stagnant | N/A | Demonstration of failed convergence |
 | 2 | Asia | No | Issues with many categorical variables |
-| 2 | Pigs | No | Issues with many categorical variables |
-| 2 | Simulated data | N/A | Demonstration, not for inference testing |
+| 2 | Pigs | No | The source file in this repository is empty. |
+| 2 | Simulated data | N/A | The source file in this repository is empty. Demonstration, not for inference testing |
+
+Volume 3 is tracked separately in [Volume_3/notes.md](Volume_3/notes.md).
+Volume 4 is not registered; only Methadone exists in this repository, and its data file
+is too large to load at package load time.

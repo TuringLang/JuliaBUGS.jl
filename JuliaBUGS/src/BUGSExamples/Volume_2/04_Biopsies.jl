@@ -191,7 +191,7 @@ data = (ns = 157,
                 0 0 0 3
                 0 0 0 3])
 
-intis = (p = [0.25, 0.25, 0.25, 0.25],
+inits = (p = [0.25, 0.25, 0.25, 0.25],
     error = [missing missing missing missing
              0.5 0.5 missing missing
              0.33333333 0.33333333 0.33333333 missing])

@@ -79,6 +79,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("opaque_closure.jl")
         include("model/utils.jl")
         include("model/bugsmodel.jl")
+        include("bugsexamples.jl")
     end,
     "compilation_source_gen" => () -> include("source_gen.jl"),
     "model_operations" => () -> begin
