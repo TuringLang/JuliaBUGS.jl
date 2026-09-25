@@ -72,13 +72,13 @@ model = initialize!(model, initial_θ)
 
 ## Initial values passed to a sampler
 
-Samplers using the `AbstractMCMC` interface accept a flat parameter vector through `init_params`:
+Samplers using the `AbstractMCMC` interface accept a flat parameter vector through `initial_params`:
 
 ```julia
 initial_θ = JuliaBUGS.getparams(model)
 chain = AbstractMCMC.sample(
     model, sampler, n_samples;
-    init_params=initial_θ,
+    initial_params=initial_θ,
     # other sampler options...
 )
 ```
