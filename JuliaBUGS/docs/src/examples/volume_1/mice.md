@@ -76,7 +76,7 @@ D = LogDensityProblems.dimension(model)
 chain = AbstractMCMC.sample(
     model, NUTS(0.8), n_samples;
     chain_type=VNChain, n_adapts=n_adapts,
-    init_params=rand(D), discard_initial=n_adapts,
+    initial_params=rand(D), discard_initial=n_adapts,
 )
 summarystats(chain)
 ```
