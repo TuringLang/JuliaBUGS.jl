@@ -12,6 +12,11 @@
 - Preparing `BUGSModelWithGradient` during package precompilation now throws an `ArgumentError`. Store the base model and prepare gradients after package loading.
 - The serialized representation of `BUGSModelWithGradient` has changed. Recreate gradient wrappers saved by earlier versions rather than loading them directly.
 
+### Bug Fixes
+
+- `dmnorm`, `dmt`, and `dwish` symmetrize their matrix argument before factorizing it. A precision matrix computed from parameters, such as the inverse of one under ForwardDiff, can come out a rounding error from symmetric, and was rejected as not Hermitian although it is positive definite. Jaws and the multivariate Orange Trees now sample.
+- A point whose precision or scale matrix is not positive definite has log density `-Inf` instead of raising `PosDefException`, as a point outside the support already did, so a sampler rejects it and moves on. The gradient rejects such a point only where the density is not finite too, so a failure that only differentiation produces is still reported. Birats, whose NUTS step-size search overflowed into such a point, now converges.
+
 ## 0.17.1
 
 ### Bug Fixes

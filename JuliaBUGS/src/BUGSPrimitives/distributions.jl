@@ -371,6 +371,12 @@ function dbeta(a, b)
     return Beta(a, b)
 end
 
+# A precision or scale matrix computed from parameters can come out a rounding error
+# away from symmetric, as the inverse of a matrix of dual numbers does, and `PDMat`
+# rejects it as not Hermitian. Averaging it with its transpose is exact for a matrix
+# that is already symmetric, and cheap next to the Cholesky factorization that follows.
+_pdmat(M::AbstractMatrix) = PDMat((M .+ transpose(M)) ./ 2)
+
 # `Distributions.MvNormalCanon` provides this parameterization, but it errors on ReverseDiff (others, including 
 # ForwardDiff, Mooncake, etc. seems to be fine). The reason for error seems to be that `MvNormalCanon` uses 
 # `PDMat` and `PDMat` uses `PDMats.quad` which does `chol_upper` (https://github.com/JuliaStats/PDMats.jl/blob/5e7d88ec271df4bd12accc16eb56e7a9e14043fb/src/chol.jl#L49-L69)
@@ -387,7 +393,7 @@ p(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
 where ``k`` is the dimension of `x`.
 """
 function dmnorm(μ::AbstractVector, T::AbstractMatrix)
-    return MvNormal(μ, _inv(PDMat(T)))
+    return MvNormal(μ, _inv(_pdmat(T)))
 end
 
 """
@@ -402,7 +408,7 @@ p(x|k,μ,Σ) = \\frac{\\Gamma((k+d)/2)}{\\Gamma(k/2) (k\\pi)^{p/2} |Σ|^{1/2}} \
 where ``p`` is the dimension of ``x``.
 """
 function dmt(μ::AbstractVector, T::AbstractMatrix, k)
-    return MvTDist(k, μ, _inv(PDMat(T)))
+    return MvTDist(k, μ, _inv(_pdmat(T)))
 end
 
 """
@@ -424,7 +430,7 @@ function dwish(R::AbstractMatrix, k)
             ),
         )
     end
-    return Wishart(k, _inv(PDMat(R)))
+    return Wishart(k, _inv(_pdmat(R)))
 end
 
 """
