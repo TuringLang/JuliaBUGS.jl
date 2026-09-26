@@ -116,7 +116,7 @@ summarystats(chain)
 
 The resulting chain is a standard FlexiChains object (pass `chain_type = MCMCChains.Chains` if you
 prefer MCMCChains), so your existing diagnostics, plotting, and post-processing code carries over
-unchanged. Initial values can be supplied with `initialize!(model, inits)` or via `init_params`.
+unchanged. Initial values can be supplied with `initialize!(model, inits)` or via `initial_params`.
 
 For a full walkthrough from installation to results, start with
 [Getting Started](../getting_started.md).
