@@ -11,6 +11,11 @@
 - Cached model specializations can retain earlier helper definitions. After redefining a helper or custom primitive, recompile the model and prepare its gradients again; continued evaluation of the old model is unsupported.
 - Preparing `BUGSModelWithGradient` during package precompilation now throws an `ArgumentError`. Store the base model and prepare gradients after package loading.
 - The serialized representation of `BUGSModelWithGradient` has changed. Recreate gradient wrappers saved by earlier versions rather than loading them directly.
+- Inside a model, `censored` has the BUGS `C()` meaning instead of that of `Distributions.censored`. An observed value exactly on a censoring bound contributes the density there, as in BUGS, rather than the probability mass `Distributions.censored` puts on the bound. Code outside a model still gets `Distributions.censored`.
+
+### Bug Fixes
+
+- A censored BUGS observation with a missing value now carries its censored likelihood. `dweib(r, mu)C(c, )` lowers to `censored(dweib(r, mu), c, nothing)`, which was `Distributions.censored` and put a point mass at `c`. A missing value started there about half the time, which is minus infinity in unconstrained space, so the sampler froze. It also counted as a generated quantity, because nothing observed depends on it, and was left out of the log density altogether. `censored` in a model now keeps the density of the distribution inside the bounds and zero outside, with no mass on the bounds, for continuous and discrete distributions alike, and a censored node always counts toward the log density. Mice's posterior medians now match JAGS.
 
 ### Bug Fixes
 

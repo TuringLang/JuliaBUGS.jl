@@ -182,6 +182,68 @@ function Distributions.truncated(::Flat, ::Nothing, r::Real)
 end
 
 """
+    censored(dist, lower, upper)
+
+What BUGS's `x ~ dist C(lower, upper)` means, and what `censored` means in a JuliaBUGS
+model: `x` lies between the bounds, with `dist`'s own density there. Either bound can be
+`nothing`. A missing censored observation becomes a parameter confined to the bounds, and
+integrating it out leaves `P(lower ≤ X ≤ upper)`, the censored likelihood.
+
+Unlike `Distributions.censored`, it puts no mass on the bounds. Code outside a model still
+gets `Distributions.censored`.
+"""
+censored(dist::UnivariateDistribution, lower, upper) = BUGSCensored(dist, lower, upper)
+
+"""
+    BUGSCensored
+
+`dist`'s density restricted to `[lower, upper]` and not renormalized, unlike `truncated`,
+and with no mass piled on the bounds, unlike `Distributions.censored`. See
+[`JuliaBUGS.BUGSPrimitives.censored`](@ref).
+"""
+struct BUGSCensored{S<:ValueSupport,D<:UnivariateDistribution{S},L,U} <:
+       UnivariateDistribution{S}
+    dist::D
+    lower::L
+    upper::U
+end
+
+_above(d::BUGSCensored, x) = d.lower === nothing || x >= d.lower
+_below(d::BUGSCensored, x) = d.upper === nothing || x <= d.upper
+
+function Distributions.minimum(d::BUGSCensored)
+    return d.lower === nothing ? minimum(d.dist) : max(d.lower, minimum(d.dist))
+end
+function Distributions.maximum(d::BUGSCensored)
+    return d.upper === nothing ? maximum(d.dist) : min(d.upper, maximum(d.dist))
+end
+Distributions.insupport(d::BUGSCensored, x::Real) = _above(d, x) && _below(d, x)
+
+function Distributions.logpdf(d::BUGSCensored, x::Real)
+    return insupport(d, x) ? logpdf(d.dist, x) : oftype(float(logpdf(d.dist, x)), -Inf)
+end
+Distributions.pdf(d::BUGSCensored, x::Real) = exp(logpdf(d, x))
+
+# Inverting on the log scale keeps a draw finite when the bound is far into the tail, where
+# `truncated` inverts a probability that has underflowed and returns `Inf`.
+function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored{Continuous})
+    if d.upper === nothing && d.lower !== nothing
+        x = invlogccdf(d.dist, logccdf(d.dist, d.lower) - Random.randexp(rng))
+        return max(x, d.lower)
+    elseif d.lower === nothing && d.upper !== nothing
+        x = invlogcdf(d.dist, logcdf(d.dist, d.upper) - Random.randexp(rng))
+        return min(x, d.upper)
+    end
+    return rand(rng, truncated(d.dist, d.lower, d.upper))
+end
+function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored)
+    return rand(rng, truncated(d.dist, d.lower, d.upper))
+end
+
+Bijectors.bijector(d::BUGSCensored) =
+    Bijectors.bijector(truncated(d.dist, d.lower, d.upper))
+
+"""
     dexp(λ)
 
 Returns an instance of [Exponential](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Exponential) 

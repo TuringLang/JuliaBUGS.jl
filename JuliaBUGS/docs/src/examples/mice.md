@@ -24,10 +24,6 @@ where the Normal prior on each $\beta_i$ is written in BUGS' mean/precision para
 
 ```@example mice
 using JuliaBUGS
-using Distributions
-
-# `censored` comes from Distributions; make it available inside `@bugs`:
-JuliaBUGS.@bugs_primitive censored
 
 mice = @bugs begin
     for i in 1:M
@@ -95,7 +91,7 @@ summarystats(chain)
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.mice.inits` and can be applied with `initialize!(model, inits)`.
 
 !!! note "Censored observations"
-    Several survival times in this example are right-censored: the animal was still alive when the study ended, so its exact survival time is unknown and only known to exceed the recorded follow-up time. The `censored(dweib(r, mu[i]), var"t.cen"[i, j], nothing)` term encodes this — for a censored animal the likelihood contribution is the Weibull survival probability beyond `var"t.cen"[i, j]` rather than a density at an observed time. This is handled automatically during sampling; you do not need to treat the censored entries specially.
+    Several survival times in this example are right-censored: the animal was still alive when the study ended, so its survival time is missing and known only to exceed the follow-up time `t.cen[i, j]`. Inside a model, `censored(dweib(r, mu[i]), var"t.cen"[i, j], nothing)` is the BUGS `dweib(r, mu[i])C(t.cen[i, j], )`. A censored animal then contributes the Weibull probability of surviving beyond `t.cen[i, j]`, rather than a density at an observed time.
 
 ## Results
 

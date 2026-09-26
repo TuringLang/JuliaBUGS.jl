@@ -25,6 +25,8 @@ function JuliaBUGS.is_observation(g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}
     return g[v].node_type == 2
 end
 
+JuliaBUGS.is_censored(::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}, ::Int) = false
+
 function JuliaBUGS.is_deterministic(g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}, v::Int)
     return g[v].node_type == 3
 end

@@ -61,3 +61,30 @@ end
     @test model.transformed_param_length == 1
     @test isfinite(LogDensityProblems.logdensity(model, [0.3]))
 end
+
+@testset "a C() draw stays finite with its bound far into the tail" begin
+    # dweib(1, 9) survives past 149 with probability exp(-1341), which underflows.
+    d = JuliaBUGS.BUGSPrimitives.censored(dweib(1, 9), 149, nothing)
+    draws = [rand(d) for _ in 1:1000]
+    @test all(x -> isfinite(x) && x >= 149, draws)
+    # The excess over the bound is exponential with rate 9, the Weibull being memoryless at shape 1.
+    @test mean(draws .- 149) ≈ 1 / 9 rtol = 0.15
+
+    d = JuliaBUGS.BUGSPrimitives.censored(dnorm(0, 1), nothing, -40)
+    @test all(x -> isfinite(x) && x <= -40, [rand(d) for _ in 1:1000])
+end
+
+@testset "C() keeps the density inside the bounds without renormalizing" begin
+    d = JuliaBUGS.BUGSPrimitives.censored(dnorm(0, 1), -1, 2)
+    @test (minimum(d), maximum(d)) == (-1, 2)
+    @test logpdf(d, 0.5) == logpdf(Normal(), 0.5)
+    @test pdf(d, 3.0) == 0
+    @test all(x -> -1 <= x <= 2, [rand(d) for _ in 1:100])
+
+    # A missing count known to be at least 5 carries P(X >= 5).
+    p = JuliaBUGS.BUGSPrimitives.censored(dpois(3), 5, nothing)
+    @test p isa DiscreteUnivariateDistribution
+    @test logpdf(p, 4) == -Inf
+    @test sum(k -> pdf(p, k), 5:100) ≈ ccdf(Poisson(3), 4)
+    @test all(>=(5), [rand(p) for _ in 1:100])
+end

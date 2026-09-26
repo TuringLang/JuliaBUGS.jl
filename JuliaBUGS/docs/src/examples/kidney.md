@@ -20,10 +20,6 @@ The disease effect uses a corner-point constraint: the first level is fixed to z
 
 ```@example kidney
 using JuliaBUGS
-using Distributions
-
-# `censored` comes from Distributions; make it available inside `@bugs`:
-JuliaBUGS.@bugs_primitive censored
 
 kidney = @bugs begin
     for i in 1:N
@@ -90,7 +86,7 @@ summarystats(chain)
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.kidney.inits` and can be applied with `initialize!(model, inits)`.
 
 !!! note "Censored observations"
-    Several recurrence times in this data set are censored — we know only that the patient had gone at least `t.cen` days without a recurrence. This is expressed in the model with `censored(dweib(r, mu[i, j]), var"t.cen"[i, j], nothing)`, which lower-censors the Weibull distribution at the recorded censoring time. JuliaBUGS handles the censored likelihood automatically, so no special sampler setup is required.
+    Several recurrence times in this data set are censored: the time is missing and known only to exceed `t.cen[i, j]`, the time the patient was last seen without a recurrence. Inside a model, `censored(dweib(r, mu[i, j]), var"t.cen"[i, j], nothing)` is the BUGS `dweib(r, mu[i, j])C(t.cen[i, j], )`. A censored observation then contributes the Weibull probability of lasting beyond `t.cen[i, j]`, rather than a density at an observed time.
 
 ## Results
 

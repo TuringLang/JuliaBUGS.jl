@@ -32,6 +32,9 @@ export @of
 
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
+# Model code runs in this module, so `censored` there has the BUGS `C()` meaning rather
+# than that of `Distributions.censored`.
+using .BUGSPrimitives: censored
 
 include("parser/Parser.jl")
 using .Parser

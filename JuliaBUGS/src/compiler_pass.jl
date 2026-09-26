@@ -837,6 +837,10 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
     end
 
     args, node_function_expr, node_function = pass.f_dict[expr]
+    is_censored =
+        is_stochastic &&
+        Meta.isexpr(expr.args[3], :call) &&
+        expr.args[3].args[1] === :censored
 
     vn = if lhs isa Symbol
         AbstractPPL.VarName{lhs}()
@@ -848,7 +852,13 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
         pass.g,
         vn,
         NodeInfo(
-            is_stochastic, is_observed, node_function_expr, node_function, args, loop_vars
+            is_stochastic,
+            is_observed,
+            is_censored,
+            node_function_expr,
+            node_function,
+            args,
+            loop_vars,
         ),
     )
     if lhs isa Symbol
