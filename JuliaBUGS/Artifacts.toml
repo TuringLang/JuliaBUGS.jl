@@ -1,0 +1,7 @@
+[BUGSExamples]
+git-tree-sha1 = "a26381b9039d3f53a9a1dd3422499f55b92b7816"
+lazy = true
+
+    [[BUGSExamples.download]]
+    sha256 = "4fc00333197657fd734e105b88cc616fc3e6cc39a27dc796300f355c6b831aad"
+    url = "https://github.com/TuringLang/JuliaBUGS.jl/releases/download/BUGSExamples-a26381b9039d/BUGSExamples.tar.gz"

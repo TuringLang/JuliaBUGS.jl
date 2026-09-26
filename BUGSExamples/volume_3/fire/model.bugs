@@ -1,0 +1,29 @@
+model{
+    for (i in 1:N) {
+        dummy[i] <- 0
+        dummy[i] ~ dloglik(logLike[i])
+        logLike[i] <- log(r / phi(alpha * sigma)) * (1 - stepxtheta[i]) + log(1 - r) * stepxtheta[i] +
+                    (-0.5 * log(2 * pi) - log(x[i]) - log(sigma) - 0.5 * pow((log(x[i]) - mu )/ sigma, 2)) *
+                    (1 - stepxtheta[i]) +
+                    (log(alpha) + alpha * log(theta) - (alpha + 1)* log(x[i])) * stepxtheta[i]
+        
+        stepxtheta[i] <- step(x[i] - theta)
+    }
+    
+    theta ~ dgamma(0.001, 0.001) # dexp(0.5) #
+    alpha ~ dgamma(0.001, 0.001) # dexp(0.5) #
+    sigma ~ dgamma(0.001, 0.001) # dexp(0.5) #
+    
+    r <- (sqrt(2 *pi) * alpha * sigma * phi(alpha * sigma))
+        / (sqrt(2 * pi) * alpha * sigma * phi(alpha * sigma) + exp(-0.5 * pow(alpha * sigma, 2)))
+    mu <- log(theta) - alpha * pow(sigma, 2)
+    pi <- 3.14159565
+    
+    # xf prediction from fitted distribution
+    xf <- xa * delta + xb * (1 - delta)
+    xa ~ dlnorm(mu, tau)T(, theta)
+    xb ~ dpar(alpha, theta)
+    
+    delta ~ dbern(r)
+    tau <- 1 / pow(sigma, 2)
+}

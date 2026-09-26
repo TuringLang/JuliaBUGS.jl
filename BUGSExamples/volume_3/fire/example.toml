@@ -1,0 +1,2 @@
+name = "Fire: A lognormal-Pareto distribution"
+blocked = "dloglik is not an allowed function in @bugs"
