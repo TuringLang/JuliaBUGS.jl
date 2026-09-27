@@ -26,6 +26,15 @@ using JuliaBUGS.BUGSPrimitives: censored, dexp, dgamma
     lambda ~ dgamma(1, 1)
 end
 end
+
+module CensoredAsValue
+using JuliaBUGS: @model
+using Distributions: Normal
+censored = 3
+@model function normal_model((; x))
+    x ~ Normal(0, 1)
+end
+end
 #! format: on
 
 @testset "model macro" begin
@@ -461,4 +470,13 @@ end
         @test Base.invokelatest(LogDensityProblems.logdensity, model, [0.0]) ≈ expected
         @test Base.invokelatest(LogDensityProblems.logdensity, generated, [0.0]) ≈ expected
     end
+end
+
+@testset "a module's `censored` that is not a function leaves generated mode working" begin
+    model = Base.invokelatest(CensoredAsValue.normal_model, (;))
+    generated = JuliaBUGS.set_evaluation_mode(
+        model, JuliaBUGS.UseGeneratedLogDensityFunction()
+    )
+    @test Base.invokelatest(LogDensityProblems.logdensity, generated, [0.5]) ≈
+        logpdf(Normal(0, 1), 0.5)
 end

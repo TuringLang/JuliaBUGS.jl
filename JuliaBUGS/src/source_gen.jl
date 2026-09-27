@@ -556,11 +556,9 @@ end
 
 # The generated function resolves names in JuliaBUGS, where `censored` has the BUGS
 # meaning, while the node functions resolve them in `eval_module`. Under `@model` that is
-# the caller's module, so `censored` is pinned to the function the node functions call.
+# the caller's module, so `censored` is pinned to the binding the node functions call.
 function __pin_censored(expr, eval_module::Module)
-    isdefined(eval_module, :censored) || return expr
-    f = getglobal(eval_module, :censored)
-    ref = GlobalRef(parentmodule(f), nameof(f))
+    ref = GlobalRef(eval_module, :censored)
     return MacroTools.postwalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :call) && sub_expr.args[1] === :censored
             return Expr(:call, ref, sub_expr.args[2:end]...)
