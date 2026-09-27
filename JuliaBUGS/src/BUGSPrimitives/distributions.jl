@@ -240,9 +240,6 @@ function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored)
     return rand(rng, truncated(d.dist, d.lower, d.upper))
 end
 
-Bijectors.bijector(d::BUGSCensored) =
-    Bijectors.bijector(truncated(d.dist, d.lower, d.upper))
-
 """
     dexp(λ)
 

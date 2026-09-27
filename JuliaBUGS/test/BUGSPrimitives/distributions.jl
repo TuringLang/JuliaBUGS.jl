@@ -88,3 +88,12 @@ end
     @test sum(k -> pdf(p, k), 5:100) ≈ ccdf(Poisson(3), 4)
     @test all(>=(5), [rand(p) for _ in 1:100])
 end
+
+@testset "a C() bijector differentiates cleanly with its bound far into the tail" begin
+    # Built through `truncated`, the bijector ran CDFs that ReverseDiff turned into NaN here.
+    function f(x)
+        d = JuliaBUGS.BUGSPrimitives.censored(Weibull(1.0, 1 / x[1]), 149.0, nothing)
+        return x[1] + Bijectors.bijector(d)(150.0)
+    end
+    @test ReverseDiff.gradient(f, [9.0]) == [1.0]
+end
