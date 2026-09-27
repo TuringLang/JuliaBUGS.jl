@@ -802,7 +802,7 @@ using JuliaBUGS.Model:
             50;
             progress=false,
             n_adapts=20,
-            init_params=θ0,
+            initial_params=θ0,
             discard_initial=20,
         )
         # Ensure sampling executed without errors and samples are reasonable
