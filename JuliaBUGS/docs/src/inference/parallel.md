@@ -16,7 +16,7 @@ samples_and_stats = AbstractMCMC.sample(
     n_chains;
     chain_type = VNChain,
     n_adapts = n_adapts,
-    init_params = [initial_θ for _ = 1:n_chains],
+    initial_params = [initial_θ for _ = 1:n_chains],
     discard_initial = n_adapts,
 )
 ```
@@ -24,7 +24,7 @@ samples_and_stats = AbstractMCMC.sample(
 The key differences from single-chain sampling:
 - `AbstractMCMC.MCMCThreads()`: enables multi-threaded sampling
 - `n_chains`: number of chains to sample in parallel
-- `init_params`: vector of initial parameters (one per chain)
+- `initial_params`: vector of initial parameters (one per chain)
 
 ## Distributed Sampling (Multi-process)
 
@@ -52,7 +52,7 @@ samples_and_stats = AbstractMCMC.sample(
     n_chains;
     chain_type = VNChain,
     n_adapts = n_adapts,
-    init_params = [initial_θ for _ = 1:n_chains],
+    initial_params = [initial_θ for _ = 1:n_chains],
     discard_initial = n_adapts,
     progress = false,  # progress logging can cause issues in distributed mode
 )

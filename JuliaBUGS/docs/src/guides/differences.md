@@ -10,7 +10,7 @@ One difference worth knowing up front: WinBUGS, OpenBUGS, and JAGS choose their 
 |:---|:---|
 | Model in a text file, `model { ... }` | The `@bugs` macro. The string form runs your original program text verbatim; there is also an optional Julia-native form (a light rewrite). |
 | Data as an R `list()` or rectangular text | A Julia `NamedTuple`, e.g. `(N = 21, r = [10, 23, ...])` |
-| Initial values as an R `list()`, one per chain | `initialize!(model, inits)` after compiling, or the `init_params` keyword when sampling |
+| Initial values as an R `list()`, one per chain | `initialize!(model, inits)` after compiling, or the `initial_params` keyword when sampling |
 | Compile the model, then `update()` for burn-in and sampling (in JAGS: `jags.model()` then `update()`) | `model = seeds(data)` to compile, then a single call to `AbstractMCMC.sample(model, NUTS(0.8), 2000; ...)` — adaptation and burn-in are handled by its `n_adapts` and `discard_initial` keywords |
 | CODA files / `coda.samples()` for summaries | `sample` returns a chain object directly (a FlexiChains or MCMCChains chain); `summarystats(chain)` prints the familiar table of means, standard deviations, and diagnostics |
 
@@ -120,7 +120,7 @@ model = seeds(data)
 initialize!(model, inits)
 ```
 
-Any parameter you leave out of `inits` is initialized by drawing from its prior, which matches the "gen inits" behavior of the classic programs. You can also pass initial values directly to `AbstractMCMC.sample` through its `init_params` keyword. From here, sampling and summarizing work exactly as in [Getting Started](../getting_started.md).
+Any parameter you leave out of `inits` is initialized by drawing from its prior, which matches the "gen inits" behavior of the classic programs. You can also pass initial values directly to `AbstractMCMC.sample` through its `initial_params` keyword. From here, sampling and summarizing work exactly as in [Getting Started](../getting_started.md).
 
 See [Initial Values](initialization.md) for the complete initialization interface, including array-valued parameters and flat sampler-space vectors.
 

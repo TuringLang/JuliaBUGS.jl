@@ -44,7 +44,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
         progress=false,
         chain_type=VNChain,
         n_adapts=n_adapts,
-        init_params=initial_θ,
+        initial_params=initial_θ,
         discard_initial=n_adapts,
     )
     @test hmc_chain isa VNChain
@@ -101,7 +101,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
         progress=false,
         chain_type=VNChain,
         n_adapts=n_adapts,
-        init_params=initial_θ,
+        initial_params=initial_θ,
         discard_initial=n_adapts,
     )
     @test mh_chain isa VNChain
@@ -216,7 +216,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
             progress=false,
             chain_type=VNChain,
             n_adapts=n_adapts,
-            init_params=[rand(StableRNG(i), D) for i in 1:n_chains],
+            initial_params=[rand(StableRNG(i), D) for i in 1:n_chains],
             discard_initial=n_adapts,
         )
         # per-chain results are concatenated into a single VNChain along the chain dim
@@ -250,7 +250,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
             progress=false,
             chain_type=VNChain,
             n_adapts=n_adapts,
-            init_params=rand(StableRNG(1), D),
+            initial_params=rand(StableRNG(1), D),
             discard_initial=n_adapts,
             thinning=thin,
         )
@@ -278,7 +278,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
             500;
             progress=false,
             chain_type=VNChain,
-            init_params=rand(StableRNG(1), D),
+            initial_params=rand(StableRNG(1), D),
             discard_initial=200,
         )
         @test chain isa VNChain
@@ -331,7 +331,7 @@ using JuliaBUGS.Model: UseAutoMarginalization, set_evaluation_mode
             progress=false,
             chain_type=VNChain,
             n_adapts=100,
-            init_params=getparams(model),
+            initial_params=getparams(model),
             discard_initial=100,
         )
         @test chain isa VNChain

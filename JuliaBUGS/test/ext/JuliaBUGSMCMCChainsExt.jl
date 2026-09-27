@@ -41,7 +41,7 @@
         progress=false,
         chain_type=Chains,
         n_adapts=n_adapts,
-        init_params=initial_θ,
+        initial_params=initial_θ,
         discard_initial=n_adapts,
     )
     @test hmc_chain.name_map[:parameters] == [
@@ -80,7 +80,7 @@
         progress=false,
         chain_type=Chains,
         n_adapts=n_adapts,
-        init_params=initial_θ,
+        initial_params=initial_θ,
         discard_initial=n_adapts,
     )
 
