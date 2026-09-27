@@ -262,6 +262,49 @@ end
         @test model.evaluation_env.y <= 0.5
     end
 
+    # BUGS reads `t ~ dexp(lambda)C(c, )` with `t` missing as "t exceeds c". The missing
+    # value is a parameter carrying the untruncated density above `c`, so integrating it
+    # out leaves the survival probability exp(-lambda c).
+    @testset "a missing value censored by C() carries the censored likelihood" begin
+        def = @bugs("model { t ~ dexp(lambda)C(c, ) }")
+        model = compile(def, (; lambda=0.7, c=2.0, t=missing))
+        @test JuliaBUGS.parameters(model) == [@varname(t)]
+
+        model = JuliaBUGS.settrans(model, false)
+        density(t) = exp(Base.invokelatest(LogDensityProblems.logdensity, model, [t]))
+        @test Base.invokelatest(LogDensityProblems.logdensity, model, [1.0]) == -Inf
+        grid = range(2.0, 60.0; length=100_001)
+        integral =
+            (sum(density, grid) - (density(first(grid)) + density(last(grid))) / 2) *
+            step(grid)
+        @test integral ≈ exp(-0.7 * 2.0) rtol = 1e-6
+
+        # Nothing observed depends on `t`, yet it must stay in the target.
+        def = @bugs(
+            "model { t ~ dexp(lambda)C(c, )\n lambda ~ dgamma(1, 1)\n y ~ dnorm(lambda, 1) }"
+        )
+        model = compile(def, (; c=2.0, t=missing, y=1.0))
+        @test isempty(model.graph_evaluation_data.generated_quantities)
+        @test LogDensityProblems.dimension(model) == 2
+    end
+
+    @testset "`censored` in a model means BUGS `C()`, outside it `Distributions.censored`" begin
+        @test censored === Distributions.censored
+
+        data = (; lambda=0.7, c=2.0, t=missing)
+        from_string = compile(@bugs("model { t ~ dexp(lambda)C(c, ) }"), data)
+        from_julia = compile((@bugs begin
+            t ~ censored(dexp(lambda), c, nothing)
+        end), data)
+        ld(model, t) = Base.invokelatest(
+            LogDensityProblems.logdensity, JuliaBUGS.settrans(model, false), [t]
+        )
+        @test ld(from_julia, 3.0) ==
+            ld(from_string, 3.0) ==
+            logpdf(Exponential(1 / 0.7), 3.0)
+        @test ld(from_julia, 2.0) == logpdf(Exponential(1 / 0.7), 2.0)
+    end
+
     @testset "Qualified names in @bugs" begin
         # Test that qualified names are rejected in @bugs
         bugs_expr = @bugs begin

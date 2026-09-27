@@ -822,6 +822,7 @@ function _regenerate_log_density_function(
         evaluation_env;
         generated_quantities=Set(graph_evaluation_data.generated_quantities),
         fixed_parameters=Set(graph_evaluation_data.fixed_parameters),
+        eval_module=owner_module,
     )
 
     if !isnothing(lowered_model_def)
