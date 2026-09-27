@@ -8,6 +8,26 @@ end
 
 custom_transform_for_test(x) = x^2 + 1
 
+#! format: off
+module CensoredFromDistributions
+using JuliaBUGS: @model
+using Distributions
+@model function censored_exp((; t, lambda), c)
+    t ~ censored(Exponential(1 / lambda), c, nothing)
+    lambda ~ Gamma(1, 1)
+end
+end
+
+module CensoredFromBUGS
+using JuliaBUGS: @model
+using JuliaBUGS.BUGSPrimitives: censored, dexp, dgamma
+@model function censored_exp((; t, lambda), c)
+    t ~ censored(dexp(lambda), c, nothing)
+    lambda ~ dgamma(1, 1)
+end
+end
+#! format: on
+
 @testset "model macro" begin
     @testset "Basic Model Usage" begin
         @testset "Minimal model body" begin
@@ -422,5 +442,23 @@ custom_transform_for_test(x) = x^2 + 1
             model = of_type_model(of_instance)
             @test model isa JuliaBUGS.BUGSModel
         end
+    end
+end
+
+@testset "`censored` in `@model` is the one its module sees, in every evaluation mode" begin
+    # `t` is observed on the bound, the one place the two meanings differ: the probability
+    # mass there for `Distributions.censored`, the density there for BUGS's.
+    for (mod, bugs, logt) in (
+        (CensoredFromDistributions, false, logcdf(Exponential(1.0), 2.0)),
+        (CensoredFromBUGS, true, logpdf(Exponential(1.0), 2.0)),
+    )
+        model = Base.invokelatest(mod.censored_exp, (; t=2.0), 2.0)
+        @test model.g[@varname(t)].is_censored == bugs
+        generated = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
+        expected = logt + logpdf(Gamma(1, 1), 1.0)
+        @test Base.invokelatest(LogDensityProblems.logdensity, model, [0.0]) ≈ expected
+        @test Base.invokelatest(LogDensityProblems.logdensity, generated, [0.0]) ≈ expected
     end
 end

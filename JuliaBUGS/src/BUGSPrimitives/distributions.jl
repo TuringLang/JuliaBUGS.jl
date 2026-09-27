@@ -184,13 +184,13 @@ end
 """
     censored(dist, lower, upper)
 
-What BUGS's `x ~ dist C(lower, upper)` means, and what `censored` means in a JuliaBUGS
-model: `x` lies between the bounds, with `dist`'s own density there. Either bound can be
+What BUGS's `x ~ dist C(lower, upper)` means, and what `censored` means in a `@bugs`
+program: `x` lies between the bounds, with `dist`'s own density there. Either bound can be
 `nothing`. A missing censored observation becomes a parameter confined to the bounds, and
 integrating it out leaves `P(lower ≤ X ≤ upper)`, the censored likelihood.
 
-Unlike `Distributions.censored`, it puts no mass on the bounds. Code outside a model still
-gets `Distributions.censored`.
+Unlike `Distributions.censored`, it puts no mass on the bounds. `@model` code, and code
+outside a model, keep the `censored` their module has.
 """
 censored(dist::UnivariateDistribution, lower, upper) = BUGSCensored(dist, lower, upper)
 
