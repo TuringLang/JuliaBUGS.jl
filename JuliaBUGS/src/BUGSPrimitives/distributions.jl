@@ -182,6 +182,65 @@ function Distributions.truncated(::Flat, ::Nothing, r::Real)
 end
 
 """
+    censored(dist, lower, upper)
+
+What BUGS's `x ~ dist C(lower, upper)` means, and what `censored` means in a `@bugs`
+program: `x` lies between the bounds, with `dist`'s own density there. Either bound can be
+`nothing`. A missing censored observation becomes a parameter confined to the bounds, and
+integrating it out leaves `P(lower ≤ X ≤ upper)`, the censored likelihood.
+
+Unlike `Distributions.censored`, it puts no mass on the bounds. `@model` code, and code
+outside a model, keep the `censored` their module has.
+"""
+censored(dist::UnivariateDistribution, lower, upper) = BUGSCensored(dist, lower, upper)
+
+"""
+    BUGSCensored
+
+`dist`'s density restricted to `[lower, upper]` and not renormalized, unlike `truncated`,
+and with no mass piled on the bounds, unlike `Distributions.censored`. See
+[`JuliaBUGS.BUGSPrimitives.censored`](@ref).
+"""
+struct BUGSCensored{S<:ValueSupport,D<:UnivariateDistribution{S},L,U} <:
+       UnivariateDistribution{S}
+    dist::D
+    lower::L
+    upper::U
+end
+
+_above(d::BUGSCensored, x) = d.lower === nothing || x >= d.lower
+_below(d::BUGSCensored, x) = d.upper === nothing || x <= d.upper
+
+function Distributions.minimum(d::BUGSCensored)
+    return d.lower === nothing ? minimum(d.dist) : max(d.lower, minimum(d.dist))
+end
+function Distributions.maximum(d::BUGSCensored)
+    return d.upper === nothing ? maximum(d.dist) : min(d.upper, maximum(d.dist))
+end
+Distributions.insupport(d::BUGSCensored, x::Real) = _above(d, x) && _below(d, x)
+
+function Distributions.logpdf(d::BUGSCensored, x::Real)
+    return insupport(d, x) ? logpdf(d.dist, x) : oftype(float(logpdf(d.dist, x)), -Inf)
+end
+Distributions.pdf(d::BUGSCensored, x::Real) = exp(logpdf(d, x))
+
+# Inverting on the log scale keeps a draw finite when the bound is far into the tail, where
+# `truncated` inverts a probability that has underflowed and returns `Inf`.
+function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored{Continuous})
+    if d.upper === nothing && d.lower !== nothing
+        x = invlogccdf(d.dist, logccdf(d.dist, d.lower) - Random.randexp(rng))
+        return max(x, d.lower)
+    elseif d.lower === nothing && d.upper !== nothing
+        x = invlogcdf(d.dist, logcdf(d.dist, d.upper) - Random.randexp(rng))
+        return min(x, d.upper)
+    end
+    return rand(rng, truncated(d.dist, d.lower, d.upper))
+end
+function Base.rand(rng::Random.AbstractRNG, d::BUGSCensored)
+    return rand(rng, truncated(d.dist, d.lower, d.upper))
+end
+
+"""
     dexp(λ)
 
 Returns an instance of [Exponential](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Exponential) 
@@ -371,6 +430,12 @@ function dbeta(a, b)
     return Beta(a, b)
 end
 
+# A precision or scale matrix computed from parameters can come out a rounding error
+# away from symmetric, as the inverse of a matrix of dual numbers does, and `PDMat`
+# rejects it as not Hermitian. Averaging it with its transpose is exact for a matrix
+# that is already symmetric, and cheap next to the Cholesky factorization that follows.
+_pdmat(M::AbstractMatrix) = PDMat((M .+ transpose(M)) ./ 2)
+
 # `Distributions.MvNormalCanon` provides this parameterization, but it errors on ReverseDiff (others, including 
 # ForwardDiff, Mooncake, etc. seems to be fine). The reason for error seems to be that `MvNormalCanon` uses 
 # `PDMat` and `PDMat` uses `PDMats.quad` which does `chol_upper` (https://github.com/JuliaStats/PDMats.jl/blob/5e7d88ec271df4bd12accc16eb56e7a9e14043fb/src/chol.jl#L49-L69)
@@ -387,7 +452,7 @@ p(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
 where ``k`` is the dimension of `x`.
 """
 function dmnorm(μ::AbstractVector, T::AbstractMatrix)
-    return MvNormal(μ, _inv(PDMat(T)))
+    return MvNormal(μ, _inv(_pdmat(T)))
 end
 
 """
@@ -402,7 +467,7 @@ p(x|k,μ,Σ) = \\frac{\\Gamma((k+d)/2)}{\\Gamma(k/2) (k\\pi)^{p/2} |Σ|^{1/2}} \
 where ``p`` is the dimension of ``x``.
 """
 function dmt(μ::AbstractVector, T::AbstractMatrix, k)
-    return MvTDist(k, μ, _inv(PDMat(T)))
+    return MvTDist(k, μ, _inv(_pdmat(T)))
 end
 
 """
@@ -424,7 +489,7 @@ function dwish(R::AbstractMatrix, k)
             ),
         )
     end
-    return Wishart(k, _inv(PDMat(R)))
+    return Wishart(k, _inv(_pdmat(R)))
 end
 
 """

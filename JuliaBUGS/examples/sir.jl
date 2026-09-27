@@ -129,7 +129,7 @@ samples_nuts_mooncake = AbstractMCMC.sample(
     n_samples;
     chain_type=Chains,     # Store results as MCMCChains object
     n_adapts=n_adapts,     # Number of adaptation/warmup steps
-    init_params=initial_θ_vec, # Starting point for the sampler
+    initial_params=initial_θ_vec, # Starting point for the sampler
     discard_initial=n_adapts, # Discard warmup samples
     progress=false,
 )

@@ -8,6 +8,35 @@ end
 
 custom_transform_for_test(x) = x^2 + 1
 
+#! format: off
+module CensoredFromDistributions
+using JuliaBUGS: @model
+using Distributions
+@model function censored_exp((; t, lambda), c)
+    t ~ censored(Exponential(1 / lambda), c, nothing)
+    lambda ~ Gamma(1, 1)
+end
+end
+
+module CensoredFromBUGS
+using JuliaBUGS: @model
+using JuliaBUGS.BUGSPrimitives: censored, dexp, dgamma
+@model function censored_exp((; t, lambda), c)
+    t ~ censored(dexp(lambda), c, nothing)
+    lambda ~ dgamma(1, 1)
+end
+end
+
+module CensoredAsValue
+using JuliaBUGS: @model
+using Distributions: Normal
+censored = 3
+@model function normal_model((; x))
+    x ~ Normal(0, 1)
+end
+end
+#! format: on
+
 @testset "model macro" begin
     @testset "Basic Model Usage" begin
         @testset "Minimal model body" begin
@@ -423,4 +452,31 @@ custom_transform_for_test(x) = x^2 + 1
             @test model isa JuliaBUGS.BUGSModel
         end
     end
+end
+
+@testset "`censored` in `@model` is the one its module sees, in every evaluation mode" begin
+    # `t` is observed on the bound, the one place the two meanings differ: the probability
+    # mass there for `Distributions.censored`, the density there for BUGS's.
+    for (mod, bugs, logt) in (
+        (CensoredFromDistributions, false, logcdf(Exponential(1.0), 2.0)),
+        (CensoredFromBUGS, true, logpdf(Exponential(1.0), 2.0)),
+    )
+        model = Base.invokelatest(mod.censored_exp, (; t=2.0), 2.0)
+        @test model.g[@varname(t)].is_censored == bugs
+        generated = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
+        expected = logt + logpdf(Gamma(1, 1), 1.0)
+        @test Base.invokelatest(LogDensityProblems.logdensity, model, [0.0]) ≈ expected
+        @test Base.invokelatest(LogDensityProblems.logdensity, generated, [0.0]) ≈ expected
+    end
+end
+
+@testset "a module's `censored` that is not a function leaves generated mode working" begin
+    model = Base.invokelatest(CensoredAsValue.normal_model, (;))
+    generated = JuliaBUGS.set_evaluation_mode(
+        model, JuliaBUGS.UseGeneratedLogDensityFunction()
+    )
+    @test Base.invokelatest(LogDensityProblems.logdensity, generated, [0.5]) ≈
+        logpdf(Normal(0, 1), 0.5)
 end

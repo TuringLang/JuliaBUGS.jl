@@ -463,6 +463,7 @@ function _generate_lowered_model_def(
     diagnostics::Vector{String}=String[],
     generated_quantities::Union{Nothing,Set{<:VarName}}=nothing,
     fixed_parameters::Set{<:VarName}=Set{VarName}(),
+    eval_module::Module=JuliaBUGS,
 )
     __check_for_reserved_names(model_def)
     stmt_to_stmt_id = _build_stmt_to_stmt_id(model_def)
@@ -546,9 +547,24 @@ function _generate_lowered_model_def(
         reconstructed_model_def, stmt_to_stmt_id, var_types, evaluation_env
     )
     return __cast_array_indices_to_Int(
-        __qualify_builtins_with_JuliaBUGS_namespace(lowered_model_def)
+        __pin_censored(
+            __qualify_builtins_with_JuliaBUGS_namespace(lowered_model_def), eval_module
+        ),
     ),
     reconstructed_model_def
+end
+
+# The generated function resolves names in JuliaBUGS, where `censored` has the BUGS
+# meaning, while the node functions resolve them in `eval_module`. Under `@model` that is
+# the caller's module, so `censored` is pinned to the binding the node functions call.
+function __pin_censored(expr, eval_module::Module)
+    ref = GlobalRef(eval_module, :censored)
+    return MacroTools.postwalk(expr) do sub_expr
+        if Meta.isexpr(sub_expr, :call) && sub_expr.args[1] === :censored
+            return Expr(:call, ref, sub_expr.args[2:end]...)
+        end
+        return sub_expr
+    end
 end
 
 function __cast_array_indices_to_Int(expr)

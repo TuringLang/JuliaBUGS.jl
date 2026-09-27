@@ -672,6 +672,7 @@ mutable struct AddVertices <: CompilerPass
     const g::MetaGraph
     vertex_id_tracker::NamedTuple
     const f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}
+    const eval_module::Module
 end
 
 function AddVertices(model_def::Expr, eval_env::NamedTuple, eval_module::Module=Main)
@@ -693,7 +694,15 @@ function AddVertices(model_def::Expr, eval_env::NamedTuple, eval_module::Module=
         eval_module,
     )
 
-    return AddVertices(eval_env, g, NamedTuple(vertex_id_tracker), f_dict)
+    return AddVertices(eval_env, g, NamedTuple(vertex_id_tracker), f_dict, eval_module)
+end
+
+# Whether `rhs` calls `f`, with the callee looked up where the node functions run: under
+# `@model` that is the caller's module, where `censored` can be `Distributions.censored`.
+function _calls(rhs, f, eval_module::Module)
+    Meta.isexpr(rhs, :call) && rhs.args[1] isa Symbol || return false
+    callee = rhs.args[1]
+    return isdefined(eval_module, callee) && getglobal(eval_module, callee) === f
 end
 
 function build_node_functions(
@@ -837,6 +846,8 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
     end
 
     args, node_function_expr, node_function = pass.f_dict[expr]
+    is_censored =
+        is_stochastic && _calls(expr.args[3], BUGSPrimitives.censored, pass.eval_module)
 
     vn = if lhs isa Symbol
         AbstractPPL.VarName{lhs}()
@@ -848,7 +859,13 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
         pass.g,
         vn,
         NodeInfo(
-            is_stochastic, is_observed, node_function_expr, node_function, args, loop_vars
+            is_stochastic,
+            is_observed,
+            is_censored,
+            node_function_expr,
+            node_function,
+            args,
+            loop_vars,
         ),
     )
     if lhs isa Symbol

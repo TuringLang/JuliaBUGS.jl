@@ -1,6 +1,7 @@
 struct NodeInfo{F}
     is_stochastic::Bool
     is_observed::Bool
+    is_censored::Bool
     node_function_expr::Expr
     node_function::F
     node_args::Tuple{Vararg{Symbol}}
@@ -16,13 +17,18 @@ is_model_parameter(g::BUGSGraph, v::VarName) = g[v].is_stochastic && !g[v].is_ob
 is_observation(g::BUGSGraph, v::VarName) = g[v].is_stochastic && g[v].is_observed
 is_deterministic(g::BUGSGraph, v::VarName) = !g[v].is_stochastic
 
+is_censored(g::BUGSGraph, v::VarName) = g[v].is_censored
+carries_likelihood(g, v) = is_observation(g, v) || is_censored(g, v)
+
 """
     find_generated_quantities_variables(g::BUGSGraph)
 
 Find all the generated quantities variables in the graph.
 
 Generated quantities variables are variables that do not affect the sampling process. 
-They are variables that do not have any descendant variables that are observed.
+They are variables that do not have any descendant variables that carry likelihood: an
+observation, or a censored node, whose density is not normalized and so carries the
+censored likelihood even when its value is missing.
 """
 function find_generated_quantities_variables(
     g::MetaGraph{Int,<:SimpleDiGraph,Label,VertexData};
@@ -32,7 +38,7 @@ function find_generated_quantities_variables(
     can_reach_observations = Dict{Label,Bool}()
 
     for n in labels(g)
-        if !is_observation(g, n) && n ∉ fixed_parameters
+        if !carries_likelihood(g, n) && n ∉ fixed_parameters
             if !dfs_can_reach_observations(g, n, can_reach_observations, fixed_parameters)
                 push!(generated_quantities_variables, n)
             end
@@ -53,7 +59,7 @@ function dfs_can_reach_observations(
         return false
     end
 
-    if is_observation(g, n)
+    if carries_likelihood(g, n)
         can_reach_observations[n] = true
         return true
     end
