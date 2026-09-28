@@ -1,3 +1,5 @@
+using Enzyme: Enzyme
+
 @testset "AD Backend Compatibility" begin
     # Use a simpler model for testing AD compatibility
     # (similar to existing tests in JuliaBUGSAdvancedHMCExt.jl)
@@ -187,6 +189,58 @@
             logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, x)
             @test isfinite(logp)
             @test all(isfinite, grad)
+        end
+
+        # The generated function writes `a` into the evaluation environment and
+        # reads it back in the nested loop, so Enzyme has to follow the writes.
+        @testset "AutoEnzyme follows values written into the evaluation environment" begin
+            nested_def = @bugs begin
+                for i in 1:N
+                    a[i] ~ dnorm(0, 1)
+                end
+                for i in 1:N
+                    for j in 1:T
+                        Y[i, j] ~ dnorm(a[i] + x[j], 1)
+                    end
+                end
+            end
+            generated(m) =
+                JuliaBUGS.set_evaluation_mode(m, JuliaBUGS.UseGeneratedLogDensityFunction())
+            enzyme = AutoEnzyme(; mode=Enzyme.set_runtime_activity(Enzyme.Reverse))
+
+            complete = generated(
+                compile(
+                    nested_def,
+                    (; N=2, T=2, x=[0.5, 1.5], Y=[1.0 2.0; 3.0 4.0]),
+                    (; a=[0.1, 0.2]),
+                ),
+            )
+            grad_model = JuliaBUGS.BUGSModelWithGradient(complete, enzyme)
+            _, grad = LogDensityProblems.logdensity_and_gradient(grad_model, [0.1, 0.2])
+            @test grad ≈ [0.7, 4.4]
+
+            # `Y[1, 2]` missing makes it a parameter stored in the same array as the
+            # observed `Y`, so the written storage also holds data.
+            partial = generated(
+                compile(
+                    nested_def,
+                    (; N=2, T=2, x=[0.5, 1.5], Y=[1.0 missing; 3.0 4.0]),
+                    (; a=[0.1, 0.2], Y=[missing 2.5; missing missing]),
+                ),
+            )
+            grad_model = JuliaBUGS.BUGSModelWithGradient(partial, enzyme)
+            reference = JuliaBUGS.BUGSModelWithGradient(
+                partial, AutoMooncake(; config=nothing)
+            )
+            θ = JuliaBUGS.getparams(partial)
+            for point in (θ, θ .+ 0.3)
+                logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, point)
+                ref_logp, ref_grad = LogDensityProblems.logdensity_and_gradient(
+                    reference, point
+                )
+                @test logp ≈ ref_logp
+                @test grad ≈ ref_grad
+            end
         end
     end
 
