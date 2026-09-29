@@ -219,35 +219,23 @@ function _logdensity_for_gradient(x::AbstractVector, model::BUGSModel)
     return _eval_logdensity(model, model.evaluation_mode, x)
 end
 
-# The generated function reads the data from the evaluation environment and
-# writes each parameter and deterministic value into it. The fields it writes,
-# `mutable_symbols`, go to AbstractPPL as a `cache`, which the AD follows, and
-# the rest as a constant `context`. As a constant, the whole environment made
-# Enzyme drop everything that flows through it from the gradient.
-struct _GeneratedLogDensity{K,F}
+# The generated function writes each parameter and deterministic value into the
+# evaluation environment and reads it back, so the environment goes to AbstractPPL
+# as a `cache`, which the AD follows. As a constant, it made Enzyme drop everything
+# that flows through it from the gradient. The data stays in the cache too, since
+# splitting it out into a constant `context` makes Enzyme need runtime activity.
+struct _GeneratedLogDensity{F}
     f::F
 end
-_GeneratedLogDensity{K}(f::F) where {K,F} = _GeneratedLogDensity{K,F}(f)
 
-function (g::_GeneratedLogDensity{K})(x, data, written) where {K}
-    return g.f(NamedTuple{K}(merge(data, written)), x)
-end
-
-function _split_evaluation_env(env::NamedTuple, mutable_symbols)
-    names = keys(env)
-    written = Tuple(k for k in names if k in mutable_symbols)
-    data = Tuple(k for k in names if !(k in mutable_symbols))
-    return NamedTuple{data}(env), NamedTuple{written}(env)
-end
+(g::_GeneratedLogDensity)(x, env) = g.f(env, x)
 
 function _prepare_logdensity_gradient(
     adtype::ADTypes.AbstractADType, model::BUGSModel, x::AbstractVector
 )
     if model.evaluation_mode isa UseGeneratedLogDensityFunction
-        env = model.evaluation_env
-        data, written = _split_evaluation_env(env, model.mutable_symbols)
-        problem = _GeneratedLogDensity{keys(env)}(model.log_density_computation_function)
-        return AbstractPPL.prepare(adtype, problem, x; context=(data,), cache=(written,))
+        problem = _GeneratedLogDensity(model.log_density_computation_function)
+        return AbstractPPL.prepare(adtype, problem, x; cache=(model.evaluation_env,))
     elseif adtype isa ADTypes.AutoMooncake
         # Mooncake's forward-mode path currently treats AbstractPPL context
         # arguments as AD inputs, but reverse mode can capture the model here so
