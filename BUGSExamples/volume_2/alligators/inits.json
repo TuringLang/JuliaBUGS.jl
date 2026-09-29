@@ -1,0 +1,20 @@
+{
+  "alpha": [null, 0, 0, 0, 0],
+  "beta": [
+    [null, null, null, null, null],
+    [null, 0, 0, 0, 0],
+    [null, 0, 0, 0, 0],
+    [null, 0, 0, 0, 0],
+    [null, 0, 0, 0, 0]
+  ],
+  "gamma": [
+    [null, null, null, null, null],
+    [null, 0, 0, 0, 0]
+  ],
+  "lambda": [
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0]
+  ]
+}

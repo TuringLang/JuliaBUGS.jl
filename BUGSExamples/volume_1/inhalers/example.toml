@@ -1,0 +1,2 @@
+name = "Inhaler: ordered categorical data"
+blocked = "compile reports a loop in the graph: the logical node group[i] indexes mu[group[i], t]"

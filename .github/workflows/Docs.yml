@@ -8,11 +8,13 @@ on:
     paths:
       - 'JuliaBUGS/docs/**'
       - 'JuliaBUGS/src/**'
+      - 'BUGSExamples/**'
       - '.github/workflows/Docs.yml'
   pull_request:
     paths:
       - 'JuliaBUGS/docs/**'
       - 'JuliaBUGS/src/**'
+      - 'BUGSExamples/**'
       - '.github/workflows/Docs.yml'
   workflow_dispatch:
 
