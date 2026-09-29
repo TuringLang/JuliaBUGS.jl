@@ -206,7 +206,7 @@ using Enzyme: Enzyme
             end
             generated(m) =
                 JuliaBUGS.set_evaluation_mode(m, JuliaBUGS.UseGeneratedLogDensityFunction())
-            enzyme = AutoEnzyme(; mode=Enzyme.set_runtime_activity(Enzyme.Reverse))
+            enzyme = AutoEnzyme()
 
             complete = generated(
                 compile(
