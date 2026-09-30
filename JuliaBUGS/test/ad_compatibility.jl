@@ -192,7 +192,7 @@ using Enzyme: Enzyme
         end
 
         # The generated function writes `a` into the evaluation environment and
-        # reads it back in the nested loop, so Enzyme has to follow the writes.
+        # reads it back in the nested loop.
         @testset "AutoEnzyme follows values written into the evaluation environment" begin
             nested_def = @bugs begin
                 for i in 1:N
@@ -219,8 +219,8 @@ using Enzyme: Enzyme
             _, grad = LogDensityProblems.logdensity_and_gradient(grad_model, [0.1, 0.2])
             @test grad ≈ [0.7, 4.4]
 
-            # `Y[1, 2]` missing makes it a parameter stored in the same array as the
-            # observed `Y`, so the written storage also holds data.
+            # With `Y[1, 2]` missing, the array the generated function writes into
+            # also holds data.
             partial = generated(
                 compile(
                     nested_def,

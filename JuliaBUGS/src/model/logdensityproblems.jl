@@ -220,10 +220,8 @@ function _logdensity_for_gradient(x::AbstractVector, model::BUGSModel)
 end
 
 # The generated function writes each parameter and deterministic value into the
-# evaluation environment and reads it back, so the environment goes to AbstractPPL
-# as a `cache`, which the AD follows. As a constant, it made Enzyme drop everything
-# that flows through it from the gradient. The data stays in the cache too, since
-# splitting it out into a constant `context` makes Enzyme need runtime activity.
+# evaluation environment and reads it back, so the whole environment goes to
+# AbstractPPL as a `cache`.
 struct _GeneratedLogDensity{F}
     f::F
 end
