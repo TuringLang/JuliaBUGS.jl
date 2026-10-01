@@ -19,7 +19,7 @@
 - `dmnorm`, `dmt`, and `dwish` symmetrize their matrix argument before factorizing it. A precision matrix computed from parameters, such as the inverse of one under ForwardDiff, can come out a rounding error from symmetric, and was rejected as not Hermitian although it is positive definite. Jaws and the multivariate Orange Trees now sample.
 - A point whose precision or scale matrix is not positive definite has log density `-Inf` instead of raising `PosDefException`, as a point outside the support already did, so a sampler rejects it and moves on. The gradient rejects such a point only where the density is not finite too, so a failure that only differentiation produces is still reported. Birats, whose NUTS step-size search overflowed into such a point, now converges.
 - `AutoEnzyme` gives the right gradient in generated mode (#549).
-  The evaluation environment that the generated log density writes into goes to AbstractPPL as a `cache`, which needs AbstractPPL 0.15.6.
+  The evaluation environment that the generated log density writes into goes to AbstractPPL as `scratch`, which needs AbstractPPL 0.15.6.
 
 ## 0.17.1
 

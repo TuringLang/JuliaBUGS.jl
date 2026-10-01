@@ -221,7 +221,7 @@ end
 
 # The generated function writes each parameter and deterministic value into the
 # evaluation environment and reads it back, so the whole environment goes to
-# AbstractPPL as a `cache`.
+# AbstractPPL as `scratch`.
 struct _GeneratedLogDensity{F}
     f::F
 end
@@ -233,7 +233,7 @@ function _prepare_logdensity_gradient(
 )
     if model.evaluation_mode isa UseGeneratedLogDensityFunction
         problem = _GeneratedLogDensity(model.log_density_computation_function)
-        return AbstractPPL.prepare(adtype, problem, x; cache=(model.evaluation_env,))
+        return AbstractPPL.prepare(adtype, problem, x; scratch=(model.evaluation_env,))
     elseif adtype isa ADTypes.AutoMooncake
         # Mooncake's forward-mode path currently treats AbstractPPL context
         # arguments as AD inputs, but reverse mode can capture the model here so
