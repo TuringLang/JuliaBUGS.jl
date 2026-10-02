@@ -1,5 +1,12 @@
 # JuliaBUGS Changelog
 
+## 0.18.1
+
+### Bug Fixes
+
+- `AutoEnzyme` gives the right gradient in generated mode (#555, closes #549).
+  The evaluation environment that the generated log density writes into goes to AbstractPPL as `scratch`, which needs AbstractPPL 0.15.6.
+
 ## 0.18.0
 
 ### Highlights
@@ -18,8 +25,6 @@
 - A censored BUGS observation with a missing value now carries its censored likelihood. `dweib(r, mu)C(c, )` lowers to `censored(dweib(r, mu), c, nothing)`, which was `Distributions.censored` and put a point mass at `c`. A missing value started there about half the time, which is minus infinity in unconstrained space, so the sampler froze. It also counted as a generated quantity, because nothing observed depends on it, and was left out of the log density altogether. `censored` in a `@bugs` program now keeps the density of the distribution inside the bounds and zero outside, with no mass on the bounds, for continuous and discrete distributions alike, and a censored node always counts toward the log density. Mice's posterior medians now match JAGS.
 - `dmnorm`, `dmt`, and `dwish` symmetrize their matrix argument before factorizing it. A precision matrix computed from parameters, such as the inverse of one under ForwardDiff, can come out a rounding error from symmetric, and was rejected as not Hermitian although it is positive definite. Jaws and the multivariate Orange Trees now sample.
 - A point whose precision or scale matrix is not positive definite has log density `-Inf` instead of raising `PosDefException`, as a point outside the support already did, so a sampler rejects it and moves on. The gradient rejects such a point only where the density is not finite too, so a failure that only differentiation produces is still reported. Birats, whose NUTS step-size search overflowed into such a point, now converges.
-- `AutoEnzyme` gives the right gradient in generated mode (#549).
-  The evaluation environment that the generated log density writes into goes to AbstractPPL as `scratch`, which needs AbstractPPL 0.15.6.
 
 ## 0.17.1
 
