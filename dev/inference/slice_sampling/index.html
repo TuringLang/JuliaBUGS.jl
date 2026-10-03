@@ -544,12 +544,12 @@ model = model_def((; y = 1.5))</code></pre><pre class="documenter-example-output
 )
 summarystats(chain)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Summary Statistics
 
-  parameters      mean       std      mcse   ess_bulk   ess_tail      rhat   e ⋯
-      Symbol   Float64   Float64   Float64       Real    Float64   Float64     ⋯
+ <span class="sgr1"> parameters </span> <span class="sgr1">    mean </span> <span class="sgr1">     std </span> <span class="sgr1">    mcse </span> <span class="sgr1"> ess_bulk </span> <span class="sgr1"> ess_tail </span> <span class="sgr1">    rhat </span> <span class="sgr1"> e</span> ⋯
+ <span class="sgr90">     Symbol </span> <span class="sgr90"> Float64 </span> <span class="sgr90"> Float64 </span> <span class="sgr90"> Float64 </span> <span class="sgr90">     Real </span> <span class="sgr90">  Float64 </span> <span class="sgr90"> Float64 </span> <span class="sgr90">  </span> ⋯
 
-          mu    1.3085    4.2316    0.3335   331.0070   169.6016    1.0139     ⋯
+          mu    1.9423    4.5638    0.4820   280.3014   132.5315    0.9984     ⋯
 
-                                                                1 column omitted
+<span class="sgr36">                                                                1 column omitted</span>
 </code></pre><p>No <code>initial_params</code> is required: the extension implements <code>SliceSampling.initial_sample</code>, which seeds the sampler from the model&#39;s current parameter values.</p><p>For a model with <strong>more than one parameter</strong>, wrap a univariate sampler in a multivariate strategy (e.g. <code>RandPermGibbs</code>, which cycles through coordinates in a random order), or use a genuinely multivariate slice sampler:</p><pre><code class="language-julia hljs">multi_def = @bugs begin
     a ~ dnorm(0, 1)
     b ~ dnorm(0, 1)
@@ -566,13 +566,13 @@ multi_chain = AbstractMCMC.sample(
 )
 summarystats(multi_chain)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Summary Statistics
 
-  parameters      mean       std      mcse   ess_bulk   ess_tail      rhat   e ⋯
-      Symbol   Float64   Float64   Float64       Real    Float64   Float64     ⋯
+ <span class="sgr1"> parameters </span> <span class="sgr1">    mean </span> <span class="sgr1">     std </span> <span class="sgr1">    mcse </span> <span class="sgr1"> ess_bulk </span> <span class="sgr1"> ess_tail </span> <span class="sgr1">    rhat </span> <span class="sgr1"> e</span> ⋯
+ <span class="sgr90">     Symbol </span> <span class="sgr90"> Float64 </span> <span class="sgr90"> Float64 </span> <span class="sgr90"> Float64 </span> <span class="sgr90">     Real </span> <span class="sgr90">  Float64 </span> <span class="sgr90"> Float64 </span> <span class="sgr90">  </span> ⋯
 
-           b    0.2211    0.8399    0.0531   253.1979   298.2147    0.9985     ⋯
-           a    0.1388    0.8619    0.0499   296.1321   350.3450    1.0010     ⋯
+           b    0.1072    0.8332    0.0565   218.3672   333.2991    1.0035     ⋯
+           a    0.2614    0.7995    0.0492   262.1170   326.3465    0.9990     ⋯
 
-                                                                1 column omitted
+<span class="sgr36">                                                                1 column omitted</span>
 </code></pre><h2 id="Inside-Gibbs"><a class="docs-heading-anchor" href="#Inside-Gibbs">Inside <code>Gibbs</code></a><a id="Inside-Gibbs-1"></a><a class="docs-heading-anchor-permalink" href="#Inside-Gibbs" title="Permalink"></a></h2><p>Because each single-site conditional in <code>JuliaBUGS.Gibbs</code> is univariate, a bare univariate slice sampler works per site — no multivariate wrapper needed. Map variable groups to samplers in an <code>OrderedDict</code>:</p><pre><code class="language-julia hljs">sampler_map = OrderedDict(
     @varname(a) =&gt; SliceSteppingOut(1.0),
     @varname(b) =&gt; SliceSteppingOut(1.0),
@@ -588,17 +588,17 @@ gibbs_chain = AbstractMCMC.sample(
 )
 summarystats(gibbs_chain)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Summary Statistics
 
-  parameters      mean       std      mcse   ess_bulk   ess_tail      rhat   e ⋯
-      Symbol   Float64   Float64   Float64       Real    Float64   Float64     ⋯
+ <span class="sgr1"> parameters </span> <span class="sgr1">    mean </span> <span class="sgr1">     std </span> <span class="sgr1">    mcse </span> <span class="sgr1"> ess_bulk </span> <span class="sgr1"> ess_tail </span> <span class="sgr1">    rhat </span> <span class="sgr1"> e</span> ⋯
+ <span class="sgr90">     Symbol </span> <span class="sgr90"> Float64 </span> <span class="sgr90"> Float64 </span> <span class="sgr90"> Float64 </span> <span class="sgr90">     Real </span> <span class="sgr90">  Float64 </span> <span class="sgr90"> Float64 </span> <span class="sgr90">  </span> ⋯
 
-           b    0.1995    0.7679    0.0463   270.8329   336.5285    1.0088     ⋯
-           a    0.1703    0.7740    0.0444   301.8149   365.0928    1.0063     ⋯
+           b    0.1827    0.9081    0.0587   239.9567   246.4993    1.0052     ⋯
+           a    0.1391    0.8085    0.0466   301.3084   355.3709    0.9989     ⋯
 
-                                                                1 column omitted
+<span class="sgr36">                                                                1 column omitted</span>
 </code></pre><p>Slice samplers can be freely mixed with HMC and AdvancedMH samplers in the same <code>sampler_map</code>. They update continuous blocks. <code>Gibbs</code> updates finite discrete blocks exactly by enumerating and normalizing their full conditional, without invoking SliceSampling or AdvancedMH.</p><h2 id="Output-formats-and-statistics"><a class="docs-heading-anchor" href="#Output-formats-and-statistics">Output formats and statistics</a><a id="Output-formats-and-statistics-1"></a><a class="docs-heading-anchor-permalink" href="#Output-formats-and-statistics" title="Permalink"></a></h2><p>Both chain backends are supported:</p><ul><li><code>chain_type = Chains</code> returns an <code>MCMCChains.Chains</code> (shown above).</li><li><code>chain_type = VNChain</code> returns a <a href="https://github.com/penelopeysm/FlexiChains.jl"><code>FlexiChains.FlexiChain</code></a> keyed by <code>VarName</code> (requires <code>using FlexiChains</code>):</li></ul><pre><code class="language-julia hljs">using FlexiChains
 chain = AbstractMCMC.sample(model, SliceSteppingOut(1.0), 500; chain_type = VNChain, progress = false)</code></pre><p>In either case the sampler&#39;s own statistics are recorded alongside the draws: the log density <code>lp</code> and <code>num_proposals</code> (the number of proposals the slice sampler evaluated per step). Under <code>MCMCChains</code> these appear as <code>internals</code>; under <code>FlexiChains</code> they are <code>FlexiChains.Extra</code> entries. For a multivariate sampler the per-coordinate <code>num_proposals</code> is flattened into <code>num_proposals[i]</code> columns for <code>MCMCChains</code>.</p><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 mermaid.initialize({
     startOnLoad: true,
     theme: "neutral"
 });
-</script></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../auto_marginalization/">« Discrete Variables and Auto-Marginalization</a><a class="docs-footer-nextpage" href="../output_formats/">Sampling Output Formats »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Sunday 27 September 2026 19:05">Sunday 27 September 2026</span>. Using Julia version 1.13.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+</script></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../auto_marginalization/">« Discrete Variables and Auto-Marginalization</a><a class="docs-footer-nextpage" href="../output_formats/">Sampling Output Formats »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Saturday 3 October 2026 16:49">Saturday 3 October 2026</span>. Using Julia version 1.13.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
