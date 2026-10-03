@@ -1,5 +1,12 @@
 # JuliaBUGS Changelog
 
+## 0.18.1
+
+### Bug Fixes
+
+- `AutoEnzyme` gives the right gradient in generated mode (#555, closes #549).
+  The evaluation environment that the generated log density writes into goes to AbstractPPL as `scratch`, which needs AbstractPPL 0.15.6.
+
 ## 0.18.0
 
 ### Highlights
