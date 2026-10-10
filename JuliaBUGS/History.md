@@ -12,6 +12,10 @@
 ### Highlights
 
 - Use OpaqueClosures for world-age-safe model evaluation, including models compiled and evaluated in the same function, late AD loading, and package restoration (#541). Mooncake differentiates the ordinary source functions.
+- **The BUGS examples are plain files** (#543). Each example is a folder under `BUGSExamples/` at the root of the repository, holding the original BUGS program and JSON files for the data, the two sets of initial values, and the published reference results. `JuliaBUGS.BUGSExamples` reads those folders when it loads: a checkout reads the directory directly, and an installed JuliaBUGS reads a snapshot of it that ships as an artifact. `VOLUME_1` and the per-example bindings such as `BUGSExamples.rats` are unchanged, and `Example` gains a `path` field pointing at the folder.
+- **A `BUGSModelDef` prints as the `@bugs begin ... end` block that builds it**, with `for i in 1:N` loops, instead of as a `quote` block.
+- **Volume 3 is registered** as `VOLUME_3`, Volume 2 gains Stagnant and Asia, and `volumes()` returns all three volumes. Examples that JuliaBUGS cannot compile yet stay on disk marked `blocked` with the reason, Methadone from Volume 4 is read on demand with `BUGSExamples.load(:methadone)`, and `BUGSExamples.list()` prints everything on disk.
+- `BUGSModelDef(program::String; replace_period=true, no_enclosure=false)` parses a BUGS program held in a string at runtime, with the same result as `@bugs` on that string as a literal.
 
 ### Breaking Changes
 
@@ -19,12 +23,15 @@
 - Preparing `BUGSModelWithGradient` during package precompilation now throws an `ArgumentError`. Store the base model and prepare gradients after package loading.
 - The serialized representation of `BUGSModelWithGradient` has changed. Recreate gradient wrappers saved by earlier versions rather than loading them directly.
 - In a `@bugs` program, `censored` has the BUGS `C()` meaning instead of that of `Distributions.censored`. An observed value exactly on a censoring bound contributes the density there, as in BUGS, rather than the probability mass `Distributions.censored` puts on the bound. `@model` code, and code outside a model, keep the `censored` their module has.
+- `Example.model_def` in `JuliaBUGS.BUGSExamples` is now the `BUGSModelDef` that `@bugs` returns rather than its `Expr` (#543). `compile` accepts either, and the `Expr` is its `model_def` field.
 
 ### Bug Fixes
 
 - A censored BUGS observation with a missing value now carries its censored likelihood. `dweib(r, mu)C(c, )` lowers to `censored(dweib(r, mu), c, nothing)`, which was `Distributions.censored` and put a point mass at `c`. A missing value started there about half the time, which is minus infinity in unconstrained space, so the sampler froze. It also counted as a generated quantity, because nothing observed depends on it, and was left out of the log density altogether. `censored` in a `@bugs` program now keeps the density of the distribution inside the bounds and zero outside, with no mass on the bounds, for continuous and discrete distributions alike, and a censored node always counts toward the log density. Mice's posterior medians now match JAGS.
 - `dmnorm`, `dmt`, and `dwish` symmetrize their matrix argument before factorizing it. A precision matrix computed from parameters, such as the inverse of one under ForwardDiff, can come out a rounding error from symmetric, and was rejected as not Hermitian although it is positive definite. Jaws and the multivariate Orange Trees now sample.
 - A point whose precision or scale matrix is not positive definite has log density `-Inf` instead of raising `PosDefException`, as a point outside the support already did, so a sampler rejects it and moves on. The gradient rejects such a point only where the density is not finite too, so a failure that only differentiation produces is still reported. Birats, whose NUTS step-size search overflowed into such a point, now converges.
+- The Biopsies example carries its own initial values. Its `inits` were misspelled in the source file, so it silently used the initial values of the multivariate Orange Trees example defined before it.
+- The Hepatitis measurement-error example carries its own reference results instead of those of the plain Hepatitis example.
 
 ## 0.17.1
 

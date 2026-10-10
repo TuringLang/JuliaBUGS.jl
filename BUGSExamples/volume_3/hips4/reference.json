@@ -1,0 +1,254 @@
+{
+  "BQ.incr[1]": {
+    "mean": 0.1392,
+    "std": 0.0619
+  },
+  "BQ.incr[2]": {
+    "mean": 0.1154,
+    "std": 0.05106
+  },
+  "BQ.incr[3]": {
+    "mean": 0.08319,
+    "std": 0.03693
+  },
+  "BQ.incr[4]": {
+    "mean": 0.03889,
+    "std": 0.01744
+  },
+  "BQ.incr[5]": {
+    "mean": 0.02016,
+    "std": 0.009124
+  },
+  "BQ.incr[6]": {
+    "mean": 0.01352,
+    "std": 0.006099
+  },
+  "BQ.incr[7]": {
+    "mean": 0.1302,
+    "std": 0.0577
+  },
+  "BQ.incr[8]": {
+    "mean": 0.1118,
+    "std": 0.04939
+  },
+  "BQ.incr[9]": {
+    "mean": 0.08488,
+    "std": 0.03763
+  },
+  "BQ.incr[10]": {
+    "mean": 0.04113,
+    "std": 0.01848
+  },
+  "BQ.incr[11]": {
+    "mean": 0.02194,
+    "std": 0.009888
+  },
+  "BQ.incr[12]": {
+    "mean": 0.01536,
+    "std": 0.006892
+  },
+  "C.incr[1]": {
+    "mean": -105.0,
+    "std": 251.0
+  },
+  "C.incr[2]": {
+    "mean": -38.62,
+    "std": 209.2
+  },
+  "C.incr[3]": {
+    "mean": 62.14,
+    "std": 152.7
+  },
+  "C.incr[4]": {
+    "mean": 211.7,
+    "std": 72.68
+  },
+  "C.incr[5]": {
+    "mean": 277.4,
+    "std": 38.26
+  },
+  "C.incr[6]": {
+    "mean": 301.3,
+    "std": 25.61
+  },
+  "C.incr[7]": {
+    "mean": -75.88,
+    "std": 232.5
+  },
+  "C.incr[8]": {
+    "mean": -25.19,
+    "std": 201.1
+  },
+  "C.incr[9]": {
+    "mean": 57.93,
+    "std": 154.8
+  },
+  "C.incr[10]": {
+    "mean": 204.6,
+    "std": 76.55
+  },
+  "C.incr[11]": {
+    "mean": 271.5,
+    "std": 41.24
+  },
+  "C.incr[12]": {
+    "mean": 295.0,
+    "std": 28.76
+  },
+  "HR": {
+    "mean": 0.6054,
+    "std": 0.1584
+  },
+  "ICER.strata[1]": {
+    "mean": -9624.0,
+    "std": 1.346e6
+  },
+  "ICER.strata[2]": {
+    "mean": -9435.0,
+    "std": 1.399e6
+  },
+  "ICER.strata[3]": {
+    "mean": -10320.0,
+    "std": 1.703e6
+  },
+  "ICER.strata[4]": {
+    "mean": -16720.0,
+    "std": 3.395e6
+  },
+  "ICER.strata[5]": {
+    "mean": -41420.0,
+    "std": 8.35e6
+  },
+  "ICER.strata[6]": {
+    "mean": -18120.0,
+    "std": 6.573e6
+  },
+  "ICER.strata[7]": {
+    "mean": -9118.0,
+    "std": 1.306e6
+  },
+  "ICER.strata[8]": {
+    "mean": -9113.0,
+    "std": 1.36e6
+  },
+  "ICER.strata[9]": {
+    "mean": -10120.0,
+    "std": 1.655e6
+  },
+  "ICER.strata[10]": {
+    "mean": -11560.0,
+    "std": 2.555e6
+  },
+  "ICER.strata[11]": {
+    "mean": -19530.0,
+    "std": 5.045e6
+  },
+  "ICER.strata[12]": {
+    "mean": -12830.0,
+    "std": 5.1e6
+  },
+  "P.CEA[30]": {
+    "mean": 0.7457,
+    "std": 0.4354
+  },
+  "P.CEA[50]": {
+    "mean": 0.8662,
+    "std": 0.3404
+  },
+  "P.CEA.strata[30,1]": {
+    "mean": 0.9293,
+    "std": 0.2562
+  },
+  "P.CEA.strata[30,2]": {
+    "mean": 0.9197,
+    "std": 0.2717
+  },
+  "P.CEA.strata[30,3]": {
+    "mean": 0.8854,
+    "std": 0.3185
+  },
+  "P.CEA.strata[30,4]": {
+    "mean": 0.571,
+    "std": 0.4949
+  },
+  "P.CEA.strata[30,5]": {
+    "mean": 0.0392,
+    "std": 0.1941
+  },
+  "P.CEA.strata[30,6]": {
+    "mean": 0.00045,
+    "std": 0.02121
+  },
+  "P.CEA.strata[30,7]": {
+    "mean": 0.9258,
+    "std": 0.2621
+  },
+  "P.CEA.strata[30,8]": {
+    "mean": 0.9173,
+    "std": 0.2754
+  },
+  "P.CEA.strata[30,9]": {
+    "mean": 0.8892,
+    "std": 0.3139
+  },
+  "P.CEA.strata[30,10]": {
+    "mean": 0.6146,
+    "std": 0.4867
+  },
+  "P.CEA.strata[30,11]": {
+    "mean": 0.0718,
+    "std": 0.2582
+  },
+  "P.CEA.strata[30,12]": {
+    "mean": 0.0018,
+    "std": 0.04239
+  },
+  "P.CEA.strata[50,1]": {
+    "mean": 0.9491,
+    "std": 0.2198
+  },
+  "P.CEA.strata[50,2]": {
+    "mean": 0.944,
+    "std": 0.2298
+  },
+  "P.CEA.strata[50,3]": {
+    "mean": 0.9276,
+    "std": 0.2591
+  },
+  "P.CEA.strata[50,4]": {
+    "mean": 0.7882,
+    "std": 0.4086
+  },
+  "P.CEA.strata[50,5]": {
+    "mean": 0.2678,
+    "std": 0.4428
+  },
+  "P.CEA.strata[50,6]": {
+    "mean": 0.02395,
+    "std": 0.1529
+  },
+  "P.CEA.strata[50,7]": {
+    "mean": 0.9473,
+    "std": 0.2233
+  },
+  "P.CEA.strata[50,8]": {
+    "mean": 0.9429,
+    "std": 0.2319
+  },
+  "P.CEA.strata[50,9]": {
+    "mean": 0.929,
+    "std": 0.2567
+  },
+  "P.CEA.strata[50,10]": {
+    "mean": 0.8093,
+    "std": 0.3929
+  },
+  "P.CEA.strata[50,11]": {
+    "mean": 0.35,
+    "std": 0.477
+  },
+  "P.CEA.strata[50,12]": {
+    "mean": 0.06165,
+    "std": 0.2405
+  }
+}

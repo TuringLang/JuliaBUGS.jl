@@ -1,0 +1,25 @@
+model
+{
+    tau.alpha ~ dgamma(0.001, 0.001)
+    alpha0 ~ dnorm(0.0, 1.0E-6)
+    beta0 ~ dnorm(0.0, 1.0E-6)
+    tau.beta ~ dgamma(0.001, 0.001)
+    for(i in 1:N) {
+        alpha[i] ~ dnorm(alpha0, tau.alpha)
+        beta[i] ~ dnorm(beta0, tau.beta)
+        y0[i] ~ dnorm(mu0[i], tau)
+        mu0[i] ~ dnorm(theta, psi)
+    }
+    for(j in 1:T) {
+        for(i in 1:N) {
+            Y[i, j] ~ dnorm(mu[i, j], tau)
+            mu[i, j] <- alpha[i] + beta[i] * (t[i, j] - 6.5) + 
+                gamma * (mu0[i] - mean(y0[]))
+        }
+    }
+    tau ~ dgamma(0.001, 0.001)
+    sigma <- 1 / sqrt(tau)
+    gamma ~ dnorm(0.0, 1.0E-6)
+    theta ~ dnorm(0.0, 1.0E-6)
+    psi ~ dgamma(0.001, 0.001)
+}
