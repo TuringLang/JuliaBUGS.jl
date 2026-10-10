@@ -409,6 +409,20 @@ function Base.show(io::IO, model::BUGSModel)
     return nothing
 end
 
+# As in BUGS, a node whose initial value is missing, or has a missing entry, starts from a
+# draw from its prior. A given value of a continuous node is stored as a float, since an
+# integer array would reject the real values evaluation later writes into it.
+function initial_value(dist, value)
+    value isa AbstractArray && any(ismissing, value) && return rand(dist)
+    ismissing(value) && return rand(dist)
+    value = value isa AbstractArray ? map(identity, value) : value
+    return if Distributions.value_support(typeof(dist)) === Distributions.Continuous
+        float.(value)
+    else
+        value
+    end
+end
+
 function BUGSModel(
     g::BUGSGraph,
     evaluation_env::NamedTuple,
@@ -451,13 +465,12 @@ function BUGSModel(
                     transformed_param_length += transformed_var_lengths[vn]
                 end
 
-                if haskey(initial_params, AbstractPPL.getsym(vn))
-                    initialization = AbstractPPL.getvalue(initial_params, vn)
-                    evaluation_env = BangBang.setindex!!(evaluation_env, initialization, vn)
+                initialization = if haskey(initial_params, AbstractPPL.getsym(vn))
+                    initial_value(dist, AbstractPPL.getvalue(initial_params, vn))
                 else
-                    init_value = rand(dist)
-                    evaluation_env = BangBang.setindex!!(evaluation_env, init_value, vn)
+                    rand(dist)
                 end
+                evaluation_env = BangBang.setindex!!(evaluation_env, initialization, vn)
             end
         end
     end
@@ -597,22 +610,15 @@ function initialize!(
         elseif variable_type == FixedParameter
             continue
         elseif !is_observed
-            initialization = try
+            given = try
                 AbstractPPL.getvalue(initial_params, vn)
             catch _
                 missing
             end
-            if !ismissing(initialization)
-                BangBang.@set!! model.evaluation_env = setindex!!(
-                    model.evaluation_env, initialization, vn
-                )
-            else
-                BangBang.@set!! model.evaluation_env = setindex!!(
-                    model.evaluation_env,
-                    rand(node_function(model.evaluation_env, loop_vars)),
-                    vn,
-                )
-            end
+            dist = node_function(model.evaluation_env, loop_vars)
+            BangBang.@set!! model.evaluation_env = setindex!!(
+                model.evaluation_env, initial_value(dist, given), vn
+            )
         end
     end
     return model
