@@ -816,13 +816,15 @@ function _regenerate_log_density_function(
     graph_evaluation_data::GraphEvaluationData,
     owner_module::Module,
 )
-    lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
+    generated_sorted_nodes = VarName[]
+    lowered_model_def, _ = JuliaBUGS._generate_lowered_model_def(
         model_def,
         graph,
         evaluation_env;
         generated_quantities=Set(graph_evaluation_data.generated_quantities),
         fixed_parameters=Set(graph_evaluation_data.fixed_parameters),
         eval_module=owner_module,
+        sorted_nodes_out=generated_sorted_nodes,
     )
 
     if !isnothing(lowered_model_def)
@@ -833,12 +835,7 @@ function _regenerate_log_density_function(
             log_density_computation_expr, JuliaBUGS, owner_module
         )
 
-        # Collect sorted nodes from the reconstructed model def to ensure correct parameter ordering
-        pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
-        JuliaBUGS.analyze_block(pass, reconstructed_model_def)
-
-        # Filter to only include nodes that are in the graph
-        sorted_nodes = filter(pass.sorted_nodes) do node
+        sorted_nodes = filter(generated_sorted_nodes) do node
             node in graph_evaluation_data.sorted_nodes
         end
 
