@@ -30,6 +30,7 @@ test_examples = [
     :birats,
     :schools,
     :cervix,
+    :endo,
 ]
 
 @testset "source_gen: $example_name" for example_name in test_examples
@@ -56,6 +57,25 @@ test_examples = [
     end
 
     @test result_with_log_density_computation_function ≈ result_with_bugsmodel
+
+    # A second point, from the alternative initial values, catches a value read before
+    # this evaluation writes it, which the starting point hides because the environment
+    # already holds its values.
+    alternative = compile(
+        model_def, data, getfield(JuliaBUGS.BUGSExamples, example_name).inits_alternative
+    )
+    x_graph = Base.invokelatest(
+        JuliaBUGS.getparams,
+        JuliaBUGS.set_evaluation_mode(alternative, JuliaBUGS.UseGraph()),
+    )
+    x_gen = Base.invokelatest(
+        JuliaBUGS.getparams,
+        JuliaBUGS.set_evaluation_mode(
+            alternative, JuliaBUGS.UseGeneratedLogDensityFunction()
+        ),
+    )
+    @test Base.invokelatest(LogDensityProblems.logdensity, model_gen, x_gen) ≈
+        Base.invokelatest(LogDensityProblems.logdensity, model_graph, x_graph)
 end
 
 @testset "reserved variable names are rejected" begin
@@ -95,20 +115,21 @@ end
         return lowered !== nothing, diags
     end
 
-    # Helper: verify generated code produces same log density as graph evaluation
+    # Helper: verify generated code produces same log density as graph evaluation, at
+    # the starting point and then at a second one (see the example tests above)
     function generated_matches_graph(model_def, data)
         model = compile(model_def, data)
-        result_graph = begin
-            m = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
-            params = Base.invokelatest(JuliaBUGS.getparams, m)
-            Base.invokelatest(LogDensityProblems.logdensity, m, params)
+        graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        gen = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
+        params(m) = Base.invokelatest(JuliaBUGS.getparams, m)
+        # Read before evaluating, since generated evaluation writes into the shared environment.
+        x_graph, x_gen = params(graph), params(gen)
+        return all((0.0, 0.1)) do shift
+            at(m, x) = Base.invokelatest(LogDensityProblems.logdensity, m, x .+ shift)
+            at(graph, x_graph) ≈ at(gen, x_gen)
         end
-        result_gen = begin
-            m = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
-            params = Base.invokelatest(JuliaBUGS.getparams, m)
-            Base.invokelatest(LogDensityProblems.logdensity, m, params)
-        end
-        return result_graph ≈ result_gen
     end
 
     @testset "basic SSM with self-recursion" begin
@@ -215,6 +236,24 @@ end
             end
         end
         @test !first(can_generate_source(model_def, (a=[2, 2, 1], b=[2, 1, 2])))
+    end
+
+    @testset "statement reading a row that a later iteration writes" begin
+        # As in Endo: at j = 1, p[i, 1] reads e[i, 2], which the loop writes at j = 2,
+        # so the two statements must not share a loop.
+        model_def = @bugs begin
+            for i in 1:N
+                for j in 1:2
+                    e[i, j] = exp(beta * x[i, j])
+                    p[i, j] = e[i, j] / sum(e[i, 1:2])
+                end
+                y[i, 1:2] ~ dmulti(p[i, 1:2], 1)
+            end
+            beta ~ Normal(0, 1)
+        end
+        data = (N=3, x=[1 0; 0 1; 1 1], y=[1 0; 0 1; 1 0])
+        @test first(can_generate_source(model_def, data))
+        @test generated_matches_graph(model_def, data)
     end
 
     @testset "multi-statement loop with mixed dependencies" begin

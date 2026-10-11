@@ -190,20 +190,26 @@ function _sort_fissioned_stmts(stmt_dep_graph, fissioned_stmts, stmt_ids)
     return sorted_fissioned_stmts
 end
 
-function _reconstruct_model_def_from_sorted_fissioned_stmts(sorted_fissioned_stmts)
+function _reconstruct_model_def_from_sorted_fissioned_stmts(
+    sorted_fissioned_stmts, stmt_ids, unfusable
+)
     args = Any[]
 
     i = 1
     N = length(sorted_fissioned_stmts)
     while i <= N
         loops_i, stmti = sorted_fissioned_stmts[i]
-        # collect consecutive statements with identical loop nests
+        # collect consecutive statements with identical loop nests, unless a statement
+        # reads a value that an earlier one in the group writes in a later iteration
         group_stmts = Any[]
+        group_ids = Int[]
         j = i
         while j <= N
             loops_j, stmtj = sorted_fissioned_stmts[j]
-            if loops_j == loops_i
+            id_j = stmt_ids[first(stmtj)]
+            if loops_j == loops_i && !any(id -> (id, id_j) in unfusable, group_ids)
                 append!(group_stmts, stmtj)
+                push!(group_ids, id_j)
                 j += 1
             else
                 break
@@ -485,7 +491,7 @@ function _generate_lowered_model_def(
     # the same loop nest, they are sequentially valid and we can either
     # drop those edges (self or cross-statement) or fuse statements into
     # a single loop with per-iteration ordering.
-    ordering_graph, all_deps_valid = _build_ordering_graph_via_dependence_vectors(
+    ordering_graph, all_deps_valid, unfusable = _build_ordering_graph_via_dependence_vectors(
         g, coarse_graph, var_to_stmt_id; diagnostics=diagnostics
     )
     # If dependence analysis found a negative dependence, abort immediately.
@@ -524,7 +530,7 @@ function _generate_lowered_model_def(
         )
     end
     reconstructed_model_def = _reconstruct_model_def_from_sorted_fissioned_stmts(
-        sorted_fissioned_stmts
+        sorted_fissioned_stmts, stmt_to_stmt_id, unfusable
     )
     induction_variable_values = _var_to_loop_vars(model_def, evaluation_env)
     fixed_parameter_vars = Set{VarName}(fixed_parameters)
@@ -876,7 +882,8 @@ end
 #   like x[t] ~ f(x[t-1]).
 # - Cross-statement edges are always kept. Cycles among them are resolved
 #   later by _attempt_resolve_cycles_via_loop_fusion.
-# - If any edge has a negative dependence vector, we abort (return ok=false).
+# - If a self-edge has a negative dependence vector, we abort (return ok=false).
+# - Also returns the cross-statement pairs whose loops must not be fused.
 function _build_ordering_graph_via_dependence_vectors(
     g::JuliaBUGS.BUGSGraph,
     coarse_graph::Graphs.SimpleDiGraph,
@@ -884,6 +891,7 @@ function _build_ordering_graph_via_dependence_vectors(
     diagnostics::Vector{String}=String[],
 )
     ordering_graph = Graphs.SimpleDiGraph(Graphs.nv(coarse_graph))
+    unfusable = Set{Tuple{Int,Int}}()
 
     # Iterate all coarse edges and decide whether to keep them for ordering
     for e in Graphs.edges(coarse_graph)
@@ -898,10 +906,13 @@ function _build_ordering_graph_via_dependence_vectors(
         # Check all fine edges to classify the coarse edge
         all_positive = true
         has_negative = false
+        has_unknown = false
         for (src_vn, dst_vn) in fine_edges
             rel = _classify_fine_edge(g, src_vn, dst_vn)
             if rel === :negative
                 has_negative = true
+            elseif rel === :unknown
+                has_unknown = true
             end
             if rel !== :positive
                 all_positive = false
@@ -916,7 +927,7 @@ function _build_ordering_graph_via_dependence_vectors(
                     diagnostics,
                     "Negative self-dependence prevents ordering: statement $(src_stmt_id)",
                 )
-                return ordering_graph, false
+                return ordering_graph, false, unfusable
             end
             # Self-edge: only drop if ALL fine edges are positive (loop-carried)
             # This safely breaks recursion cycles like x[t] ~ f(x[t-1])
@@ -929,10 +940,11 @@ function _build_ordering_graph_via_dependence_vectors(
             # statement's loop must complete all iterations before the destination
             # statement's loop begins. This is handled by keeping the edge.
             Graphs.add_edge!(ordering_graph, src_stmt_id, dst_stmt_id)
+            (has_negative || has_unknown) && push!(unfusable, (src_stmt_id, dst_stmt_id))
         end
     end
 
-    return ordering_graph, true
+    return ordering_graph, true, unfusable
 end
 
 # Build a mapping from statement id to its fissioned loop nest (tuple of (var, lb, ub)).

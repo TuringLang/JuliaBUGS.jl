@@ -8,6 +8,8 @@
   The evaluation environment that the generated log density writes into goes to AbstractPPL as `scratch`, which needs AbstractPPL 0.15.6.
 - An initial value with a missing entry leaves its node to a draw from the prior, as in BUGS, and an integer initial value of a continuous node is stored as a float.
   Partial initial values made the array `Union{Missing, Float64}`, which distributions such as `dmulti` reject, and integer ones kept an integer array that generated evaluation could not write real values into.
+- The generated log density no longer fuses two statements into one loop when one reads a value the other writes in a later iteration.
+  Endo's `p[i, j] <- e[i, j] / sum(e[i, ])` read `e[i, 2]` from the previous evaluation, so its log density depended on the last call and its rows of `p` stopped summing to one.
 
 ## 0.18.0
 
