@@ -184,6 +184,10 @@ transition_params_and_stats(::BUGSModel, ::Any, ::Any) = nothing
 include("gibbs.jl")
 include("advanced_mh.jl")
 
+include("melding.jl")
+using .Melding: Melding, meld
+export meld
+
 include("source_gen.jl")
 
 include("BUGSExamples/BUGSExamples.jl")

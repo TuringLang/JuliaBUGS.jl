@@ -2,6 +2,10 @@
 
 ## 0.18.1
 
+### New Features
+
+- Markov melding (Goudie et al., 2019): `meld(submodels, links; pooling, marginals)` joins compiled models that share a link quantity into a `MeldedModel`, a `LogDensityProblems` target whose density is the melded posterior ``p_pool(φ) ∏_m p_m(φ, ψ_m, y_m) / p_m(φ)``. Product-of-experts, dictatorial, logarithmic and linear pooling are provided. Where a submodel's prior on the link is a closed set of graph nodes, dividing it out is done exactly with `fix`; otherwise an `ExactMarginal`, `SimulatedMarginal` (prior simulation plus a density estimate) or `FunctionMarginal` supplies ``p_m(φ)``. `MeldedModelWithGradient` and `AbstractMCMC.sample(melded, sampler, n; adtype)` sample it. See the *Markov Melding* documentation page.
+
 ### Bug Fixes
 
 - `AutoEnzyme` gives the right gradient in generated mode (#555, closes #549).
