@@ -140,7 +140,7 @@ chain = AbstractMCMC.sample(
 nothing # hide
 ```
 
-This runs 3000 iterations; the first 1000 are used to tune the sampler and are discarded (`n_adapts` and `discard_initial`), leaving 2000 posterior draws. `chain_type = VNChain` collects the draws into a chain object keyed by variable name. Expect the run to take a few minutes.
+This runs 4000 iterations. The first 1000 are used to tune the sampler and are discarded (`n_adapts` and `discard_initial`), and the 3000 after them are the posterior draws. `chain_type = VNChain` collects the draws into a chain object keyed by variable name. Expect the run to take a few minutes.
 
 ## Read the results
 
@@ -156,7 +156,7 @@ The table has a row for each of the 30 intercepts `alpha[i]` and slopes `beta[i]
 - `alpha0`, the average weight extrapolated back to birth: about 106.6 grams (published value 106.6),
 - `sigma`, the residual standard deviation of the weight measurements: about 6.1 grams (published value 6.093).
 
-Your numbers will not match the published values to every digit, and they will change slightly each time you run the sampler: posterior means estimated from 2000 draws carry a small Monte Carlo error (reported in the `mcse` column), so agreement to within that error is exactly what success looks like. As a quick health check, `rhat` should be very close to 1 for every row.
+Your numbers will not match the published values to every digit, and they will change slightly each time you run the sampler: posterior means estimated from 3000 draws carry a small Monte Carlo error (reported in the `mcse` column), so agreement to within that error is exactly what success looks like. As a quick health check, `rhat` should be very close to 1 for every row.
 
 That is the whole workflow: write the model with `@bugs`, put the data in a `NamedTuple`, compile it, attach a gradient backend when the sampler needs one, `sample` to fit, and `summarystats` to read the results.
 
