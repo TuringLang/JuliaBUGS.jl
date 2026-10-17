@@ -386,12 +386,13 @@ the continuous parameters and observations.
 
 The latents are drawn in the marginalization order: each discrete latent `z_i` is sampled
 from the weights `p(z_i = v | pa) · p(y, z_{>i} | z_i = v, …)`, where the second factor is
-the marginalized joint of everything downstream (computed by [`_marginalize_recursive`](@ref)
-with `z_i` fixed to `v` and the not-yet-sampled latents summed out). Normalizing over `v`
-gives exactly `p(z_i = v | z_{<i}, θ, y)`, so sampling the latents sequentially in
-topological order yields a draw from the joint posterior `p(z | θ, y)`. Continuous parameters
-are taken from `evaluation_env`; generated quantities are skipped (they are forward-sampled
-separately).
+the marginalized joint of the nodes downstream that depend on `z_i` (computed by
+[`_marginalize_recursive`](@ref) over the segment of `z_i`, see [`_segment_lengths`](@ref),
+with `z_i` fixed to `v` and the not-yet-sampled latents summed out). The nodes after the
+segment contribute the same factor for every `v`, so normalizing over `v` gives exactly
+`p(z_i = v | z_{<i}, θ, y)`, and sampling the latents sequentially in topological order
+yields a draw from the joint posterior `p(z | θ, y)`. Continuous parameters are taken from
+`evaluation_env`; generated quantities are skipped (they are forward-sampled separately).
 """
 function _sample_discrete_latents!!(
     rng::Random.AbstractRNG, model::BUGSModel, evaluation_env
@@ -400,94 +401,64 @@ function _sample_discrete_latents!!(
     (mc === nothing || mc.n_discrete_finite == 0) && return evaluation_env
     # Continuous parameters in the order/offsets expected by `_marginalize_recursive`.
     param_values = getparams(model, evaluation_env)
-    return _backward_sample_recursive!!(
-        rng,
-        model,
-        evaluation_env,
-        mc.marginalization_order,
-        param_values,
-        mc.param_offsets,
-        mc.param_lengths,
-        mc.minimal_cache_keys,
-    )
-end
-
-function _backward_sample_recursive!!(
-    rng::Random.AbstractRNG,
-    model::BUGSModel,
-    env::NamedTuple,
-    remaining_indices::AbstractVector{Int},
-    param_values::AbstractVector,
-    param_offsets::Dict{<:VarName,Int},
-    var_lengths::Dict{<:VarName,Int},
-    minimal_keys::Dict{Int,Vector{Int}},
-)
-    isempty(remaining_indices) && return env
+    order = mc.marginalization_order
+    segment_lengths = _segment_lengths(order, mc.minimal_cache_keys)
 
     gd = model.graph_evaluation_data
-    mc = model.marginalization_cache
+    env = evaluation_env
+    for (k, current_idx) in enumerate(order)
+        current_vn = gd.sorted_nodes[current_idx]
+        node_function = gd.node_function_vals[current_idx]
+        loop_vars = gd.loop_vars_vals[current_idx]
 
-    current_idx = remaining_indices[1]
-    current_vn = gd.sorted_nodes[current_idx]
-    rest_indices = @view(remaining_indices[2:end])
-    node_function = gd.node_function_vals[current_idx]
-    loop_vars = gd.loop_vars_vals[current_idx]
-
-    if gd.variable_types[current_idx] == GeneratedQuantity ||
-        gd.variable_types[current_idx] == FixedParameter
-        # Generated quantities are forward-sampled separately; skip here.
-    elseif !gd.is_stochastic_vals[current_idx]
-        env = BangBang.setindex!!(env, node_function(env, loop_vars), current_vn)
-    elseif gd.is_observed_vals[current_idx]
-        # Observed value is already in the environment.
-    elseif mc.node_types[current_idx] == :discrete_finite
-        # Sample this latent from p(z_i = v | z_{<i}, θ, y), with z_{>i} marginalized.
-        dist = node_function(env, loop_vars)
-        possible_values = collect(_enumerate_discrete_values(dist))
-        log_weights = Vector{Float64}(undef, length(possible_values))
-        for (k, val) in enumerate(possible_values)
-            branch_env = BangBang.setindex!!(env, val, current_vn)
-            memo = Dict{Tuple{Int,Tuple},Tuple{Float64,Float64}}()
-            branch_prior, branch_lik = _marginalize_recursive(
-                model,
-                branch_env,
-                rest_indices,
-                param_values,
-                param_offsets,
-                var_lengths,
-                memo,
-                minimal_keys,
+        if gd.variable_types[current_idx] == GeneratedQuantity ||
+            gd.variable_types[current_idx] == FixedParameter
+            # Generated quantities are forward-sampled separately; skip here.
+        elseif !gd.is_stochastic_vals[current_idx]
+            env = BangBang.setindex!!(env, node_function(env, loop_vars), current_vn)
+        elseif gd.is_observed_vals[current_idx]
+            # Observed value is already in the environment.
+        elseif mc.node_types[current_idx] == :discrete_finite
+            # Sample this latent from p(z_i = v | z_{<i}, θ, y), with z_{>i} marginalized.
+            segment = (k + 1):(k + segment_lengths[k] - 1)
+            dist = node_function(env, loop_vars)
+            possible_values = collect(_enumerate_discrete_values(dist))
+            log_weights = Vector{Float64}(undef, length(possible_values))
+            for (j, val) in enumerate(possible_values)
+                branch_env = BangBang.setindex!!(env, val, current_vn)
+                memo = Dict{Tuple{Int,Tuple},Tuple{Float64,Float64}}()
+                branch_prior, branch_lik = _marginalize_recursive(
+                    model,
+                    branch_env,
+                    view(order, segment),
+                    param_values,
+                    mc.param_offsets,
+                    mc.param_lengths,
+                    memo,
+                    mc.minimal_cache_keys,
+                    view(segment_lengths, segment),
+                )
+                # Keep the full branch weight: downstream prior and likelihood terms may
+                # both depend on this candidate value.
+                log_weights[j] = logpdf(dist, val) + branch_prior + branch_lik
+            end
+            weights = exp.(log_weights .- LogExpFunctions.logsumexp(log_weights))
+            sampled = possible_values[rand(rng, Distributions.Categorical(weights))]
+            env = BangBang.setindex!!(env, sampled, current_vn)
+        else
+            # Continuous (or discrete-infinite) parameter: set its value from the vector.
+            dist = node_function(env, loop_vars)
+            b_inv = Bijectors.inverse(Bijectors.bijector(dist))
+            len = mc.param_lengths[current_vn]
+            start_idx = mc.param_offsets[current_vn]
+            param_slice = view(param_values, start_idx:(start_idx + len - 1))
+            value, _ = Bijectors.with_logabsdet_jacobian(
+                b_inv, reconstruct(b_inv, dist, param_slice)
             )
-            # Keep the full branch weight: downstream prior and likelihood terms may
-            # both depend on this candidate value.
-            log_weights[k] = logpdf(dist, val) + branch_prior + branch_lik
+            env = BangBang.setindex!!(env, value, current_vn)
         end
-        weights = exp.(log_weights .- LogExpFunctions.logsumexp(log_weights))
-        sampled = possible_values[rand(rng, Distributions.Categorical(weights))]
-        env = BangBang.setindex!!(env, sampled, current_vn)
-    else
-        # Continuous (or discrete-infinite) parameter: set its value from the vector.
-        dist = node_function(env, loop_vars)
-        b_inv = Bijectors.inverse(Bijectors.bijector(dist))
-        len = var_lengths[current_vn]
-        start_idx = param_offsets[current_vn]
-        param_slice = view(param_values, start_idx:(start_idx + len - 1))
-        value, _ = Bijectors.with_logabsdet_jacobian(
-            b_inv, reconstruct(b_inv, dist, param_slice)
-        )
-        env = BangBang.setindex!!(env, value, current_vn)
     end
-
-    return _backward_sample_recursive!!(
-        rng,
-        model,
-        env,
-        rest_indices,
-        param_values,
-        param_offsets,
-        var_lengths,
-        minimal_keys,
-    )
+    return env
 end
 
 # ======================
@@ -725,13 +696,48 @@ function _compute_marginalization_order(
 end
 
 """
-    _marginalize_recursive(model, env, remaining_indices, parameter_values,
-                           param_offsets, var_lengths, memo, minimal_keys)
+    _segment_lengths(order, minimal_keys)
 
-Recursively compute log probability by marginalizing over discrete finite variables.
+For each position `p` in `order`, the number of nodes from `p` up to the first later node
+whose frontier holds no variable placed at or after `p`.
+
+For a discrete finite node this is the part of the order that depends on its value, directly
+or through discrete variables placed after it that are still live. Summing the node out only
+needs that segment inside each branch. Every other node gets `1`.
+"""
+function _segment_lengths(order::AbstractVector{Int}, minimal_keys::Dict{Int,Vector{Int}})
+    n = length(order)
+    no_frontier = Int[]
+    stops = Vector{Int}(undef, n)
+    for p in n:-1:1
+        frontier = get(minimal_keys, order[p], no_frontier)
+        q = p + 1
+        # If the frontier at `q` still holds a variable placed at or after `p`, so does
+        # every frontier before `stops[q]`, so the loop jumps there.
+        while q <= n && !issubset(get(minimal_keys, order[q], no_frontier), frontier)
+            q = stops[q]
+        end
+        stops[p] = q
+    end
+    return stops .- (1:n)
+end
+
+"""
+    _marginalize_recursive(
+        model, env, remaining_indices, parameter_values, param_offsets, var_lengths, memo,
+        minimal_keys, segment_lengths=_segment_lengths(remaining_indices, minimal_keys),
+    )
+
+Compute the log probability of the nodes in `remaining_indices` by marginalizing over
+discrete finite variables.
 
 Returns `(log_prior, log_lik)` where the total log joint is `log_prior + log_lik`.
 This separation allows for likelihood tempering.
+
+Nodes are visited in a loop. A discrete finite node is summed out over its segment only (see
+[`_segment_lengths`](@ref)), and the nodes after the segment are added once outside the sum,
+so the recursion is only as deep as the segments are nested. The result from each visited
+node to the end of `remaining_indices` is memoized under the node's frontier values.
 """
 function _marginalize_recursive(
     model::BUGSModel,
@@ -742,164 +748,166 @@ function _marginalize_recursive(
     var_lengths::Dict{VarName,Int},
     memo::Dict{Tuple{Int,Tuple},Tuple{T,T}},
     minimal_keys::Dict{Int,Vector{Int}},
+    segment_lengths::AbstractVector{Int}=_segment_lengths(remaining_indices, minimal_keys),
 ) where {T}
-    # Base case - use zero(T) for AD compatibility
-    isempty(remaining_indices) && return (zero(T), zero(T))
-
     gd = model.graph_evaluation_data
     mc = model.marginalization_cache
 
-    current_idx = remaining_indices[1]
-    current_vn = gd.sorted_nodes[current_idx]
+    # The memo key and the `(log_prior, log_lik)` term of each visited node. After the loop
+    # they are summed from the back, so each key gets the total from its node to the end.
+    visited_keys = Tuple{Int,Tuple}[]
+    terms = Tuple{T,T}[]
+    # Base case - use zero(T) for AD compatibility
+    rest_prior, rest_lik = zero(T), zero(T)
 
-    # Memo key: (node index, frontier values)
-    # Frontier indices are deterministic given current_idx, so only values needed
-    frontier_indices = get(minimal_keys, current_idx, Int[])
-    frontier_values = if isempty(frontier_indices)
-        ()
-    else
-        Tuple(AbstractPPL.getvalue(env, gd.sorted_nodes[idx]) for idx in frontier_indices)
-    end
-    memo_key = (current_idx, frontier_values)
+    k = 1
+    while k <= length(remaining_indices)
+        current_idx = remaining_indices[k]
+        current_vn = gd.sorted_nodes[current_idx]
 
-    haskey(memo, memo_key) && return memo[memo_key]
-
-    node_function = gd.node_function_vals[current_idx]
-    loop_vars = gd.loop_vars_vals[current_idx]
-    rest_indices = @view(remaining_indices[2:end])
-
-    result =
-        if gd.variable_types[current_idx] == GeneratedQuantity ||
-            gd.variable_types[current_idx] == FixedParameter
-            # Generated quantities are outside the target closure, so the generated-quantity
-            # block integrates/sums to one and factors out of the marginalized target p(θ, y).
-            # Skip it entirely: don't read the parameter vector (it has no slot there) and don't
-            # marginalize it. Fixed parameters keep their value in `env`; generated quantities
-            # are recovered later by forward sampling.
-            _marginalize_recursive(
-                model,
-                env,
-                rest_indices,
-                parameter_values,
-                param_offsets,
-                var_lengths,
-                memo,
-                minimal_keys,
-            )
-
-        elseif !gd.is_stochastic_vals[current_idx]
-            # Deterministic node: compute value and continue
-            value = node_function(env, loop_vars)
-            new_env = BangBang.setindex!!(env, value, current_vn)
-            _marginalize_recursive(
-                model,
-                new_env,
-                rest_indices,
-                parameter_values,
-                param_offsets,
-                var_lengths,
-                memo,
-                minimal_keys,
-            )
-
-        elseif gd.is_observed_vals[current_idx]
-            # Observed stochastic node: add to likelihood
-            dist = node_function(env, loop_vars)
-            obs_value = AbstractPPL.getvalue(env, current_vn)
-            obs_logp = logpdf(dist, obs_value)
-            obs_logp = isnan(obs_logp) ? -Inf : obs_logp
-
-            rest_prior, rest_lik = _marginalize_recursive(
-                model,
-                env,
-                rest_indices,
-                parameter_values,
-                param_offsets,
-                var_lengths,
-                memo,
-                minimal_keys,
-            )
-            (rest_prior, obs_logp + rest_lik)
-
-        elseif mc.node_types[current_idx] == :discrete_finite
-            # Discrete finite unobserved: marginalize by enumerating all values
-            dist = node_function(env, loop_vars)
-            possible_values = _enumerate_discrete_values(dist)
-
-            # Lazy allocation for type stability with AD
-            log_priors = nothing
-            log_liks = nothing
-
-            for (i, val) in enumerate(possible_values)
-                branch_env = BangBang.setindex!!(env, val, current_vn)
-                val_logp = logpdf(dist, val)
-                val_logp = isnan(val_logp) ? -Inf : val_logp
-
-                branch_prior, branch_lik = _marginalize_recursive(
-                    model,
-                    branch_env,
-                    rest_indices,
-                    parameter_values,
-                    param_offsets,
-                    var_lengths,
-                    memo,
-                    minimal_keys,
-                )
-
-                # log P(z=val, rest_prior)
-                total_prior = val_logp + branch_prior
-                if log_priors === nothing
-                    log_priors = Vector{typeof(total_prior)}(undef, length(possible_values))
-                    log_liks = Vector{typeof(branch_lik)}(undef, length(possible_values))
-                end
-                log_priors[i] = total_prior
-                log_liks[i] = branch_lik
-            end
-
-            # Marginalize: sum over all discrete values
-            # log_prior_marg = log Σ_z P(z, rest_prior)
-            # log_joint_marg = log Σ_z P(z, rest_prior, data)
-            log_prior_marg = LogExpFunctions.logsumexp(log_priors)
-            log_joint_marg = LogExpFunctions.logsumexp(log_priors .+ log_liks)
-
-            # log_lik = log P(data | params) = log_joint - log_prior
-            log_lik_marg =
-                isfinite(log_prior_marg) ? log_joint_marg - log_prior_marg : log_joint_marg
-            (log_prior_marg, log_lik_marg)
-
+        # Memo key: (node index, frontier values)
+        # Frontier indices are deterministic given current_idx, so only values needed
+        frontier_indices = get(minimal_keys, current_idx, Int[])
+        frontier_values = if isempty(frontier_indices)
+            ()
         else
-            # Continuous or discrete-infinite unobserved: read from parameter vector
-            dist = node_function(env, loop_vars)
-            bijector = Bijectors.bijector(dist)
+            Tuple(AbstractPPL.getvalue(env, gd.sorted_nodes[idx]) for idx in frontier_indices)
+        end
+        memo_key = (current_idx, frontier_values)
 
-            len = var_lengths[current_vn]
-            start_idx = param_offsets[current_vn]
-            param_slice = view(parameter_values, start_idx:(start_idx + len - 1))
-
-            b_inv = Bijectors.inverse(bijector)
-            reconstructed = reconstruct(b_inv, dist, param_slice)
-            value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed)
-
-            new_env = BangBang.setindex!!(env, value, current_vn)
-
-            dist_logp = logpdf(dist, value)
-            dist_logp = isnan(dist_logp) ? -Inf : dist_logp + logjac
-
-            rest_prior, rest_lik = _marginalize_recursive(
-                model,
-                new_env,
-                rest_indices,
-                parameter_values,
-                param_offsets,
-                var_lengths,
-                memo,
-                minimal_keys,
-            )
-            (dist_logp + rest_prior, rest_lik)
+        if haskey(memo, memo_key)
+            rest_prior, rest_lik = memo[memo_key]
+            break
         end
 
-    memo[memo_key] = result
-    return result
+        node_function = gd.node_function_vals[current_idx]
+        loop_vars = gd.loop_vars_vals[current_idx]
+        next_k = k + 1
+
+        term =
+            if gd.variable_types[current_idx] == GeneratedQuantity ||
+                gd.variable_types[current_idx] == FixedParameter
+                # Generated quantities are outside the target closure, so the generated-quantity
+                # block integrates/sums to one and factors out of the marginalized target p(θ, y).
+                # Skip it entirely: don't read the parameter vector (it has no slot there) and don't
+                # marginalize it. Fixed parameters keep their value in `env`; generated quantities
+                # are recovered later by forward sampling.
+                (zero(T), zero(T))
+
+            elseif !gd.is_stochastic_vals[current_idx]
+                # Deterministic node: compute value and continue
+                value = node_function(env, loop_vars)
+                env = BangBang.setindex!!(env, value, current_vn)
+                (zero(T), zero(T))
+
+            elseif gd.is_observed_vals[current_idx]
+                # Observed stochastic node: add to likelihood
+                dist = node_function(env, loop_vars)
+                obs_value = AbstractPPL.getvalue(env, current_vn)
+                obs_logp = logpdf(dist, obs_value)
+                obs_logp = isnan(obs_logp) ? -Inf : obs_logp
+                (zero(T), obs_logp)
+
+            elseif mc.node_types[current_idx] == :discrete_finite
+                # Discrete finite unobserved: marginalize by enumerating all values
+                next_k = k + segment_lengths[k]
+                segment = (k + 1):(next_k - 1)
+                dist = node_function(env, loop_vars)
+                possible_values = _enumerate_discrete_values(dist)
+
+                # Lazy allocation for type stability with AD
+                log_priors = nothing
+                log_liks = nothing
+
+                for (i, val) in enumerate(possible_values)
+                    branch_env = BangBang.setindex!!(env, val, current_vn)
+                    val_logp = logpdf(dist, val)
+                    val_logp = isnan(val_logp) ? -Inf : val_logp
+
+                    branch_prior, branch_lik = _marginalize_recursive(
+                        model,
+                        branch_env,
+                        view(remaining_indices, segment),
+                        parameter_values,
+                        param_offsets,
+                        var_lengths,
+                        memo,
+                        minimal_keys,
+                        view(segment_lengths, segment),
+                    )
+
+                    # log P(z=val, rest_prior)
+                    total_prior = val_logp + branch_prior
+                    if log_priors === nothing
+                        log_priors = Vector{typeof(total_prior)}(
+                            undef, length(possible_values)
+                        )
+                        log_liks = Vector{typeof(branch_lik)}(
+                            undef, length(possible_values)
+                        )
+                    end
+                    log_priors[i] = total_prior
+                    log_liks[i] = branch_lik
+                end
+
+                # Marginalize: sum over all discrete values
+                # log_prior_marg = log Σ_z P(z, rest_prior)
+                # log_joint_marg = log Σ_z P(z, rest_prior, data)
+                log_prior_marg = LogExpFunctions.logsumexp(log_priors)
+                log_joint_marg = LogExpFunctions.logsumexp(log_priors .+ log_liks)
+
+                # log_lik = log P(data | params) = log_joint - log_prior
+                log_lik_marg = if isfinite(log_prior_marg)
+                    log_joint_marg - log_prior_marg
+                else
+                    log_joint_marg
+                end
+
+                # A deterministic node in the segment may depend only on earlier variables,
+                # and nodes after the segment can read it. Its value was set only inside
+                # the branches, so set it again here.
+                if next_k <= length(remaining_indices)
+                    for j in segment
+                        idx = remaining_indices[j]
+                        gd.is_stochastic_vals[idx] && continue
+                        gd.variable_types[idx] == GeneratedQuantity && continue
+                        value = gd.node_function_vals[idx](env, gd.loop_vars_vals[idx])
+                        env = BangBang.setindex!!(env, value, gd.sorted_nodes[idx])
+                    end
+                end
+                (log_prior_marg, log_lik_marg)
+
+            else
+                # Continuous or discrete-infinite unobserved: read from parameter vector
+                dist = node_function(env, loop_vars)
+                bijector = Bijectors.bijector(dist)
+
+                len = var_lengths[current_vn]
+                start_idx = param_offsets[current_vn]
+                param_slice = view(parameter_values, start_idx:(start_idx + len - 1))
+
+                b_inv = Bijectors.inverse(bijector)
+                reconstructed = reconstruct(b_inv, dist, param_slice)
+                value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed)
+
+                env = BangBang.setindex!!(env, value, current_vn)
+
+                dist_logp = logpdf(dist, value)
+                dist_logp = isnan(dist_logp) ? -Inf : dist_logp + logjac
+                (dist_logp, zero(T))
+            end
+
+        push!(visited_keys, memo_key)
+        push!(terms, term)
+        k = next_k
+    end
+
+    for i in reverse(eachindex(terms))
+        rest_prior = terms[i][1] + rest_prior
+        rest_lik = terms[i][2] + rest_lik
+        memo[visited_keys[i]] = (rest_prior, rest_lik)
+    end
+    return rest_prior, rest_lik
 end
 
 """

@@ -1039,4 +1039,59 @@ using JuliaBUGS.Model:
         @test maximum(abs.(P_emp .- P)) < 0.02
         @test isapprox(g_sum / N, Eg; atol=0.05)
     end
+
+    @testset "mixture with thousands of latents" begin
+        mixture_def = @bugs begin
+            for i in 1:N
+                z[i] ~ Bernoulli(0.5)
+                y[i] ~ Normal(mu + z[i], 1)
+            end
+            mu ~ Normal(0, 10)
+        end
+        N = 5000
+        y = randn(StableRNG(1), N)
+        model = set_evaluation_mode(
+            settrans(compile(mixture_def, (; N=N, y=y)), true), UseAutoMarginalization()
+        )
+
+        mu = 0.3
+        log_mix(yi) = LogExpFunctions.logaddexp(
+            log(0.5) + logpdf(Normal(mu, 1), yi),
+            log(0.5) + logpdf(Normal(mu + 1, 1), yi),
+        )
+        expected = logpdf(Normal(0, 10), mu) + sum(log_mix, y)
+        @test Base.invokelatest(LogDensityProblems.logdensity, model, [mu]) ≈ expected
+
+        # Given mu the latents are independent, and p(z[i] = 1 | y[i]) has a closed form.
+        model = initialize!(model, (; mu=mu))
+        env = Base.invokelatest(forward_sample_generated_quantities!!, StableRNG(2), model)
+        z = [AbstractPPL.getvalue(env, @varname(z[i])) for i in 1:N]
+        p1 = [exp(log(0.5) + logpdf(Normal(mu + 1, 1), yi) - log_mix(yi)) for yi in y]
+        @test abs(sum(z) - sum(p1)) / N < 0.03
+    end
+
+    @testset "deterministic node placed after a latent it does not depend on" begin
+        # The order is w, u, d, y1, y2. `d` comes after `u` but depends only on `w`, and
+        # `y2` reads `d` after `u` has been summed out.
+        model_def = @bugs begin
+            w ~ Categorical(pw[1:2])
+            u ~ Categorical(P[w, 1:2])
+            y1 ~ Normal(b[u] + d, 1)
+            d = a[w]
+            y2 ~ Normal(d, 1)
+        end
+        data = (
+            pw=[0.4, 0.6], P=[0.3 0.7; 0.8 0.2], a=[-1.0, 2.0], b=[0.0, 1.5], y1=0.4, y2=1.7
+        )
+        model = set_evaluation_mode(
+            settrans(compile(model_def, data), true), UseAutoMarginalization()
+        )
+        expected = LogExpFunctions.logsumexp([
+            log(data.pw[w]) +
+            log(data.P[w, u]) +
+            logpdf(Normal(data.b[u] + data.a[w], 1), data.y1) +
+            logpdf(Normal(data.a[w], 1), data.y2) for w in 1:2 for u in 1:2
+        ])
+        @test Base.invokelatest(LogDensityProblems.logdensity, model, Float64[]) ≈ expected
+    end
 end

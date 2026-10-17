@@ -6,6 +6,8 @@
 
 - `AutoEnzyme` gives the right gradient in generated mode (#555, closes #549).
   The evaluation environment that the generated log density writes into goes to AbstractPPL as `scratch`, which needs AbstractPPL 0.15.6.
+- `UseAutoMarginalization` no longer overflows the stack on models with a few thousand nodes, such as Cervix, or on Eye Tracking with Mooncake gradients (#564, closes #558).
+  Drawing the marginalized latents, which happens for every chain draw, is faster too: 0.005 s instead of 6.4 s for a mixture with 1000 latents.
 
 ## 0.18.0
 
