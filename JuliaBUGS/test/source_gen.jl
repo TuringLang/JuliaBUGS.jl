@@ -30,6 +30,7 @@ test_examples = [
     :birats,
     :schools,
     :cervix,
+    :endo,
 ]
 
 @testset "source_gen: $example_name" for example_name in test_examples
@@ -56,6 +57,30 @@ test_examples = [
     end
 
     @test result_with_log_density_computation_function ≈ result_with_bugsmodel
+
+    # The starting point can hide stale values in the evaluation environment.
+    rng_state = copy(Random.default_rng())
+    alternative = try
+        compile(
+            model_def,
+            data,
+            getfield(JuliaBUGS.BUGSExamples, example_name).inits_alternative,
+        )
+    finally
+        copy!(Random.default_rng(), rng_state)
+    end
+    x_graph = Base.invokelatest(
+        JuliaBUGS.getparams,
+        JuliaBUGS.set_evaluation_mode(alternative, JuliaBUGS.UseGraph()),
+    )
+    x_gen = Base.invokelatest(
+        JuliaBUGS.getparams,
+        JuliaBUGS.set_evaluation_mode(
+            alternative, JuliaBUGS.UseGeneratedLogDensityFunction()
+        ),
+    )
+    @test Base.invokelatest(LogDensityProblems.logdensity, model_gen, x_gen) ≈
+        Base.invokelatest(LogDensityProblems.logdensity, model_graph, x_graph)
 end
 
 @testset "reserved variable names are rejected" begin
@@ -82,6 +107,53 @@ end
     model = compile(model_def, data)
 end
 
+@testset "transformed data and observation share a node" begin
+    model_def = @bugs begin
+        for i in 1:2
+            x[i] = exp(z[i])
+        end
+        x[1] ~ dnorm(theta, 1)
+        z[2] ~ dnorm(0, 1)
+        theta ~ dnorm(0, 1)
+        y ~ dnorm(x[2], 1)
+    end
+    data = (z=Union{Missing,Float64}[1.0, missing], y=1.0)
+    inits = (z=Union{Missing,Float64}[missing, 0.2], theta=0.1)
+    model = compile(model_def, data, inits)
+    graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+    generated = JuliaBUGS.set_evaluation_mode(
+        model, JuliaBUGS.UseGeneratedLogDensityFunction()
+    )
+    @test !isnothing(generated.log_density_computation_function)
+    roundtrip = JuliaBUGS.set_evaluation_mode(generated, JuliaBUGS.UseGraph())
+    graph_params = JuliaBUGS.getparams(graph)
+    generated_params = JuliaBUGS.getparams(generated)
+    roundtrip_params = JuliaBUGS.getparams(roundtrip)
+    for shift in (0.0, 0.1)
+        @test LogDensityProblems.logdensity(generated, generated_params .+ shift) ≈
+            LogDensityProblems.logdensity(graph, graph_params .+ shift)
+        @test LogDensityProblems.logdensity(roundtrip, roundtrip_params .+ shift) ≈
+            LogDensityProblems.logdensity(graph, graph_params .+ shift)
+    end
+
+    ast = model_def.model_def
+    env = JuliaBUGS.semantic_analysis(ast, data)
+    dependency_graph = JuliaBUGS.create_graph(ast, env)
+    stmt_ids = JuliaBUGS._build_stmt_to_stmt_id(ast)
+    var_to_stmt_id = JuliaBUGS._build_var_to_stmt_id(ast, dependency_graph, env, stmt_ids)
+    id_to_stmt = JuliaBUGS._build_stmt_id_to_stmt(stmt_ids)
+    _, reconstructed = JuliaBUGS._generate_lowered_model_def(ast, dependency_graph, env)
+    push!(
+        reconstructed.args,
+        first(filter(stmt -> Meta.isexpr(stmt, :for), reconstructed.args)),
+    )
+    @test isnothing(
+        JuliaBUGS._generated_graph_nodes_in_order(
+            reconstructed, dependency_graph, env, stmt_ids, var_to_stmt_id, id_to_stmt
+        ),
+    )
+end
+
 @testset "state-space models (SSM) transformation" begin
     # Helper: check if source generation succeeds, returns (success::Bool, diagnostics)
     function can_generate_source(model_def, data)
@@ -95,20 +167,19 @@ end
         return lowered !== nothing, diags
     end
 
-    # Helper: verify generated code produces same log density as graph evaluation
-    function generated_matches_graph(model_def, data)
-        model = compile(model_def, data)
-        result_graph = begin
-            m = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
-            params = Base.invokelatest(JuliaBUGS.getparams, m)
-            Base.invokelatest(LogDensityProblems.logdensity, m, params)
+    function generated_matches_graph(model_def, data, inits=NamedTuple())
+        model = compile(model_def, data, inits)
+        graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        gen = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
+        params(m) = Base.invokelatest(JuliaBUGS.getparams, m)
+        # Read before evaluating, since generated evaluation writes into the shared environment.
+        x_graph, x_gen = params(graph), params(gen)
+        return all((0.0, 0.1)) do shift
+            at(m, x) = Base.invokelatest(LogDensityProblems.logdensity, m, x .+ shift)
+            at(graph, x_graph) ≈ at(gen, x_gen)
         end
-        result_gen = begin
-            m = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
-            params = Base.invokelatest(JuliaBUGS.getparams, m)
-            Base.invokelatest(LogDensityProblems.logdensity, m, params)
-        end
-        return result_graph ≈ result_gen
     end
 
     @testset "basic SSM with self-recursion" begin
@@ -215,6 +286,49 @@ end
             end
         end
         @test !first(can_generate_source(model_def, (a=[2, 2, 1], b=[2, 1, 2])))
+    end
+
+    @testset "statement reading a row that a later iteration writes" begin
+        model_def = @bugs begin
+            for i in 1:N
+                for j in 1:2
+                    e[i, j] = exp(beta * x[i, j])
+                    p[i, j] = e[i, j] / sum(e[i, 1:2])
+                end
+                y[i, 1:2] ~ dmulti(p[i, 1:2], 1)
+            end
+            beta ~ Normal(0, 1)
+        end
+        data = (N=3, x=[1 0; 0 1; 1 1], y=[1 0; 0 1; 1 0])
+        @test first(can_generate_source(model_def, data))
+        @test generated_matches_graph(model_def, data, (beta=0.2,))
+    end
+
+    @testset "loop cycle stays intact" begin
+        model_def = @bugs begin
+            alpha ~ dnorm(0, 1)
+            beta ~ dnorm(0, 1)
+            c[1] = 0
+            for i in 1:N
+                a[i] = alpha * i
+                b[i] = c[i] + beta
+                c[i + 1] = b[i] + a[N + 1 - i]
+            end
+            y ~ dnorm(c[N + 1], 1)
+        end
+        data = (N=3, y=1.0)
+        model = JuliaBUGS.settrans(compile(model_def, data, (alpha=0.2, beta=0.2)), true)
+        gen = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
+        @test !isnothing(gen.log_density_computation_function)
+        graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        x = Base.invokelatest(JuliaBUGS.getparams, gen)
+        x[1] += 0.5
+        expected = Base.invokelatest(LogDensityProblems.logdensity, graph, x)
+        @test all(1:3) do _
+            Base.invokelatest(LogDensityProblems.logdensity, gen, x) ≈ expected
+        end
     end
 
     @testset "multi-statement loop with mixed dependencies" begin

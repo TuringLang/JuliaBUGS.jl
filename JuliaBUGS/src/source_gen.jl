@@ -190,36 +190,76 @@ function _sort_fissioned_stmts(stmt_dep_graph, fissioned_stmts, stmt_ids)
     return sorted_fissioned_stmts
 end
 
-function _reconstruct_model_def_from_sorted_fissioned_stmts(sorted_fissioned_stmts)
-    args = Any[]
-
-    i = 1
-    N = length(sorted_fissioned_stmts)
-    while i <= N
-        loops_i, stmti = sorted_fissioned_stmts[i]
-        # collect consecutive statements with identical loop nests
-        group_stmts = Any[]
-        j = i
-        while j <= N
-            loops_j, stmtj = sorted_fissioned_stmts[j]
-            if loops_j == loops_i
-                append!(group_stmts, stmtj)
-                j += 1
-            else
-                break
-            end
-        end
-
-        if loops_i == ()
-            # top-level sequential statements
-            append!(args, group_stmts)
-        else
-            push!(args, __gen_loop_expr(loops_i, group_stmts))
-        end
-        i = j
+function _append_fissioned_group!(args, loops, stmts)
+    if loops == ()
+        append!(args, stmts)
+    else
+        push!(args, __gen_loop_expr(loops, stmts))
     end
+    return nothing
+end
 
+function _reconstruct_model_def_from_stmt_units(stmt_units, stmt_ids, unfusable)
+    args = Any[]
+    group_stmts = Any[]
+    group_ids = Int[]
+    group_loops = ()
+    for unit in stmt_units
+        loops = first(unit)[1]
+        unit_ids = [stmt_ids[first(stmts)] for (_, stmts) in unit]
+        if any(item -> item[1] != loops, unit) ||
+            any((u, v) in unfusable for u in unit_ids for v in unit_ids)
+            return nothing
+        end
+        if !isempty(group_ids) && (
+            loops != group_loops || any(
+                (u, v) in unfusable || (v, u) in unfusable for u in group_ids for
+                v in unit_ids
+            )
+        )
+            _append_fissioned_group!(args, group_loops, group_stmts)
+            empty!(group_stmts)
+            empty!(group_ids)
+        end
+        group_loops = loops
+        for (_, stmts) in unit
+            append!(group_stmts, stmts)
+        end
+        append!(group_ids, unit_ids)
+    end
+    isempty(group_ids) || _append_fissioned_group!(args, group_loops, group_stmts)
     return Expr(:block, args...)
+end
+
+function _generated_graph_nodes_in_order(
+    model_def, g, evaluation_env, stmt_to_stmt_id, var_to_stmt_id, stmt_id_to_stmt
+)
+    pass = CollectSortedNodes(evaluation_env)
+    analyze_block(pass, model_def)
+    graph_nodes = Set{VarName}(labels(g))
+    positions = Dict{VarName,Int}()
+    sorted_nodes = VarName[]
+    for (node, stmt) in zip(pass.sorted_nodes, pass.sorted_stmts)
+        node in graph_nodes || continue
+        owner = var_to_stmt_id[node]
+        if stmt_to_stmt_id[stmt] != owner &&
+            is_deterministic(stmt) &&
+            is_stochastic(stmt_id_to_stmt[owner]) &&
+            g[node].is_observed
+            continue
+        end
+        haskey(positions, node) && return nothing
+        push!(sorted_nodes, node)
+        positions[node] = length(sorted_nodes)
+    end
+    for edge in Graphs.edges(g.graph)
+        src_node = label_for(g, Graphs.src(edge))
+        dst_node = label_for(g, Graphs.dst(edge))
+        src_pos = get(positions, src_node, 0)
+        dst_pos = get(positions, dst_node, 0)
+        (src_pos == 0 || dst_pos == 0 || src_pos >= dst_pos) && return nothing
+    end
+    return sorted_nodes
 end
 
 # Overload to generate nested loops around a block of statements
@@ -464,6 +504,7 @@ function _generate_lowered_model_def(
     generated_quantities::Union{Nothing,Set{<:VarName}}=nothing,
     fixed_parameters::Set{<:VarName}=Set{VarName}(),
     eval_module::Module=JuliaBUGS,
+    sorted_nodes_out::Union{Nothing,Vector{VarName}}=nothing,
 )
     __check_for_reserved_names(model_def)
     stmt_to_stmt_id = _build_stmt_to_stmt_id(model_def)
@@ -485,7 +526,7 @@ function _generate_lowered_model_def(
     # the same loop nest, they are sequentially valid and we can either
     # drop those edges (self or cross-statement) or fuse statements into
     # a single loop with per-iteration ordering.
-    ordering_graph, all_deps_valid = _build_ordering_graph_via_dependence_vectors(
+    ordering_graph, all_deps_valid, unfusable = _build_ordering_graph_via_dependence_vectors(
         g, coarse_graph, var_to_stmt_id; diagnostics=diagnostics
     )
     # If dependence analysis found a negative dependence, abort immediately.
@@ -496,10 +537,10 @@ function _generate_lowered_model_def(
         end
         return nothing, nothing
     end
-    sorted_fissioned_stmts = nothing
+    sorted_stmt_units = nothing
     if Graphs.is_cyclic(ordering_graph)
         # Try to resolve remaining cycles by loop fusion within identical loop nests.
-        stmt_order = _attempt_resolve_cycles_via_loop_fusion(
+        stmt_units = _attempt_resolve_cycles_via_loop_fusion(
             g,
             ordering_graph,
             var_to_stmt_id,
@@ -507,25 +548,43 @@ function _generate_lowered_model_def(
             stmt_to_stmt_id;
             diagnostics=diagnostics,
         )
-        if stmt_order === nothing
+        if stmt_units === nothing
             if !isempty(diagnostics)
                 @warn "Source generation aborted due to unsafe/corner-case dependencies\n - $(join(diagnostics, "\n - "))"
             end
             return nothing, nothing
         end
-        sorted_fissioned_stmts = _sort_fissioned_stmts_by_stmt_order(
-            stmt_order, fissioned_stmts, stmt_to_stmt_id
+        sorted_stmt_units = _sort_fissioned_stmts_by_stmt_units(
+            stmt_units, fissioned_stmts, stmt_to_stmt_id
         )
     else
         # Use the filtered ordering graph (with loop-carried non-negative
         # dependences removed) to sort fissioned statements.
-        sorted_fissioned_stmts = _sort_fissioned_stmts(
-            ordering_graph, fissioned_stmts, stmt_to_stmt_id
+        sorted_stmt_units = [
+            [stmt] for
+            stmt in _sort_fissioned_stmts(ordering_graph, fissioned_stmts, stmt_to_stmt_id)
+        ]
+    end
+    reconstructed_model_def = _reconstruct_model_def_from_stmt_units(
+        sorted_stmt_units, stmt_to_stmt_id, unfusable
+    )
+    sorted_nodes = if reconstructed_model_def === nothing
+        nothing
+    else
+        _generated_graph_nodes_in_order(
+            reconstructed_model_def,
+            g,
+            evaluation_env,
+            stmt_to_stmt_id,
+            var_to_stmt_id,
+            stmt_id_to_stmt,
         )
     end
-    reconstructed_model_def = _reconstruct_model_def_from_sorted_fissioned_stmts(
-        sorted_fissioned_stmts
-    )
+    if isnothing(sorted_nodes)
+        push!(diagnostics, "Generated statement order violates the node graph")
+        return nothing, nothing
+    end
+    isnothing(sorted_nodes_out) || append!(sorted_nodes_out, sorted_nodes)
     induction_variable_values = _var_to_loop_vars(model_def, evaluation_env)
     fixed_parameter_vars = Set{VarName}(fixed_parameters)
     generated_quantity_vars = if generated_quantities === nothing
@@ -876,7 +935,7 @@ end
 #   like x[t] ~ f(x[t-1]).
 # - Cross-statement edges are always kept. Cycles among them are resolved
 #   later by _attempt_resolve_cycles_via_loop_fusion.
-# - If any edge has a negative dependence vector, we abort (return ok=false).
+# - If a self-edge has a negative dependence vector, we abort (return ok=false).
 function _build_ordering_graph_via_dependence_vectors(
     g::JuliaBUGS.BUGSGraph,
     coarse_graph::Graphs.SimpleDiGraph,
@@ -884,6 +943,7 @@ function _build_ordering_graph_via_dependence_vectors(
     diagnostics::Vector{String}=String[],
 )
     ordering_graph = Graphs.SimpleDiGraph(Graphs.nv(coarse_graph))
+    unfusable = Set{Tuple{Int,Int}}()
 
     # Iterate all coarse edges and decide whether to keep them for ordering
     for e in Graphs.edges(coarse_graph)
@@ -898,10 +958,13 @@ function _build_ordering_graph_via_dependence_vectors(
         # Check all fine edges to classify the coarse edge
         all_positive = true
         has_negative = false
+        has_unknown = false
         for (src_vn, dst_vn) in fine_edges
             rel = _classify_fine_edge(g, src_vn, dst_vn)
             if rel === :negative
                 has_negative = true
+            elseif rel === :unknown
+                has_unknown = true
             end
             if rel !== :positive
                 all_positive = false
@@ -916,7 +979,7 @@ function _build_ordering_graph_via_dependence_vectors(
                     diagnostics,
                     "Negative self-dependence prevents ordering: statement $(src_stmt_id)",
                 )
-                return ordering_graph, false
+                return ordering_graph, false, unfusable
             end
             # Self-edge: only drop if ALL fine edges are positive (loop-carried)
             # This safely breaks recursion cycles like x[t] ~ f(x[t-1])
@@ -929,10 +992,11 @@ function _build_ordering_graph_via_dependence_vectors(
             # statement's loop must complete all iterations before the destination
             # statement's loop begins. This is handled by keeping the edge.
             Graphs.add_edge!(ordering_graph, src_stmt_id, dst_stmt_id)
+            (has_negative || has_unknown) && push!(unfusable, (src_stmt_id, dst_stmt_id))
         end
     end
 
-    return ordering_graph, true
+    return ordering_graph, true, unfusable
 end
 
 # Build a mapping from statement id to its fissioned loop nest (tuple of (var, lb, ub)).
@@ -952,7 +1016,7 @@ _loop_var_names(loops) = map(lvh -> lvh[1], collect(loops))
 # - share identical loop variable names and identical bounds (same loop nest)
 # - have no lexicographically negative fine-grained dependences among them
 # Ordering inside the fused loop is determined by zero-dependence edges.
-# Returns a vector of statement ids in a globally valid order, or nothing if not possible.
+# Returns ordered statement groups, or nothing if fusion is unsafe.
 function _attempt_resolve_cycles_via_loop_fusion(
     g::JuliaBUGS.BUGSGraph,
     ordering_graph::Graphs.SimpleDiGraph,
@@ -1089,44 +1153,42 @@ function _attempt_resolve_cycles_via_loop_fusion(
 
     # Topologically sort clusters
     cluster_order = Graphs.topological_sort(cluster_graph)
-    # Expand clusters into a flat statement order
-    stmt_order = Int[]
+    stmt_units = Vector{Int}[]
     for cid in cluster_order
         nodes = sccs[cid]
         if haskey(fuseable, cid)
-            append!(stmt_order, fuseable[cid])
+            push!(stmt_units, fuseable[cid])
         else
-            # size-1 SCC or non-fuseable SCC (should not exist here if cycles remain)
-            append!(stmt_order, nodes)
+            push!(stmt_units, nodes)
         end
     end
-    return stmt_order
+    return stmt_units
 end
 
-# Sort fissioned statements according to an explicit statement id order
-function _sort_fissioned_stmts_by_stmt_order(
-    stmt_order::Vector{Int}, fissioned_stmts, stmt_ids
-)
-    order_pos = Dict{Int,Int}(sid => i for (i, sid) in enumerate(stmt_order))
-    # Filter only statements that appear in order (some transformed-data removed ones may be absent)
-    items = []
+function _sort_fissioned_stmts_by_stmt_units(stmt_units, fissioned_stmts, stmt_ids)
+    by_id = Dict{Int,Any}()
     for (loops, stmt) in fissioned_stmts
-        sid = stmt_ids[first(stmt)]
-        if haskey(order_pos, sid)
-            push!(items, (order_pos[sid], loops, stmt))
-        end
+        by_id[stmt_ids[first(stmt)]] = (loops, stmt)
     end
-    sort!(items; by=x -> x[1])
-    return [(loops, stmt) for (_, loops, stmt) in items]
+    sorted_units = []
+    for unit_ids in stmt_units
+        unit = []
+        for id in unit_ids
+            haskey(by_id, id) && push!(unit, by_id[id])
+        end
+        isempty(unit) || push!(sorted_units, unit)
+    end
+    return sorted_units
 end
 
 struct CollectSortedNodes{ET} <: CompilerPass
     sorted_nodes::Vector{<:VarName}
+    sorted_stmts::Vector{Expr}
     env::ET
 end
 
 function CollectSortedNodes(env::NamedTuple)
-    return CollectSortedNodes(VarName[], env)
+    return CollectSortedNodes(VarName[], Expr[], env)
 end
 
 function analyze_statement(pass::CollectSortedNodes, expr::Expr, loop_variables::NamedTuple)
@@ -1140,5 +1202,6 @@ function analyze_statement(pass::CollectSortedNodes, expr::Expr, loop_variables:
         VarName{symbol}(AbstractPPL.Index((indices...,), (;)))
     end
     push!(pass.sorted_nodes, varname)
+    push!(pass.sorted_stmts, expr)
     return nothing
 end
