@@ -31,6 +31,40 @@ using Enzyme: Enzyme
         @test graph_result[2] ≈ generated_result[2]
     end
 
+    @testset "AutoMooncakeForward with transformed data and observation" begin
+        overlap_def = @bugs begin
+            for i in 1:2
+                x[i] = exp(z[i])
+            end
+            x[1] ~ dnorm(theta, 1)
+            z[2] ~ dnorm(0, 1)
+            theta ~ dnorm(0, 1)
+            y ~ dnorm(x[2], 1)
+        end
+        overlap_data = (z=Union{Missing,Float64}[1.0, missing], y=1.0)
+        overlap_inits = (z=Union{Missing,Float64}[missing, 0.2], theta=0.1)
+        overlap_model = compile(overlap_def, overlap_data, overlap_inits)
+        graph_grad = JuliaBUGS.BUGSModelWithGradient(overlap_model, AutoForwardDiff())
+        generated_grad = JuliaBUGS.BUGSModelWithGradient(
+            overlap_model, AutoMooncakeForward(; config=nothing)
+        )
+        @test generated_grad.base_model.evaluation_mode isa
+            JuliaBUGS.UseGeneratedLogDensityFunction
+        @test !isnothing(generated_grad.base_model.log_density_computation_function)
+        graph_params = JuliaBUGS.getparams(graph_grad.base_model)
+        generated_params = JuliaBUGS.getparams(generated_grad.base_model)
+        for shift in (0.0, 0.1)
+            graph_result = LogDensityProblems.logdensity_and_gradient(
+                graph_grad, graph_params .+ shift
+            )
+            generated_result = LogDensityProblems.logdensity_and_gradient(
+                generated_grad, generated_params .+ shift
+            )
+            @test generated_result[1] ≈ graph_result[1]
+            @test generated_result[2] ≈ graph_result[2]
+        end
+    end
+
     @testset "UseGraph mode" begin
         model = compile(model_def, data)
         @test model.evaluation_mode isa JuliaBUGS.UseGraph
