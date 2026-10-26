@@ -6,6 +6,7 @@
 
 - `AutoEnzyme` gives the right gradient in generated mode (#555, closes #549).
   The evaluation environment that the generated log density writes into goes to AbstractPPL as `scratch`, which needs AbstractPPL 0.15.6.
+- Initial values with missing entries now draw from the prior, and integer initial values of continuous nodes no longer fail during generated evaluation.
 
 ## 0.18.0
 
