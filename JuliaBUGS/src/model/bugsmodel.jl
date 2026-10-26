@@ -409,13 +409,12 @@ function Base.show(io::IO, model::BUGSModel)
     return nothing
 end
 
-# As in BUGS, a node whose initial value is missing, or has a missing entry, starts from a
-# draw from its prior. A given value of a continuous node is stored as a float, since an
-# integer array would reject the real values evaluation later writes into it.
 function initial_value(dist, value)
+    # BUGS treats a partially missing initial array as unset.
     value isa AbstractArray && any(ismissing, value) && return rand(dist)
     ismissing(value) && return rand(dist)
     value = value isa AbstractArray ? map(identity, value) : value
+    # Generated evaluation writes real values into continuous arrays.
     return if Distributions.value_support(typeof(dist)) === Distributions.Continuous
         float.(value)
     else

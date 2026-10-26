@@ -377,8 +377,6 @@ end
             @test Set(model_vec.evaluation_env.theta) == Set([0.5, 1.5, 2.5])
         end
 
-        # As in Kidney: an element the program fixes makes an integer array, which
-        # integer initial values kept, and generated evaluation writes reals into it.
         @testset "integer initial values of a continuous node" begin
             model_def = @bugs begin
                 beta[1] = 0
@@ -404,7 +402,6 @@ end
             end
         end
 
-        # As in Biopsies: a row given as missing starts from a draw from its prior.
         @testset "initial values with missing entries" begin
             model_def = @bugs begin
                 for i in 1:2

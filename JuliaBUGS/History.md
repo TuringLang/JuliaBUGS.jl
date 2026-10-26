@@ -6,8 +6,7 @@
 
 - `AutoEnzyme` gives the right gradient in generated mode (#555, closes #549).
   The evaluation environment that the generated log density writes into goes to AbstractPPL as `scratch`, which needs AbstractPPL 0.15.6.
-- An initial value with a missing entry leaves its node to a draw from the prior, as in BUGS, and an integer initial value of a continuous node is stored as a float.
-  Partial initial values made the array `Union{Missing, Float64}`, which distributions such as `dmulti` reject, and integer ones kept an integer array that generated evaluation could not write real values into.
+- Initial values with missing entries now draw from the prior, and integer initial values of continuous nodes no longer fail during generated evaluation.
 
 ## 0.18.0
 
