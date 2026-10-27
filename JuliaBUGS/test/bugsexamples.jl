@@ -62,11 +62,11 @@ using JuliaBUGS: BUGSExamples
         @test_throws ErrorException BUGSExamples.load(:no_such_example)
     end
 
-    # A key that names no variable is silently ignored, so a misspelled starting value
-    # leaves its parameter to a draw from the prior. That is how Hepatitis started from
-    # `tau_alpha` when its program says `tau.alpha`.
+    # A misspelled initial value silently leaves its parameter to a prior draw.
     @testset "every initial value and reference result names a model variable" begin
-        for (volume, examples) in pairs(BUGSExamples.volumes()), (key, ex) in pairs(examples)
+        for (volume, examples) in pairs(BUGSExamples.volumes()),
+            (key, ex) in pairs(examples)
+
             names = Set{Symbol}()
             MacroTools.postwalk(ex.model_def.model_def) do e
                 e isa Symbol && push!(names, e)
@@ -92,8 +92,7 @@ using JuliaBUGS: BUGSExamples
         @test occursin("[load on demand]", out)
     end
 
-    # Volume 1 is compiled by test/model/bugsmodel.jl. Some of these compile only from
-    # their initial values and a few only without them.
+    # Volume 1 is compiled by test/model/bugsmodel.jl.
     @testset "every Volume 2 and 3 example compiles" begin
         for volume in (:volume_2, :volume_3),
             (key, ex) in pairs(BUGSExamples.volumes()[volume])

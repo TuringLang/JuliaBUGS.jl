@@ -324,7 +324,6 @@ end
     @test model_def isa JuliaBUGS.BUGSModelDef
     @test model_def.model_def isa Expr
 
-    # it prints as the block that builds it
     nested = @bugs begin
         for i in 1:N
             for j in 1:T
