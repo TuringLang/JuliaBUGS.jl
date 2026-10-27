@@ -100,7 +100,7 @@ end
 
 @testset "CheckRepeatedAssignments" begin
     @testset "with Leuk" begin
-        model_def = JuliaBUGS.BUGSExamples.leuk.model_def
+        model_def = JuliaBUGS.BUGSExamples.leuk.model_def.model_def
         data = JuliaBUGS.BUGSExamples.leuk.data
         inits = JuliaBUGS.BUGSExamples.leuk.inits
 

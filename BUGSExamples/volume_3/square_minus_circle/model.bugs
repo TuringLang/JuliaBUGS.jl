@@ -1,0 +1,8 @@
+model
+{
+    x ~ dunif(-1, 1)
+    y ~ dunif(-1, 1)
+    O <- 1
+    O ~ dbern(constraint)
+    constraint <- step(x * x + y * y - 1)
+}

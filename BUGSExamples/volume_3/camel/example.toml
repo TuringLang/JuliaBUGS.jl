@@ -1,0 +1,2 @@
+name = "Camel: Multivariate normal with structured missing data"
+blocked = "Y[5, 1:2] is a partially observed multivariate node, which compile rejects"
