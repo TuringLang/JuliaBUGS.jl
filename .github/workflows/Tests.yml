@@ -87,6 +87,7 @@ jobs:
         with:
           project: JuliaBUGS
           coverage: ${{ matrix.version == '1.11' }}
+          force_latest_compatible_version: false
         env:
           TEST_GROUP: ${{ matrix.test_group }}
           JULIA_NUM_THREADS: ${{ matrix.test_group == 'parallel_sampling' && steps.threads.outputs.count || '1' }}

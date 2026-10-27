@@ -1,3 +1,5 @@
+using Enzyme: Enzyme
+
 @testset "AD Backend Compatibility" begin
     # Use a simpler model for testing AD compatibility
     # (similar to existing tests in JuliaBUGSAdvancedHMCExt.jl)
@@ -27,6 +29,40 @@
         graph_result, generated_result = function_scoped_mooncake_gradients(model_def, data)
         @test graph_result[1] ≈ generated_result[1]
         @test graph_result[2] ≈ generated_result[2]
+    end
+
+    @testset "AutoMooncakeForward with transformed data and observation" begin
+        overlap_def = @bugs begin
+            for i in 1:2
+                x[i] = exp(z[i])
+            end
+            x[1] ~ dnorm(theta, 1)
+            z[2] ~ dnorm(0, 1)
+            theta ~ dnorm(0, 1)
+            y ~ dnorm(x[2], 1)
+        end
+        overlap_data = (z=Union{Missing,Float64}[1.0, missing], y=1.0)
+        overlap_inits = (z=Union{Missing,Float64}[missing, 0.2], theta=0.1)
+        overlap_model = compile(overlap_def, overlap_data, overlap_inits)
+        graph_grad = JuliaBUGS.BUGSModelWithGradient(overlap_model, AutoForwardDiff())
+        generated_grad = JuliaBUGS.BUGSModelWithGradient(
+            overlap_model, AutoMooncakeForward(; config=nothing)
+        )
+        @test generated_grad.base_model.evaluation_mode isa
+            JuliaBUGS.UseGeneratedLogDensityFunction
+        @test !isnothing(generated_grad.base_model.log_density_computation_function)
+        graph_params = JuliaBUGS.getparams(graph_grad.base_model)
+        generated_params = JuliaBUGS.getparams(generated_grad.base_model)
+        for shift in (0.0, 0.1)
+            graph_result = LogDensityProblems.logdensity_and_gradient(
+                graph_grad, graph_params .+ shift
+            )
+            generated_result = LogDensityProblems.logdensity_and_gradient(
+                generated_grad, generated_params .+ shift
+            )
+            @test generated_result[1] ≈ graph_result[1]
+            @test generated_result[2] ≈ graph_result[2]
+        end
     end
 
     @testset "UseGraph mode" begin
@@ -187,6 +223,58 @@
             logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, x)
             @test isfinite(logp)
             @test all(isfinite, grad)
+        end
+
+        # The generated function writes `a` into the evaluation environment and
+        # reads it back in the nested loop.
+        @testset "AutoEnzyme follows values written into the evaluation environment" begin
+            nested_def = @bugs begin
+                for i in 1:N
+                    a[i] ~ dnorm(0, 1)
+                end
+                for i in 1:N
+                    for j in 1:T
+                        Y[i, j] ~ dnorm(a[i] + x[j], 1)
+                    end
+                end
+            end
+            generated(m) =
+                JuliaBUGS.set_evaluation_mode(m, JuliaBUGS.UseGeneratedLogDensityFunction())
+            enzyme = AutoEnzyme()
+
+            complete = generated(
+                compile(
+                    nested_def,
+                    (; N=2, T=2, x=[0.5, 1.5], Y=[1.0 2.0; 3.0 4.0]),
+                    (; a=[0.1, 0.2]),
+                ),
+            )
+            grad_model = JuliaBUGS.BUGSModelWithGradient(complete, enzyme)
+            _, grad = LogDensityProblems.logdensity_and_gradient(grad_model, [0.1, 0.2])
+            @test grad ≈ [0.7, 4.4]
+
+            # With `Y[1, 2]` missing, the array the generated function writes into
+            # also holds data.
+            partial = generated(
+                compile(
+                    nested_def,
+                    (; N=2, T=2, x=[0.5, 1.5], Y=[1.0 missing; 3.0 4.0]),
+                    (; a=[0.1, 0.2], Y=[missing 2.5; missing missing]),
+                ),
+            )
+            grad_model = JuliaBUGS.BUGSModelWithGradient(partial, enzyme)
+            reference = JuliaBUGS.BUGSModelWithGradient(
+                partial, AutoMooncake(; config=nothing)
+            )
+            θ = JuliaBUGS.getparams(partial)
+            for point in (θ, θ .+ 0.3)
+                logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, point)
+                ref_logp, ref_grad = LogDensityProblems.logdensity_and_gradient(
+                    reference, point
+                )
+                @test logp ≈ ref_logp
+                @test grad ≈ ref_grad
+            end
         end
     end
 

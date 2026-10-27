@@ -376,6 +376,51 @@ end
             model_vec = initialize!(model, params)
             @test Set(model_vec.evaluation_env.theta) == Set([0.5, 1.5, 2.5])
         end
+
+        @testset "integer initial values of a continuous node" begin
+            model_def = @bugs begin
+                beta[1] = 0
+                for k in 2:3
+                    beta[k] ~ dnorm(0, 1)
+                end
+                y ~ dnorm(beta[2] + beta[3], 1)
+            end
+            inits = (; beta=[missing, 0, 0])
+            for model in (
+                compile(model_def, (; y=1.0), inits),
+                initialize!(compile(model_def, (; y=1.0)), inits),
+            )
+                @test model.evaluation_env.beta == [0.0, 0.0, 0.0]
+                @test eltype(model.evaluation_env.beta) == Float64
+                generated = JuliaBUGS.set_evaluation_mode(
+                    model, JuliaBUGS.UseGeneratedLogDensityFunction()
+                )
+                x = Base.invokelatest(getparams, generated) .+ 0.25
+                @test isfinite(
+                    Base.invokelatest(LogDensityProblems.logdensity, generated, x)
+                )
+            end
+        end
+
+        @testset "initial values with missing entries" begin
+            model_def = @bugs begin
+                for i in 1:2
+                    p[i, 1:2] ~ ddirich(alpha[1:2])
+                    y[i, 1:2] ~ dmulti(p[i, 1:2], 3)
+                end
+            end
+            data = (; alpha=[1.0, 1.0], y=[1 2; 2 1])
+            inits = (; p=[missing missing; 0.3 0.7])
+            for model in (
+                compile(model_def, data, inits),
+                initialize!(compile(model_def, data), inits),
+            )
+                p = model.evaluation_env.p
+                @test eltype(p) == Float64
+                @test p[2, :] == [0.3, 0.7]
+                @test sum(p[1, :]) ≈ 1
+            end
+        end
     end
 
     @testset "getparams" begin
