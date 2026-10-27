@@ -133,6 +133,7 @@ end
 Read the example stored in the directory `dir`.
 """
 function load(dir::AbstractString)
+    tracked(dir)
     meta = read_toml(joinpath(dir, "example.toml"))
     program = read(tracked(joinpath(dir, "model.bugs")), String)
     model_def = JuliaBUGS.BUGSModelDef(program; replace_period=false)
