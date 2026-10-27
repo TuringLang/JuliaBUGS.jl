@@ -48,6 +48,50 @@ struct Entry
 end
 
 const SIBLING = normpath(joinpath(@__DIR__, "..", "..", "BUGSExamples"))
+const ORDER = Dict(
+    :volume_1 => (
+        :rats,
+        :pumps,
+        :dogs,
+        :seeds,
+        :surgical_simple,
+        :surgical_realistic,
+        :magnesium,
+        :salm,
+        :equiv,
+        :dyes,
+        :stacks,
+        :epil,
+        :blockers,
+        :oxford,
+        :lsat,
+        :bones,
+        :inhalers,
+        :mice,
+        :kidney,
+        :leuk,
+        :leukfr,
+    ),
+    :volume_2 => (
+        :dugongs,
+        :orange_trees,
+        :orange_trees_multivariate,
+        :biopsies,
+        :eyes,
+        :hearts,
+        :air,
+        :cervix,
+        :jaws,
+        :birats,
+        :schools,
+        :ice,
+        :beetles,
+        :alligators,
+        :endo,
+        :stagnant,
+        :asia,
+    ),
+)
 
 function root()
     isdir(joinpath(SIBLING, "volume_1")) && return SIBLING
@@ -114,7 +158,12 @@ function entries(root::AbstractString)
     out = Entry[]
     for volume in filter(startswith("volume_"), readdir(tracked(root)))
         volume_dir = tracked(joinpath(root, volume))
-        for key in readdir(volume_dir)
+        order = get(ORDER, Symbol(volume), ())
+        keys = sort(
+            readdir(volume_dir);
+            by=key -> (something(findfirst(==(Symbol(key)), order), typemax(Int)), key),
+        )
+        for key in keys
             dir = joinpath(volume_dir, key)
             isdir(dir) || continue
             meta = read_toml(joinpath(dir, "example.toml"))

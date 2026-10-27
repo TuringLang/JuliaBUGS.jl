@@ -42,6 +42,46 @@ using JuliaBUGS: BUGSExamples
         @test keys(volumes) == (:volume_1, :volume_2, :volume_3)
         @test volumes.volume_1 === BUGSExamples.VOLUME_1
         @test BUGSExamples.VOLUME_1.rats === BUGSExamples.rats
+        @test keys(BUGSExamples.VOLUME_1) == (
+            :rats,
+            :pumps,
+            :dogs,
+            :seeds,
+            :surgical_simple,
+            :surgical_realistic,
+            :magnesium,
+            :salm,
+            :equiv,
+            :dyes,
+            :stacks,
+            :epil,
+            :blockers,
+            :oxford,
+            :lsat,
+            :bones,
+            :mice,
+            :kidney,
+            :leuk,
+            :leukfr,
+        )
+        @test keys(BUGSExamples.VOLUME_2) == (
+            :dugongs,
+            :orange_trees,
+            :orange_trees_multivariate,
+            :biopsies,
+            :eyes,
+            :hearts,
+            :air,
+            :cervix,
+            :jaws,
+            :birats,
+            :schools,
+            :beetles,
+            :alligators,
+            :endo,
+            :stagnant,
+            :asia,
+        )
         @test BUGSExamples.load(:rats) isa BUGSExamples.Example
         @test BUGSExamples.load(:volume_2, :dugongs).name == BUGSExamples.dugongs.name
         for (volume, examples) in pairs(volumes), (key, ex) in pairs(examples)
