@@ -6,8 +6,8 @@ If you know these examples from WinBUGS, OpenBUGS, or JAGS they will look famili
 The original write-ups are on the MultiBUGS pages for [Volume 1](https://www.multibugs.org/examples/latest/VolumeI.html), [Volume 2](https://www.multibugs.org/examples/latest/VolumeII.html), and [Volume 3](https://www.multibugs.org/examples/latest/VolumeIII.html).
 
 Every example ships with the package, so nothing here needs retyping.
-Each one is `JuliaBUGS.BUGSExamples.VOLUME_N.<key>`, holding the model definition, the original BUGS program, the data, two sets of initial values, and the published reference results where there are any.
-The pages below pull everything they show from there, and `JuliaBUGS.BUGSExamples.list()` prints the lot.
+The examples in the volumes below are available as `JuliaBUGS.BUGSExamples.VOLUME_N.<key>`, with the model definition, original BUGS program, data, initial values, and any published reference results.
+The example pages read these files, and `JuliaBUGS.BUGSExamples.list()` prints every example on disk.
 The files live in the `BUGSExamples/` directory of the repository, one folder per example.
 Each folder is also a complete input for the [mcmcjs](https://github.com/mcmcjs/mcmcjs) command line: `mcmc run BUGSExamples/volume_1/rats` fits it with its own data and initial values.
 

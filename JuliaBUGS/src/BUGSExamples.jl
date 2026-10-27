@@ -4,10 +4,10 @@
 The classic BUGS examples, read from the `BUGSExamples/` directory at the root of the repository, or from the artifact snapshot of that directory when JuliaBUGS is installed on its own.
 
 Each example is a folder holding `example.toml`, the original program as `model.bugs`, and `data.json`, `inits.json`, `inits_alternative.json`, and `reference.json` where the example has them.
-The folders are read when the package loads.
+The package reads examples that are neither blocked nor lazy when it loads.
 `VOLUME_1`, `VOLUME_2`, and `VOLUME_3` hold the examples of each volume as `NamedTuple`s, and every example is also bound by its key, so `VOLUME_1.rats` and `rats` are the same [`Example`](@ref).
 
-Examples marked `blocked` in `example.toml` use language features JuliaBUGS does not support yet, and examples marked `lazy` are too large to read at load time.
+Examples marked `blocked` in `example.toml` cannot compile yet, and examples marked `lazy` are too large to read at load time.
 Neither is in the `VOLUME_N` tuples.
 Both can be read explicitly with [`load`](@ref) and are shown by [`list`](@ref).
 """
