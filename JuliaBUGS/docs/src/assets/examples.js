@@ -1,9 +1,18 @@
-// The widget version and the mcmcjs URLs live here and nowhere else, so an example page
-// carries only a <doodle-ppl model=...> element and a <div class="mcmc-run" data-example=...> slot.
 const DOODLEPPL_SCRIPT = "https://unpkg.com/doodleppl@0.10/dist/doodleppl.global.js";
 const BUNDLES = "https://mcmcjs.github.io/bugs-examples";
 const REPORT = "https://mcmcjs.github.io/report/";
 const BACKENDS = { juliabugs: "JuliaBUGS", turing: "Turing", stan: "Stan" };
+const SVG_NS = "http://www.w3.org/2000/svg";
+const SVG_TAGS = new Set([
+  "svg", "g", "path", "rect", "line", "polyline", "polygon", "circle", "ellipse",
+  "text", "tspan", "defs", "clipPath",
+]);
+const SVG_ATTRS = new Set([
+  "viewBox", "width", "height", "x", "y", "x1", "y1", "x2", "y2", "cx", "cy", "r",
+  "rx", "ry", "points", "d", "transform", "fill", "fill-opacity", "stroke",
+  "stroke-width", "stroke-opacity", "opacity", "text-anchor", "font-family",
+  "font-size", "font-weight", "data-tip",
+]);
 
 function loadWidget() {
   if (!document.querySelector("doodle-ppl")) return;
@@ -13,29 +22,44 @@ function loadWidget() {
   document.head.appendChild(script);
 }
 
-// An <img> renders an SVG as its own document, out of reach of the page's CSS variables,
-// so a plot would stay light on a dark page. Inlining the SVG lets them apply.
+// Inlining keeps the plot's CSS variables in sync with the page theme.
 async function inlinePlot(url, label) {
-  const response = await fetch(url);
-  if (!response.ok) return null;
-  const holder = document.createElement("div");
-  holder.className = "mcmc-plot";
-  holder.innerHTML = await response.text();
-  const svg = holder.querySelector("svg");
-  if (!svg) return null;
-  svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", label);
-  svg.removeAttribute("width");
-  return holder;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const parsed = new DOMParser().parseFromString(await response.text(), "image/svg+xml");
+    const svg = parsed.documentElement;
+    if (svg.namespaceURI !== SVG_NS || svg.localName !== "svg") return null;
+    for (const node of [svg, ...svg.querySelectorAll("*")]) {
+      if (node.namespaceURI !== SVG_NS || !SVG_TAGS.has(node.localName)) {
+        node.remove();
+        continue;
+      }
+      for (const attr of [...node.attributes]) {
+        if (attr.name === "xmlns" && attr.value === SVG_NS) continue;
+        if (attr.namespaceURI || !SVG_ATTRS.has(attr.name) || /url\s*\(/i.test(attr.value)) {
+          node.removeAttributeNode(attr);
+        }
+      }
+    }
+    const holder = document.createElement("div");
+    holder.className = "mcmc-plot";
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", label);
+    svg.removeAttribute("width");
+    holder.append(document.importNode(svg, true));
+    return holder;
+  } catch {
+    return null;
+  }
 }
 
-function paragraph(html) {
+function paragraph(text) {
   const p = document.createElement("p");
-  p.innerHTML = html;
+  p.textContent = text;
   return p;
 }
 
-// The bundle records the backend id and the Julia version it ran on.
 function describe(run) {
   const parts = [];
   if (run.backend) {
@@ -63,30 +87,34 @@ async function fillRun(slot, run) {
   section.appendChild(
     paragraph(
       `This example was fitted with ${describe(run)}. ` +
-        `The original used Gibbs sampling, so the posterior should agree but the Monte Carlo error will not.`,
+        "The original used Gibbs sampling, so the posterior should agree but the Monte Carlo error will not.",
     ),
   );
   if (run.converged === false) {
     const rhat = typeof run.rhat_max === "number" ? ` (largest R-hat ${run.rhat_max.toFixed(2)})` : "";
-    section.appendChild(
-      paragraph(
-        `<strong>This run did not converge</strong>${rhat}, so its summaries are not reliable. ` +
-          `It is published so the chains can be inspected.`,
-      ),
+    const warning = paragraph(
+      `${rhat}, so its summaries are not reliable. It is published so the chains can be inspected.`,
     );
+    const strong = document.createElement("strong");
+    strong.textContent = "This run did not converge";
+    warning.prepend(strong);
+    section.appendChild(warning);
   }
   const plots = await Promise.all([
     inlinePlot(`${BUNDLES}/${key}-trace.svg`, "Trace of the monitored parameters, one line per chain"),
     inlinePlot(`${BUNDLES}/${key}-density.svg`, "Posterior density of the monitored parameters, one curve per chain"),
   ]);
   for (const plot of plots) if (plot) section.appendChild(plot);
-  const bundle = `${BUNDLES}/${run.file}`;
-  section.appendChild(
-    paragraph(
-      `<a href="${REPORT}#bundle=${bundle}">Open the full report</a> to explore every parameter interactively, ` +
-        `or <a href="${bundle}">download the run bundle</a>.`,
-    ),
-  );
+  const bundle = `${BUNDLES}/${encodeURIComponent(run.file)}`;
+  const links = document.createElement("p");
+  const report = document.createElement("a");
+  report.href = `${REPORT}#bundle=${bundle}`;
+  report.textContent = "Open the full report";
+  const download = document.createElement("a");
+  download.href = bundle;
+  download.textContent = "download the run bundle";
+  links.append(report, " to explore every parameter interactively, or ", download, ".");
+  section.appendChild(links);
   slot.replaceWith(section);
 }
 
@@ -96,10 +124,11 @@ async function fillRuns() {
   let runs = [];
   try {
     const response = await fetch(`${BUNDLES}/index.json`);
-    if (response.ok) runs = (await response.json()).runs || [];
-  } catch {
-    // Offline, the page reads fine without its run section.
-  }
+    if (response.ok) {
+      const index = await response.json();
+      if (Array.isArray(index.runs)) runs = index.runs;
+    }
+  } catch {}
   for (const slot of slots) {
     const run = runs.find((r) => r.key === slot.dataset.example);
     if (run) {
