@@ -902,8 +902,9 @@ function regenerate_log_density_function(model::BUGSModel; force::Bool=false)
         model.graph_evaluation_data,
         model.compile_options.eval_module,
     )
-    # Always refresh graph_evaluation_data from regeneration helper (it may refine ordering)
-    model = BangBang.setproperty!!(model, :graph_evaluation_data, updated_graph_eval_data)
+    # Always refresh graph_evaluation_data from regeneration helper (it may refine ordering).
+    # The keyword constructor also rebuilds the graph evaluation plan for the new ordering.
+    model = BUGSModel(model; graph_evaluation_data=updated_graph_eval_data)
 
     if isnothing(new_fn)
         # Cannot generate compiled function; leave as-is

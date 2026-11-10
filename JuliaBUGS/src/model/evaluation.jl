@@ -217,6 +217,22 @@ Evaluate model with the given parameter values.
 function evaluate_with_values!!(
     model::BUGSModel, flattened_values::AbstractVector; temperature=1.0, transformed=true
 )
+    plan = model.evaluation_plan
+    if _evaluation_plan_is_current(plan, model)
+        return _evaluate_plan_with_values!!(
+            plan, model, flattened_values, temperature, transformed
+        )
+    end
+    return _evaluate_with_values_in_sorted_order!!(
+        model, flattened_values; temperature, transformed
+    )
+end
+
+# Reference evaluator: visits `sorted_nodes` one node at a time. Used when a model has no
+# current evaluation plan, and by tests as the ground truth for the plan.
+function _evaluate_with_values_in_sorted_order!!(
+    model::BUGSModel, flattened_values::AbstractVector; temperature=1.0, transformed=true
+)
     var_lengths = if transformed
         model.transformed_var_lengths
     else

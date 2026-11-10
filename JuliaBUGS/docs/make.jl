@@ -72,6 +72,7 @@ makedocs(;
         "Developer Guide" => [
             "Parser" => "developers/parser.md",
             "Source Code Generation" => "developers/source_gen.md",
+            "Graph Evaluation Plan" => "developers/graph_evaluation.md",
             "Notes on BUGS Implementations" => "developers/BUGS_notes.md",
         ],
     ],

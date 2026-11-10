@@ -57,6 +57,8 @@ For a package-level model constant, define its `@model` constructor in that pack
 
 The default mode evaluates the log density by traversing the computational graph. It works with reverse-mode Mooncake, ReverseDiff, and ForwardDiff.
 
+Nodes unrolled from the same statement share a node function, so the graph is evaluated in runs of such nodes rather than one node at a time. The runs follow a topological order of the graph, and the parameter vector keeps the layout of `sorted_nodes`; only the order in which log-density terms are added differs from a node-by-node traversal. The run order is rebuilt whenever conditioning, fixing, or switching evaluation modes changes the graph or its node order.
+
 ```julia
 model = normal_model(data)
 # UseGraph() is the default, no need to set explicitly

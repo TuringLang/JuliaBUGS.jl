@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## 0.18.2
+
+### Performance
+
+- `UseGraph` evaluates the nodes unrolled from each statement together, as concretely typed runs in a topological order, instead of one node at a time through untyped vectors. On 14 bundled examples the log density is 3–19× faster (Rats 66 → 4.7 µs, LSAT 2.1 ms → 110 µs), within 1.2–1.3× of generated evaluation on most of the larger ones. Graph-mode gradients get faster with it: ForwardDiff 2–8× and Mooncake 2–23×. The parameter layout is unchanged; only the order in which log-density terms are added differs. See the developer note "Graph Evaluation Plan".
+
 ## 0.18.1
 
 ### Bug Fixes

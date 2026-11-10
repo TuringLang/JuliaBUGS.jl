@@ -18,6 +18,7 @@ using Random
 
 include("utils.jl")
 include("bugsmodel.jl")
+include("evaluation_plan.jl")
 include("evaluation.jl")
 include("abstractppl.jl")
 include("logdensityproblems.jl")

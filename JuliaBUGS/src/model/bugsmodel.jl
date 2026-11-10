@@ -245,6 +245,35 @@ function GraphEvaluationData(
     )
 end
 
+abstract type AbstractNodeRun end
+
+"""
+    GraphEvaluationPlan
+
+Statement-grouped evaluation order for the `UseGraph` log density, built from a model's
+`GraphEvaluationData`, parameter lengths, and mutable symbols (see `evaluation_plan.jl`).
+It records the objects it was built from, so evaluation can check that the plan is current.
+
+# Fields
+- `runs::Vector{AbstractNodeRun}`: Concretely typed runs of nodes, in evaluation order.
+- `invoke_latest::Bool`: Whether the runs call source functions taken from world-age-safe
+  wrappers, so that evaluation must run in world `world` or later.
+- `world::UInt`: The world age in which the plan, and so every function it calls, existed.
+- `mutable_mask::NamedTuple`: For each `evaluation_env` field, `Val(true)` if evaluation may write it.
+- `graph_evaluation_data`, `transformed_var_lengths`, `untransformed_var_lengths`,
+  `mutable_symbols`: The model fields the plan was built from.
+"""
+struct GraphEvaluationPlan
+    runs::Vector{AbstractNodeRun}
+    invoke_latest::Bool
+    world::UInt
+    mutable_mask::NamedTuple
+    graph_evaluation_data::GraphEvaluationData
+    transformed_var_lengths::Dict{<:VarName,Int}
+    untransformed_var_lengths::Dict{<:VarName,Int}
+    mutable_symbols::Set{Symbol}
+end
+
 abstract type EvaluationMode end
 
 struct UseGeneratedLogDensityFunction <: EvaluationMode end
@@ -284,6 +313,9 @@ The `BUGSModel` object is used for inference and represents the output of compil
   `UseGeneratedLogDensityFunction` mode).
 - `marginalization_cache::MC`: Cache for auto-marginalization (lazy, for
   `UseAutoMarginalization` mode). Invalidated when graph structure changes.
+- `evaluation_plan::Union{Nothing,GraphEvaluationPlan}`: Statement-grouped evaluation order
+  for `UseGraph` log densities. Rebuilt by the keyword constructor when its inputs change;
+  `nothing` means evaluation visits `sorted_nodes` one node at a time.
 - `mutable_symbols::Set{Symbol}`: Symbols that may be mutated during evaluation.
 - `base_model::base_model_T`: The original model if this is a conditioned model; `nothing` otherwise.
 """
@@ -319,6 +351,8 @@ struct BUGSModel{
 
     marginalization_cache::MC
 
+    evaluation_plan::Union{Nothing,GraphEvaluationPlan}
+
     mutable_symbols::Set{Symbol}
 
     base_model::base_model_T
@@ -344,6 +378,15 @@ function BUGSModel(
     data=model.data,
     compile_options::ModelCompileOptions=model.compile_options,
 )
+    evaluation_plan = _updated_evaluation_plan(
+        model,
+        g,
+        graph_evaluation_data,
+        evaluation_env,
+        mutable_symbols,
+        transformed_var_lengths,
+        untransformed_var_lengths,
+    )
     # Return model without precomputing caches (on-demand generation)
     return BUGSModel(
         model_def,
@@ -360,8 +403,39 @@ function BUGSModel(
         graph_evaluation_data,
         log_density_computation_function,
         marginalization_cache,
+        evaluation_plan,
         mutable_symbols,
         base_model,
+    )
+end
+
+# Reuse the model's plan when none of its inputs changed, otherwise build a new one.
+function _updated_evaluation_plan(
+    model::BUGSModel,
+    g,
+    graph_evaluation_data,
+    evaluation_env,
+    mutable_symbols,
+    transformed_var_lengths,
+    untransformed_var_lengths,
+)
+    plan = model.evaluation_plan
+    if plan isa GraphEvaluationPlan &&
+        g === model.g &&
+        plan.graph_evaluation_data === graph_evaluation_data &&
+        plan.transformed_var_lengths === transformed_var_lengths &&
+        plan.untransformed_var_lengths === untransformed_var_lengths &&
+        plan.mutable_symbols === mutable_symbols &&
+        keys(evaluation_env) === keys(plan.mutable_mask)
+        return plan
+    end
+    return _build_evaluation_plan(
+        g,
+        graph_evaluation_data,
+        evaluation_env,
+        mutable_symbols,
+        transformed_var_lengths,
+        untransformed_var_lengths,
     )
 end
 
@@ -476,6 +550,14 @@ function BUGSModel(
 
     # Compute mutable symbols from graph evaluation data
     mutable_symbols = get_mutable_symbols(graph_evaluation_data)
+    evaluation_plan = _build_evaluation_plan(
+        g,
+        graph_evaluation_data,
+        evaluation_env,
+        mutable_symbols,
+        transformed_var_lengths,
+        untransformed_var_lengths,
+    )
 
     # Return model without generating log density function (on-demand generation)
     # Function will be generated when UseGeneratedLogDensityFunction mode is set
@@ -495,6 +577,7 @@ function BUGSModel(
         graph_evaluation_data,
         nothing,  # log_density_computation_function - generated on-demand
         nothing,  # marginalization_cache - generated on-demand
+        evaluation_plan,
         mutable_symbols,
         nothing,
     )

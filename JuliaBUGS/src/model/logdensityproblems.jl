@@ -5,6 +5,8 @@ function _eval_logdensity(model, ::UseGeneratedLogDensityFunction, x)
 end
 
 function _eval_logdensity(model, ::UseGraph, x)
+    plan = model.evaluation_plan
+    _evaluation_plan_is_current(plan, model) && return _plan_logjoint(plan, model, x)
     _, logp = AbstractPPL.evaluate!!(model, x)
     return logp
 end
