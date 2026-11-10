@@ -17,6 +17,7 @@ using OrderedCollections: OrderedDict
 using Random
 
 include("utils.jl")
+include("variable_elimination.jl")
 include("bugsmodel.jl")
 include("evaluation.jl")
 include("abstractppl.jl")

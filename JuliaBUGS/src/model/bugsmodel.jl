@@ -19,6 +19,8 @@ must be invalidated when the graph structure changes (e.g., during conditioning)
 - `param_offsets::Dict{VarName,Int}`: Start index in flattened parameter vector for each continuous param.
 - `n_discrete_finite::Int`: Number of discrete finite variables (for memo sizing).
 - `continuous_model_parameters::Vector{VarName}`: Continuous model parameters that remain in the flat parameter vector after marginalization.
+- `variable_elimination::Union{Nothing,VariableEliminationPlan}`: Plan for summing the
+  latents out by variable elimination; `nothing` when the frontier recursion is used instead.
 """
 struct MarginalizationCache{V<:VarName}
     minimal_cache_keys::Dict{Int,Vector{Int}}
@@ -28,6 +30,7 @@ struct MarginalizationCache{V<:VarName}
     param_offsets::Dict{V,Int}
     n_discrete_finite::Int
     continuous_model_parameters::Vector{V}
+    variable_elimination::Union{Nothing,VariableEliminationPlan}
 end
 
 """
@@ -869,8 +872,14 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     param_offsets,
                     n_discrete_finite,
                     continuous_model_parameters,
+                    nothing,
                 )
                 model = BangBang.setproperty!!(model, :marginalization_cache, cache)
+                plan = JuliaBUGS.Model._plan_variable_elimination(model)
+                if plan !== nothing
+                    cache = BangBang.setproperty!!(cache, :variable_elimination, plan)
+                    model = BangBang.setproperty!!(model, :marginalization_cache, cache)
+                end
             catch err
                 @warn "Failed to compute auto-marginalization caches; falling back to UseGraph mode" exception = (
                     err, catch_backtrace()

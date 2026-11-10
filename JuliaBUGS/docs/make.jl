@@ -72,6 +72,7 @@ makedocs(;
         "Developer Guide" => [
             "Parser" => "developers/parser.md",
             "Source Code Generation" => "developers/source_gen.md",
+            "Variable Elimination" => "developers/variable_elimination.md",
             "Notes on BUGS Implementations" => "developers/BUGS_notes.md",
         ],
     ],

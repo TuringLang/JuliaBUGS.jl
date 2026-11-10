@@ -422,6 +422,11 @@ Enable auto-marginalization on a compiled model:
 
 Requires transformed space. Discrete variables must have finite support (Categorical, Bernoulli, etc.).
 
+When every discrete latent is Bernoulli or categorical, the latents are summed out by
+variable elimination instead of the frontier recursion described above: one table per
+factor, with the latents eliminated one at a time. The result, including the log prior and
+log likelihood split, is the same. See the developer note "Variable Elimination".
+
 See [Evaluation Modes](evaluation_modes.md) for more on `set_evaluation_mode`. A quantity
 derived from a marginalized discrete latent — for example a predicted observation or the
 latent state itself — is a [generated quantity](generated_quantities.md); it is excluded from

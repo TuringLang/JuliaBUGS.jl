@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## 0.18.2
+
+### Performance
+
+- Auto-marginalization sums Bernoulli and categorical latents out by variable elimination: one table per factor, with the latents eliminated one at a time. Hidden Markov models with thousands of time steps no longer overflow the stack, and evaluation is up to 5× faster (HMM with 50 steps 2.4 → 0.45 ms, with 200 steps 4.1 → 1.9 ms; a 1000-point mixture is unchanged at 8 ms). Other models keep the frontier recursion. See the developer note "Variable Elimination".
+
 ## 0.18.1
 
 ### Bug Fixes

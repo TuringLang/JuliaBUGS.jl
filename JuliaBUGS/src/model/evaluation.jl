@@ -922,6 +922,13 @@ function evaluate_with_marginalization_values!!(
         )
     end
 
+    plan = mc.variable_elimination
+    if plan !== nothing
+        return _evaluate_with_variable_elimination!!(
+            model, plan, flattened_values; temperature=temperature
+        )
+    end
+
     # Initialize memoization cache with size hint
     # Use element type of parameter vector for AD compatibility (Float64 or Dual)
     T = eltype(flattened_values)
