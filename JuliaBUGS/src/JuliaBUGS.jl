@@ -156,8 +156,8 @@ function require_transition_params_and_stats(model, sampler, transition)
     extracted = transition_params_and_stats(model, sampler, transition)
     extracted === nothing && error(
         "JuliaBUGS does not know how to read draws from $(typeof(sampler)). " *
-        "Define `JuliaBUGS.transition_params_and_stats(::BUGSModel, ::$(typeof(sampler)), " *
-        "::$(typeof(transition)))` returning a `(params, stats)` pair.",
+            "Define `JuliaBUGS.transition_params_and_stats(::BUGSModel, ::$(typeof(sampler)), " *
+            "::$(typeof(transition)))` returning a `(params, stats)` pair.",
     )
     return extracted
 end
@@ -340,13 +340,13 @@ function validate_bugs_expression(expr, line_num)
                 end
             error(
                 "Qualified function names are not supported in @bugs. Found $(qualified_expr) at $line_num. " *
-                "To use custom functions, declare them with @bugs_primitive macro. " *
-                "Otherwise, use the unqualified function name `$(unqualified_name)` instead.",
+                    "To use custom functions, declare them with @bugs_primitive macro. " *
+                    "Otherwise, use the unqualified function name `$(unqualified_name)` instead.",
             )
         elseif func_name isa Symbol && !is_function_allowed(func_name)
             error(
                 "Function '$func_name' is not allowed in @bugs at $line_num. " *
-                "To use custom functions, declare them with @bugs_primitive macro.",
+                    "To use custom functions, declare them with @bugs_primitive macro.",
             )
         end
         # Recursively validate arguments
@@ -611,5 +611,8 @@ function __init__()
         push!(BUGS_ALLOWED_FUNCTIONS, op)
     end
 end
+
+include("melding.jl")
+export Melding
 
 end
