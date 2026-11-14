@@ -71,10 +71,11 @@ function describe(run) {
   }
   const s = run.sampler;
   if (s) {
-    parts.push(
-      `${s.algorithm} with ${s.chains} chains of ${s.draws} draws after ${s.warmup} warmup` +
-        (s.thin > 1 ? `, thinned by ${s.thin}` : ""),
-    );
+    const drawn =
+      s.algorithm === "Prior"
+        ? `forward simulation of ${s.chains} chains of ${s.draws} draws`
+        : `${s.algorithm} with ${s.chains} chains of ${s.draws} draws after ${s.warmup} warmup`;
+    parts.push(drawn + (s.thin > 1 ? `, thinned by ${s.thin}` : ""));
   }
   if (run.fitted_at) parts.push(`on ${run.fitted_at.slice(0, 10)}`);
   return parts.join(", ");
