@@ -8,7 +8,7 @@ The model contains no stochastic nodes at all. It propagates the marginal state 
 \pi_{k,t,s} = \sum_{r=1}^{S} \pi_{k,t-1,r} \, \Lambda_{k,t,r,s}
 ```
 
-where $\Lambda_{k,t}$ is the transition matrix for strata $k$ at cycle $t$ and the annual revision probability $\gamma_{k,t} = h_k (t-1)$ grows linearly with the years since the operation. Discounted costs, life years and QALYs are then exact expectations, obtained by weighting the state distribution at each cycle by the per-state cost and benefit vectors `c`, `bl` and `bq`. One evaluation of the model gives the answer with no simulation error, which is why the example carries no reference posterior summaries.
+where $\Lambda_{k,t}$ is the transition matrix for strata $k$ at cycle $t$ and the annual revision probability $\gamma_{k,t} = h_k (t-1)$ grows linearly with the years since the operation. Discounted costs, life years and QALYs are then exact expectations, obtained by weighting the state distribution at each cycle by the per-state cost and benefit vectors `c`, `bl` and `bq`. One evaluation of the model gives the answer with no simulation error, so its reference results are exact values rather than posterior summaries.
 
 The final block averages the strata-specific results over `p.strata`, the distribution of hip replacements across the 12 strata, to give `mean.C`, `mean.BL` and `mean.BQ` along with the matching standard deviations. Those standard deviations describe how much costs and benefits vary between strata, that is, case mix; they are not uncertainty about a parameter, because at this stage the model has none. The three examples that follow relax this in turn: [Hips2](hips2.md) replaces the closed-form expectation with a Monte Carlo simulation of individual patients, [Hips3](hips3.md) puts a distribution on the revision hazard, and [Hips4](hips4.md) synthesises external trial evidence to compare two prostheses. All four are in [Volume 3 of the classic BUGS examples](https://www.multibugs.org/examples/latest/VolumeIII.html); see also the [OpenBUGS version of this example](https://chjackson.github.io/openbugsdoc/Examples/Hips1.html).
 
@@ -41,8 +41,14 @@ example.data
 model = JuliaBUGS.compile(example.model_def, example.data)
 ```
 
-See [Getting Started](../../getting_started.md) for the recipe that takes a compiled model to posterior samples.
+## Results
 
-```@raw html
-<div class="mcmc-run" data-example="hips1"></div>
+Compiling evaluates every node, so the results can be read straight from the compiled model, here next to the values published with the example:
+
+```@example volume_3_hips1
+env = model.evaluation_env
+value(name) = (m = match(r"^(.*)\[(\d+)\]$", name);
+    m === nothing ? getfield(env, Symbol(name)) : getfield(env, Symbol(m[1]))[parse(Int, m[2])])
+[(name, round(value(String(name)); sigdigits=4), ref.mean) for (name, ref) in
+    pairs(example.reference_results)]
 ```
