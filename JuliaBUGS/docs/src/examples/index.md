@@ -8,8 +8,8 @@ The original write-ups are on the MultiBUGS pages for [Volume 1](https://www.mul
 Every example ships with the package, so nothing here needs retyping.
 The examples in the volumes below are available as `JuliaBUGS.BUGSExamples.VOLUME_N.<key>`, with the model definition, original BUGS program, data, initial values, and any published reference results.
 The example pages read these files, and `JuliaBUGS.BUGSExamples.list()` prints every example on disk.
-The files live in the `BUGSExamples/` directory of the repository, one folder per example.
-Each folder is also a complete input for the [mcmcjs](https://github.com/mcmcjs/mcmcjs) command line: `mcmc run BUGSExamples/volume_1/rats` fits it with its own data and initial values.
+The files live in the `JuliaBUGS/BUGSExamples/` directory of the repository, one folder per example.
+Each folder is also a complete input for the [mcmcjs](https://github.com/mcmcjs/mcmcjs) command line: `mcmc run JuliaBUGS/BUGSExamples/volume_1/rats` fits it with its own data and initial values.
 
 | Volume | Examples | |
 |---|---|---|

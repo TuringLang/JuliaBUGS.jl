@@ -32,7 +32,4 @@ Create the folder under its volume and fill in the files above. Nothing register
 
 ## How JuliaBUGS finds the files
 
-In a checkout of this repository JuliaBUGS reads this directory directly, so an edit here is visible on the next load.
-An installed JuliaBUGS has no checkout and reads a snapshot of this directory instead, declared as an artifact in `JuliaBUGS/Artifacts.toml` and attached to a GitHub release named after the content hash.
-The `BUGSExamples snapshot` workflow publishes the current directory that way: it runs on every merge to main that changes an example, creates the release, and opens a pull request that points `Artifacts.toml` at it. It can also be run from the Actions tab.
-`snapshot.jl` is the script behind it and can be run locally to produce the same tarball and hashes.
+This directory is part of the JuliaBUGS package and ships with every installed copy, so JuliaBUGS reads it directly and an edit here is visible on the next load.

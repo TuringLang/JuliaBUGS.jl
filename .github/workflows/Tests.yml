@@ -6,12 +6,10 @@ on:
       - main
     paths:
       - 'JuliaBUGS/**'
-      - 'BUGSExamples/**'
       - '.github/workflows/Tests.yml'
   pull_request:
     paths:
       - 'JuliaBUGS/**'
-      - 'BUGSExamples/**'
       - '.github/workflows/Tests.yml'
   workflow_dispatch:
 

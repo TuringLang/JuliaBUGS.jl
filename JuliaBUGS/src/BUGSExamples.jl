@@ -1,7 +1,7 @@
 """
     BUGSExamples
 
-The classic BUGS examples, read from the `BUGSExamples/` directory at the root of the repository, or from the artifact snapshot of that directory when JuliaBUGS is installed on its own.
+The classic BUGS examples, read from the `BUGSExamples/` directory that ships with the package.
 
 Each example is a folder holding `example.toml`, the original program as `model.bugs`, and `data.json`, `inits.json`, `inits_alternative.json`, and `reference.json` where the example has them.
 The package reads examples that are neither blocked nor lazy when it loads.
@@ -13,7 +13,7 @@ Both can be read explicitly with [`load`](@ref) and are shown by [`list`](@ref).
 """
 module BUGSExamples
 
-using Artifacts, LazyArtifacts, TOML
+using TOML
 using JSON
 using OrderedCollections: OrderedDict
 using JuliaBUGS: JuliaBUGS
@@ -47,7 +47,7 @@ struct Entry
     lazy::Bool
 end
 
-const SIBLING = normpath(joinpath(@__DIR__, "..", "..", "BUGSExamples"))
+const ROOT = normpath(joinpath(@__DIR__, "..", "BUGSExamples"))
 const ORDER = Dict(
     :volume_1 => (
         :rats,
@@ -92,11 +92,6 @@ const ORDER = Dict(
         :asia,
     ),
 )
-
-function root()
-    isdir(joinpath(SIBLING, "volume_1")) && return SIBLING
-    return artifact"BUGSExamples"
-end
 
 # A precompilation dependency, so an edited example file in a checkout rebuilds the cache.
 function tracked(path::AbstractString)
@@ -184,7 +179,7 @@ function entries(root::AbstractString)
     return out
 end
 
-const ENTRIES = entries(root())
+const ENTRIES = entries(ROOT)
 
 function entry(volume::Symbol, key::Symbol)
     i = findfirst(e -> e.volume === volume && e.key === key, ENTRIES)

@@ -4,7 +4,7 @@
 
 ### Highlights
 
-- `BUGSExamples` reads the original BUGS programs and their data from plain files, using an artifact snapshot for installed packages (#543).
+- `BUGSExamples` reads the original BUGS programs and their data from plain files that ship with the package (#543).
 - `VOLUME_3` adds Volume 3 examples, and `BUGSExamples.list()` includes examples that load on demand or cannot compile yet.
 - `BUGSModelDef(program::String)` parses BUGS text at runtime and can preserve dotted names with `replace_period=false`.
 - `BUGSModelDef` displays as an `@bugs` block.

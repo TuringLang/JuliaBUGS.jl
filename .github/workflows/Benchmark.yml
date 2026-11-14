@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'JuliaBUGS/**'
-      - 'BUGSExamples/**'
       - '.github/workflows/Benchmark.yml'
   workflow_dispatch:
 
