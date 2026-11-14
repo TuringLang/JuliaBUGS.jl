@@ -132,24 +132,17 @@ using JuliaBUGS: BUGSExamples
         @test occursin("[load on demand]", out)
     end
 
-    # Volume 1 is compiled by test/model/bugsmodel.jl.
-    @testset "every Volume 2 and 3 example compiles" begin
-        for volume in (:volume_2, :volume_3),
-            (key, ex) in pairs(BUGSExamples.volumes()[volume])
+    @testset "every example compiles from each of its published initial values" begin
+        for (volume, examples) in pairs(BUGSExamples.volumes()),
+            (key, ex) in pairs(examples)
 
             @testset "$volume.$key" begin
-                model = nothing
-                if !isempty(ex.inits)
-                    model = try
-                        JuliaBUGS.compile(ex.model_def, ex.data, ex.inits)
-                    catch
-                        nothing
-                    end
+                sets = filter(!isempty, Any[ex.inits, ex.inits_alternative])
+                isempty(sets) && push!(sets, NamedTuple())
+                for inits in sets
+                    @test JuliaBUGS.compile(ex.model_def, ex.data, inits) isa
+                        JuliaBUGS.BUGSModel
                 end
-                if model === nothing
-                    model = JuliaBUGS.compile(ex.model_def, ex.data)
-                end
-                @test model isa JuliaBUGS.BUGSModel
             end
         end
     end
