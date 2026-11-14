@@ -1,0 +1,10 @@
+{
+  "a0": 1,
+  "alpha.Base": 1,
+  "alpha.Trt": 1,
+  "alpha.BT": 1,
+  "alpha.Age": 1,
+  "alpha.V4": 1,
+  "tau.b1": 0.1,
+  "tau.b": 0.1
+}

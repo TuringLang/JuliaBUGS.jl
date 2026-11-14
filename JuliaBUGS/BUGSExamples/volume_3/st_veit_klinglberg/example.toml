@@ -1,0 +1,2 @@
+name = "St Veit-Klinglberg: Radiocarbon calibration with stratification"
+blocked = "interp.lin is not an allowed function in @bugs"

@@ -1,0 +1,2 @@
+name = "Jama: Radiocarbon calibration with phase information"
+blocked = "interp.lin is not an allowed function in @bugs"

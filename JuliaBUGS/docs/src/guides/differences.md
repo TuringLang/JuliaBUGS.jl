@@ -125,7 +125,8 @@ Any parameter you leave out of `inits` is initialized by drawing from its prior,
 See [Initial Values](initialization.md) for the complete initialization interface, including array-valued parameters and flat sampler-space vectors.
 
 !!! tip "The Volume 1 examples ship with JuliaBUGS"
-    All examples from Volume 1 of the classic BUGS examples come pre-translated in `JuliaBUGS.BUGSExamples.VOLUME_1`. Each entry — for instance `JuliaBUGS.BUGSExamples.VOLUME_1.seeds` — carries the translated model as `.model_def`, plus `.data`, `.inits`, and the published `.reference_results`. They are handy for cross-checking your own translations.
+    The Volume 1 examples that JuliaBUGS can compile are in `JuliaBUGS.BUGSExamples.VOLUME_1`.
+    Each entry, such as `JuliaBUGS.BUGSExamples.VOLUME_1.seeds`, has the parsed BUGS program in `.model_def`, its data and initial values, and any published reference results.
 
 ## Language differences
 

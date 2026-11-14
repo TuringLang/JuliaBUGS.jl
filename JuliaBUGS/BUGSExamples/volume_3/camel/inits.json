@@ -1,0 +1,20 @@
+{
+  "tau": [
+    [0.1, 0.0],
+    [0.0, 0.1]
+  ],
+  "Y": [
+    [null, null],
+    [null, null],
+    [null, null],
+    [null, null],
+    [null, 1],
+    [null, 1],
+    [null, 1],
+    [null, 1],
+    [1, null],
+    [1, null],
+    [1, null],
+    [1, null]
+  ]
+}

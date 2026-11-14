@@ -1,0 +1,58 @@
+{
+  "alpha.desc[1]": {
+    "mean": 3993.0,
+    "std": 167.8
+  },
+  "alpha.desc[2]": {
+    "mean": 3283.0,
+    "std": 181.8
+  },
+  "alpha.desc[3]": {
+    "mean": 2256.0,
+    "std": 149.2
+  },
+  "alpha.desc[4]": {
+    "mean": 1535.0,
+    "std": 79.5
+  },
+  "alpha.desc[5]": {
+    "mean": 1120.0,
+    "std": 88.58
+  },
+  "alpha.desc[6]": {
+    "mean": 718.7,
+    "std": 133.1
+  },
+  "alpha.desc[7]": {
+    "mean": 465.5,
+    "std": 60.24
+  },
+  "beta.desc[1]": {
+    "mean": 3728.0,
+    "std": 117.3
+  },
+  "beta.desc[2]": {
+    "mean": 2624.0,
+    "std": 195.1
+  },
+  "beta.desc[3]": {
+    "mean": 1806.0,
+    "std": 97.52
+  },
+  "beta.desc[4]": {
+    "mean": 1112.0,
+    "std": 85.24
+  },
+  "beta.desc[5]": {
+    "mean": 661.4,
+    "std": 54.69
+  },
+  "beta.desc[6]": {
+    "mean": 465.5,
+    "std": 60.24
+  },
+  "beta.desc[7]": {
+    "mean": 249.3,
+    "std": 115.1
+  }
+}

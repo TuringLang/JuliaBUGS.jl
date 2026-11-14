@@ -1,0 +1,98 @@
+# Equiv: Bioequivalence in a Cross-Over Trial
+
+This example comes from Volume 1 of the classic [BUGS examples](https://www.multibugs.org/examples/latest/VolumeI.html) (see also the [OpenBUGS write-up](https://chjackson.github.io/openbugsdoc/Examples/Equiv.html)). The data, originally from Gelfand et al. (1990), come from a two-treatment, two-period cross-over trial designed to compare two formulations of a drug, tablet A and tablet B. Ten subjects each receive both treatments, one in each of two periods, and a continuous response is measured on each occasion. The `group` variable records which order a subject was given the two treatments in, so that the treatment effect can be separated from a possible period effect.
+
+The scientific question is one of *bioequivalence*: are the two formulations close enough to be considered interchangeable? The model estimates the treatment effect on the log scale, `phi`, and reports `theta = exp(phi)`, the ratio of the two treatment effects. By the usual regulatory convention, the two tablets are declared bioequivalent when `theta` lies between 0.8 and 1.2. This is a linear mixed (normal hierarchical) model with a subject-specific random effect `delta[i]` capturing between-subject variation.
+
+The model definition, data, and initial values shown here come from `JuliaBUGS.BUGSExamples.VOLUME_1.equiv`, which ships with the package.
+
+## Model
+
+Writing `\tau_1` and `\tau_2` for the two precisions (BUGS parameterises the normal by its precision, not its variance):
+
+```math
+\begin{aligned}
+Y_{ik} &\sim \text{Normal}(m_{ik},\ \tau_1) \\
+m_{ik} &= \mu + \tfrac{1}{2}\,\text{sign}[T_{ik}]\,\phi + \tfrac{1}{2}\,\text{sign}[k]\,\pi + \delta_i \\
+\delta_i &\sim \text{Normal}(0,\ \tau_2) \\
+\theta &= e^{\phi}
+\end{aligned}
+```
+
+Here `mu` is the overall mean, `phi` is the treatment effect, `pi` is the period effect, and `equiv` is an indicator that equals 1 exactly when `theta` falls in the bioequivalence range (0.8, 1.2); its posterior mean is the posterior probability of bioequivalence.
+
+```@example equiv
+using JuliaBUGS
+
+example = JuliaBUGS.BUGSExamples.VOLUME_1.equiv
+example.model_def
+```
+
+The program as it appears in the original BUGS distribution:
+
+```@example equiv
+print(example.original_syntax_program)
+```
+
+## Graph
+
+The model as a directed graph. Drag a node to rearrange it, or use the pencil to edit the
+model and watch the generated BUGS code change with it.
+
+```@raw html
+<doodle-ppl class="doodleppl-embed" model="equiv" height="560px"
+            theme-from="theme--documenter-dark"></doodle-ppl>
+```
+
+## Data
+
+The data record the `N = 10` subjects and `P = 2` periods, the response matrix `Y`, the treatment-order indicator `group`, and the sign vector `sign` used to flip the treatment and period contributions. We supply everything as a `NamedTuple` and construct the model by calling the model definition with it:
+
+```@example equiv
+data = example.data
+```
+
+```@example equiv
+model = compile(example.model_def, data)
+```
+
+## Sampling
+
+To draw posterior samples, build the model with gradient support and run the No-U-Turn sampler:
+
+```julia
+using AbstractMCMC, AdvancedHMC, ADTypes, Mooncake, FlexiChains
+using LogDensityProblems
+
+model = compile(example.model_def, data; adtype=AutoMooncake(; config=nothing))
+
+n_samples, n_adapts = 2000, 1000
+D = LogDensityProblems.dimension(model)
+chain = AbstractMCMC.sample(
+    model, NUTS(0.8), n_samples;
+    chain_type=VNChain, n_adapts=n_adapts,
+    initial_params=rand(D), discard_initial=n_adapts,
+)
+summarystats(chain)
+```
+
+BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.equiv.inits` and can be applied with `initialize!(model, inits)`.
+
+## Results
+
+The published reference posterior summaries for this example are:
+
+| Parameter | Mean | Std |
+|-----------|------|-----|
+| equiv | 0.998 | 0.04468 |
+| mu | 1.436 | 0.05751 |
+| phi | -0.008613 | 0.05187 |
+| sigma1 | 0.1102 | 0.03268 |
+
+A correctly converged chain's `summarystats` output should match these values up to Monte Carlo error.
+
+```@raw html
+<div class="mcmc-run" data-example="equiv"></div>
+```
+
+See also: the [gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).
