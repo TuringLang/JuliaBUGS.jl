@@ -1,4 +1,4 @@
-const DOODLEPPL_SCRIPT = "https://unpkg.com/doodleppl@0.10/dist/doodleppl.global.js";
+const DOODLEPPL_SCRIPT = "https://unpkg.com/doodleppl@0.13/dist/doodleppl.global.js";
 const BUNDLES = "https://mcmcjs.github.io/bugs-examples";
 const REPORT = "https://mcmcjs.github.io/report/";
 const BACKENDS = { juliabugs: "JuliaBUGS", turing: "Turing", stan: "Stan" };
@@ -15,7 +15,10 @@ const SVG_ATTRS = new Set([
 ]);
 
 function loadWidget() {
-  if (!document.querySelector("doodle-ppl")) return;
+  const widgets = document.querySelectorAll("doodle-ppl");
+  if (widgets.length === 0) return;
+  // Every example graph is drawn as it would be for a figure.
+  for (const widget of widgets) widget.setAttribute("paper-style", "true");
   const script = document.createElement("script");
   script.src = DOODLEPPL_SCRIPT;
   script.defer = true;
@@ -68,10 +71,11 @@ function describe(run) {
   }
   const s = run.sampler;
   if (s) {
-    parts.push(
-      `${s.algorithm} with ${s.chains} chains of ${s.draws} draws after ${s.warmup} warmup` +
-        (s.thin > 1 ? `, thinned by ${s.thin}` : ""),
-    );
+    const drawn =
+      s.algorithm === "Prior"
+        ? `forward simulation of ${s.chains} chains of ${s.draws} draws`
+        : `${s.algorithm} with ${s.chains} chains of ${s.draws} draws after ${s.warmup} warmup`;
+    parts.push(drawn + (s.thin > 1 ? `, thinned by ${s.thin}` : ""));
   }
   if (run.fitted_at) parts.push(`on ${run.fitted_at.slice(0, 10)}`);
   return parts.join(", ");
