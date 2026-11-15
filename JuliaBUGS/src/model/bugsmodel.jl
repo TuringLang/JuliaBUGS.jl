@@ -17,7 +17,7 @@ must be invalidated when the graph structure changes (e.g., during conditioning)
   (`:deterministic`, `:discrete_finite`, `:discrete_infinite`, or `:continuous`).
 - `param_lengths::Dict{VarName,Int}`: Transformed lengths for continuous parameters.
 - `param_offsets::Dict{VarName,Int}`: Start index in flattened parameter vector for each continuous param.
-- `n_discrete_finite::Int`: Number of discrete finite variables (for memo sizing).
+- `n_discrete_finite::Int`: Number of discrete finite variables.
 - `continuous_model_parameters::Vector{VarName}`: Continuous model parameters that remain in the flat parameter vector after marginalization.
 """
 struct MarginalizationCache{V<:VarName}

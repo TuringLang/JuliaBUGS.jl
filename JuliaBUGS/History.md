@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## 0.18.2
+
+### Improvements
+
+- Auto-marginalized log densities reserved room for up to a million cached entries on every evaluation, which cost about 50 MiB a call and hundreds of MiB a ForwardDiff gradient.
+
 ## 0.18.1
 
 ### Bug Fixes
