@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## 0.18.2
+
+### Improvements
+
+- Recovering the marginalized discrete latents of a draw, and each `EnumeratedSampler` step, summed out the rest of the model again for every latent, which took seconds a draw for the 101 latents of Eye Tracking and minutes for the 1929 of Cervix.
+
 ## 0.18.1
 
 ### Bug Fixes

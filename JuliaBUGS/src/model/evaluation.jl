@@ -400,6 +400,10 @@ function _sample_discrete_latents!!(
     (mc === nothing || mc.n_discrete_finite == 0) && return evaluation_env
     # Continuous parameters in the order/offsets expected by `_marginalize_recursive`.
     param_values = getparams(model, evaluation_env)
+    # A memo key holds the values of every earlier latent the rest of the graph depends on,
+    # so one memo serves all the latents of a draw, as it serves every branch of a log
+    # density evaluation.
+    memo = Dict{Tuple{Int,Tuple},Tuple{Float64,Float64}}()
     return _backward_sample_recursive!!(
         rng,
         model,
@@ -409,6 +413,7 @@ function _sample_discrete_latents!!(
         mc.param_offsets,
         mc.param_lengths,
         mc.minimal_cache_keys,
+        memo,
     )
 end
 
@@ -421,6 +426,7 @@ function _backward_sample_recursive!!(
     param_offsets::Dict{<:VarName,Int},
     var_lengths::Dict{<:VarName,Int},
     minimal_keys::Dict{Int,Vector{Int}},
+    memo::Dict{Tuple{Int,Tuple},Tuple{Float64,Float64}},
 )
     isempty(remaining_indices) && return env
 
@@ -447,7 +453,6 @@ function _backward_sample_recursive!!(
         log_weights = Vector{Float64}(undef, length(possible_values))
         for (k, val) in enumerate(possible_values)
             branch_env = BangBang.setindex!!(env, val, current_vn)
-            memo = Dict{Tuple{Int,Tuple},Tuple{Float64,Float64}}()
             branch_prior, branch_lik = _marginalize_recursive(
                 model,
                 branch_env,
@@ -487,6 +492,7 @@ function _backward_sample_recursive!!(
         param_offsets,
         var_lengths,
         minimal_keys,
+        memo,
     )
 end
 
