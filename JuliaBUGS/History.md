@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## 0.18.2
+
+### Bug Fixes
+
+- `step(x)` returned 0 at `x = 0`, where BUGS returns 1, so a count tested with `step(n - 1)` missed every `n = 1`.
+
 ## 0.18.1
 
 ### Bug Fixes
