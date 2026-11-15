@@ -922,17 +922,9 @@ function evaluate_with_marginalization_values!!(
         )
     end
 
-    # Initialize memoization cache with size hint
     # Use element type of parameter vector for AD compatibility (Float64 or Dual)
     T = eltype(flattened_values)
-    n_nodes = length(model.graph_evaluation_data.sorted_nodes)
-    expected_entries = if mc.n_discrete_finite > 20
-        1_000_000
-    else
-        min((1 << mc.n_discrete_finite) * n_nodes, 1_000_000)
-    end
     memo = Dict{Tuple{Int,Tuple},Tuple{T,T}}()
-    sizehint!(memo, expected_entries)
 
     evaluation_env = _evaluate_continuous_model_parameters_with_values!!(
         model, flattened_values; transformed=model.transformed
