@@ -45,6 +45,15 @@ using JuliaBUGS: BUGSExamples
         @test map(e -> e.key, BUGSExamples.entries(root)) == [:a]
     end
 
+    @testset "a key used in two volumes is an error" begin
+        root = mktempdir()
+        for volume in ("volume_1", "volume_2")
+            mkpath(joinpath(root, volume, "a"))
+            write(joinpath(root, volume, "a", "example.toml"), "name = \"A\"\n")
+        end
+        @test_throws ErrorException BUGSExamples.entries(root)
+    end
+
     @testset "registry" begin
         volumes = BUGSExamples.volumes()
         @test keys(volumes) == (:volume_1, :volume_2, :volume_3)

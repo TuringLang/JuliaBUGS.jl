@@ -170,6 +170,8 @@ function entries(root::AbstractString)
             )
         end
     end
+    repeated = [k for k in unique(e.key for e in out) if count(e -> e.key === k, out) > 1]
+    isempty(repeated) || error("keys used in more than one volume: $(join(repeated, ", "))")
     return out
 end
 
@@ -182,11 +184,9 @@ function entry(volume::Symbol, key::Symbol)
 end
 
 function entry(key::Symbol)
-    found = filter(e -> e.key === key, ENTRIES)
-    isempty(found) && error("no example $key")
-    length(found) > 1 &&
-        error("$key is in more than one volume: $(map(e -> e.volume, found))")
-    return only(found)
+    i = findfirst(e -> e.key === key, ENTRIES)
+    i === nothing && error("no example $key")
+    return ENTRIES[i]
 end
 
 """
