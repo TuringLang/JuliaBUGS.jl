@@ -1,0 +1,40 @@
+model{   
+    for( i in 1 : N ) {
+        S[i] ~ dcat(pi[])
+        mu[i] <- theta[S[i]]
+        x[i] ~ dpois(mu[i])
+        for (j in 1 : C) {
+            SC[i, j] <- equals(j, S[i])
+        }
+    }
+
+    # Precision Parameter
+    alpha <- 1
+    # alpha~ dgamma(0.1,0.1)
+    
+    # Constructive DPP
+    p[1] <- r[1]
+    for (j in 2 : C) {
+        p[j] <- r[j] * (1 - r[j - 1]) * p[j -1 ] / r[j - 1]
+    }
+    p.sum <- sum(p[])
+    for (j in 1:C){
+        theta[j] ~ dgamma(A, B)
+        r[j] ~ dbeta(1, alpha)
+        # scaling to ensure sum to 1
+        pi[j] <- p[j] / p.sum
+    }
+    
+    # hierarchical prior on theta[i] or preset parameters
+    A ~ dexp(0.1)
+    B ~ dgamma(0.1, 0.1)
+    # A <- 1
+    # B <- 1
+    
+    # total clusters
+    K <- sum(cl[])
+    for (j in 1 : C) {
+        sumSC[j] <- sum(SC[ , j])
+        cl[j] <- step(sumSC[j] -1)
+    }
+}

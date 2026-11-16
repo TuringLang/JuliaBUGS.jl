@@ -1,0 +1,10 @@
+{
+  "alpha0": 1.0,
+  "beta0": 1.0,
+  "gamma": 0.0,
+  "tau.alpha": 0.1,
+  "tau.beta": 0.1,
+  "tau": 0.1,
+  "theta": 1.0,
+  "psi": 1.0
+}

@@ -1,5 +1,25 @@
 # JuliaBUGS Changelog
 
+## 0.19.0
+
+### Highlights
+
+- `BUGSExamples` stores each example as plain files in `JuliaBUGS/BUGSExamples/`: the BUGS program, data, initial values and reference results (#543).
+- `VOLUME_3` holds the Volume 3 examples, `VOLUME_2` adds Stagnant and Asia, and every Volume 1 example that loads with the package has its published reference results.
+- `BUGSExamples.load` reads any example by key, including those left out of the volumes because they cannot compile yet or are large, and `BUGSExamples.list()` lists them all.
+- `BUGSModelDef(program::String)` parses BUGS text at runtime and can preserve dotted names with `replace_period=false`.
+- `BUGSModelDef` displays as an `@bugs` block.
+
+### Breaking Changes
+
+- `BUGSExamples.Example.model_def` now holds a `BUGSModelDef`, whose `model_def` field holds the parsed expression (#543).
+- `BUGSExamples.vol_1` and `vol_2` are removed in favour of `VOLUME_1` and `VOLUME_2`, and `BUGSExamples.ice`, which cannot compile yet, is read with `BUGSExamples.load(:ice)`.
+
+### Bug Fixes
+
+- `BUGSExamples.biopsies` previously used the initial values of the multivariate Orange Trees example.
+- `BUGSExamples.stacks` initial values included `phi`, which is not in the model.
+
 ## 0.18.1
 
 ### Bug Fixes

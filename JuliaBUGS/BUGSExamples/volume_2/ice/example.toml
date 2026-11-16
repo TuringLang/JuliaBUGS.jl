@@ -1,0 +1,2 @@
+name = "Ice: non-parametric smoothing in an age-cohort model"
+blocked = "compile reports a loop in the graph: beta[k] has prior mean betamean[k], which is computed from the neighbouring beta"

@@ -1,0 +1,26 @@
+{
+  "bronchitis": {
+    "mean": 1.811,
+    "std": 0.3918
+  },
+  "either": {
+    "mean": 1.185,
+    "std": 0.3885
+  },
+  "lung.cancer": {
+    "mean": 1.101,
+    "std": 0.3011
+  },
+  "smoking": {
+    "mean": 1.628,
+    "std": 0.4833
+  },
+  "tuberculosis": {
+    "mean": 1.089,
+    "std": 0.2854
+  },
+  "xray": {
+    "mean": 1.223,
+    "std": 0.4161
+  }
+}

@@ -1,0 +1,189 @@
+using JuliaBUGS: BUGSExamples
+
+@testset "BUGSExamples" begin
+    @testset "reading a folder" begin
+        dir = mktempdir()
+        write(joinpath(dir, "example.toml"), "name = \"Toy\"\n")
+        write(
+            joinpath(dir, "model.bugs"),
+            """
+            model {
+                for (i in 1:2) { y[i] ~ dnorm(mu.x, 1) }
+                mu.x ~ dnorm(0, 1)
+            }
+            """,
+        )
+        write(
+            joinpath(dir, "data.json"),
+            """{"y": [1.5, null], "m": [[1, 2], [3, 4]], "c": [[[1], [2]], [[3], [4]]], "n": 2, "x": 2.0, "v": [1, null, 2.5], "w": [[1, 2], [3.5, 4]]}""",
+        )
+        ex = BUGSExamples.load(dir)
+
+        @test ex isa BUGSExamples.Example
+        @test ex.name == "Toy"
+        @test ex.model_def isa JuliaBUGS.BUGSModelDef
+        @test ex.data.y isa Vector{Union{Missing,Float64}}
+        @test isequal(ex.data.y, [1.5, missing])
+        @test ex.data.m == [1 2; 3 4]
+        @test ex.data.m isa Matrix{Int}
+        @test size(ex.data.c) == (2, 2, 1)
+        @test ex.data.c[2, 1, 1] == 3
+        @test ex.data.n === 2
+        @test ex.data.x === 2.0
+        @test ex.data.v isa Vector{Union{Missing,Float64}}
+        @test ex.data.w isa Matrix{Float64}
+        @test ex.inits === NamedTuple()
+        @test ex.reference_results === nothing
+    end
+
+    @testset "a folder without example.toml is skipped" begin
+        root = mktempdir()
+        for dir in ("volume_1/a", "volume_1/.ipynb_checkpoints")
+            mkpath(joinpath(root, dir))
+        end
+        write(joinpath(root, "volume_1/a/example.toml"), "name = \"A\"\n")
+        @test map(e -> e.key, BUGSExamples.entries(root)) == [:a]
+    end
+
+    @testset "a key used in two volumes is an error" begin
+        root = mktempdir()
+        for volume in ("volume_1", "volume_2")
+            mkpath(joinpath(root, volume, "a"))
+            write(joinpath(root, volume, "a", "example.toml"), "name = \"A\"\n")
+        end
+        @test_throws ErrorException BUGSExamples.entries(root)
+    end
+
+    @testset "registry" begin
+        volumes = BUGSExamples.volumes()
+        @test keys(volumes) == (:volume_1, :volume_2, :volume_3)
+        @test volumes.volume_1 === BUGSExamples.VOLUME_1
+        @test BUGSExamples.VOLUME_1.rats === BUGSExamples.rats
+        @test keys(BUGSExamples.VOLUME_1) == (
+            :rats,
+            :pumps,
+            :dogs,
+            :seeds,
+            :surgical_simple,
+            :surgical_realistic,
+            :magnesium,
+            :salm,
+            :equiv,
+            :dyes,
+            :stacks,
+            :epil,
+            :blockers,
+            :oxford,
+            :lsat,
+            :bones,
+            :mice,
+            :kidney,
+            :leuk,
+            :leukfr,
+        )
+        @test keys(BUGSExamples.VOLUME_2) == (
+            :dugongs,
+            :orange_trees,
+            :orange_trees_multivariate,
+            :biopsies,
+            :eyes,
+            :hearts,
+            :air,
+            :cervix,
+            :jaws,
+            :birats,
+            :schools,
+            :beetles,
+            :alligators,
+            :endo,
+            :stagnant,
+            :asia,
+        )
+        @test keys(BUGSExamples.VOLUME_3) == (
+            :eye_tracking,
+            :circle,
+            :hollow_square,
+            :parallelogram,
+            :ring,
+            :square_minus_circle,
+            :hepatitis,
+            :hepatitis_me,
+            :hips1,
+            :hips2,
+            :hips3,
+            :hips4,
+            :pig_weights,
+            :bayes_factors,
+        )
+        @test BUGSExamples.load(:rats) isa BUGSExamples.Example
+        @test BUGSExamples.load(:volume_2, :dugongs).name == BUGSExamples.dugongs.name
+        for (volume, examples) in pairs(volumes), (key, ex) in pairs(examples)
+            @test !isempty(ex.name)
+        end
+    end
+
+    @testset "blocked and lazy examples stay out of the volumes" begin
+        registered = Set(
+            e.key for e in BUGSExamples.ENTRIES if e.blocked === nothing && !e.lazy
+        )
+        for (_, examples) in pairs(BUGSExamples.volumes())
+            @test Set(keys(examples)) ⊆ registered
+        end
+        @test :inhalers ∉ keys(BUGSExamples.VOLUME_1)
+        @test :methadone ∉ registered
+        @test_throws ErrorException BUGSExamples.load(:no_such_example)
+    end
+
+    all_examples = [e => BUGSExamples.load(e.volume, e.key) for e in BUGSExamples.ENTRIES]
+
+    @testset "the @bugs block shown for every program parses back to it" begin
+        for (e, ex) in all_examples
+            shown = sprint(show, MIME"text/plain"(), ex.model_def)
+            @test eval(Meta.parse(shown)).model_def == ex.model_def.model_def
+        end
+    end
+
+    # A misspelled initial value silently leaves its parameter to a prior draw.
+    @testset "every initial value and reference result names a model variable" begin
+        for (e, ex) in all_examples
+            volume, key = e.volume, e.key
+            names = Set{Symbol}()
+            MacroTools.postwalk(ex.model_def.model_def) do e
+                e isa Symbol && push!(names, e)
+                e
+            end
+            base(k) = Symbol(first(split(string(k), '[')))
+            @testset "$volume.$key" begin
+                for field in (:inits, :inits_alternative, :reference_results)
+                    value = getfield(ex, field)
+                    value === nothing && continue
+                    @test isempty(filter(k -> base(k) ∉ names, collect(keys(value))))
+                end
+            end
+        end
+    end
+
+    @testset "list prints every entry" begin
+        out = sprint(BUGSExamples.list)
+        for e in BUGSExamples.ENTRIES
+            @test occursin(string(e.key), out)
+        end
+        @test occursin("[blocked:", out)
+        @test occursin("[load on demand]", out)
+    end
+
+    @testset "every example compiles from each of its published initial values" begin
+        for (volume, examples) in pairs(BUGSExamples.volumes()),
+            (key, ex) in pairs(examples)
+
+            @testset "$volume.$key" begin
+                sets = filter(!isempty, Any[ex.inits, ex.inits_alternative])
+                isempty(sets) && push!(sets, NamedTuple())
+                for inits in sets
+                    @test JuliaBUGS.compile(ex.model_def, ex.data, inits) isa
+                        JuliaBUGS.BUGSModel
+                end
+            end
+        end
+    end
+end
