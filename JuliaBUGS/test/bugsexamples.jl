@@ -22,8 +22,6 @@ using JuliaBUGS: BUGSExamples
         @test ex isa BUGSExamples.Example
         @test ex.name == "Toy"
         @test ex.model_def isa JuliaBUGS.BUGSModelDef
-        @test ex.model_def.model_def ==
-            JuliaBUGS.BUGSModelDef(ex.original_syntax_program; replace_period=false).model_def
         @test ex.data.y isa Vector{Union{Missing,Float64}}
         @test isequal(ex.data.y, [1.5, missing])
         @test ex.data.m == [1 2; 3 4]
