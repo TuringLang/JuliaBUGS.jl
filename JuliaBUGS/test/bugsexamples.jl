@@ -21,7 +21,6 @@ using JuliaBUGS: BUGSExamples
 
         @test ex isa BUGSExamples.Example
         @test ex.name == "Toy"
-        @test ex.path == dir
         @test ex.model_def isa JuliaBUGS.BUGSModelDef
         @test ex.model_def.model_def ==
             JuliaBUGS.BUGSModelDef(ex.original_syntax_program; replace_period=false).model_def
@@ -86,7 +85,6 @@ using JuliaBUGS: BUGSExamples
         @test BUGSExamples.load(:volume_2, :dugongs).name == BUGSExamples.dugongs.name
         for (volume, examples) in pairs(volumes), (key, ex) in pairs(examples)
             @test !isempty(ex.name)
-            @test isdir(ex.path)
         end
     end
 

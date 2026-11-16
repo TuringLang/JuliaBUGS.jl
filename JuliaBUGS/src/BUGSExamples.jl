@@ -25,7 +25,6 @@ One BUGS example.
 `model_def` is the parsed program as the `BUGSModelDef` that `@bugs` would return, ready for `compile`, and `original_syntax_program` is the program text it was parsed from.
 `data`, `inits`, and `inits_alternative` are `NamedTuple`s, empty when the example has none.
 `reference_results` is a `NamedTuple` of the summaries published with the example, or `nothing`.
-`path` is the directory the example was read from.
 """
 struct Example{DNT<:NamedTuple,INT<:NamedTuple,INT2<:NamedTuple,RNT}
     name::String
@@ -35,19 +34,20 @@ struct Example{DNT<:NamedTuple,INT<:NamedTuple,INT2<:NamedTuple,RNT}
     inits::INT
     inits_alternative::INT2
     reference_results::RNT
-    path::String
 end
 
 struct Entry
     volume::Symbol
     key::Symbol
     name::String
-    path::String
     blocked::Union{Nothing,String}
     lazy::Bool
 end
 
-const ROOT = normpath(joinpath(@__DIR__, "..", "BUGSExamples"))
+# Looked up on every use rather than stored, so a relocated depot still finds the files.
+root() = joinpath(pkgdir(JuliaBUGS), "BUGSExamples")
+folder(e::Entry) = joinpath(root(), string(e.volume), string(e.key))
+
 const ORDER = Dict(
     :volume_1 => (
         :rats,
@@ -139,14 +139,7 @@ function load(dir::AbstractString)
     )
     reference_results = read_optional(joinpath(dir, "reference.json"))
     return Example(
-        meta["name"],
-        model_def,
-        program,
-        data,
-        inits,
-        inits_alternative,
-        reference_results,
-        String(dir),
+        meta["name"], model_def, program, data, inits, inits_alternative, reference_results
     )
 end
 
@@ -169,7 +162,6 @@ function entries(root::AbstractString)
                     Symbol(volume),
                     Symbol(key),
                     meta["name"],
-                    dir,
                     get(meta, "blocked", nothing),
                     get(meta, "lazy", false),
                 ),
@@ -179,7 +171,7 @@ function entries(root::AbstractString)
     return out
 end
 
-const ENTRIES = entries(ROOT)
+const ENTRIES = entries(root())
 
 function entry(volume::Symbol, key::Symbol)
     i = findfirst(e -> e.volume === volume && e.key === key, ENTRIES)
@@ -201,13 +193,13 @@ end
 
 Read an example by key, including the blocked and lazy ones that `VOLUME_N` leave out.
 """
-load(key::Symbol) = load(entry(key).path)
-load(volume::Symbol, key::Symbol) = load(entry(volume, key).path)
+load(key::Symbol) = load(folder(entry(key)))
+load(volume::Symbol, key::Symbol) = load(folder(entry(volume, key)))
 
 const VOLUMES = let groups = OrderedDict{Symbol,Vector{Pair{Symbol,Example}}}()
     for e in ENTRIES
         (e.blocked === nothing && !e.lazy) || continue
-        push!(get!(groups, e.volume, Pair{Symbol,Example}[]), e.key => load(e.path))
+        push!(get!(groups, e.volume, Pair{Symbol,Example}[]), e.key => load(folder(e)))
     end
     NamedTuple{Tuple(keys(groups))}(Tuple((; group...) for group in values(groups)))
 end
