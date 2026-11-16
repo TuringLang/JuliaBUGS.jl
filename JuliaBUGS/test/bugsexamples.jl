@@ -136,6 +136,15 @@ using JuliaBUGS: BUGSExamples
         @test_throws ErrorException BUGSExamples.load(:no_such_example)
     end
 
+    all_examples = [e => BUGSExamples.load(e.volume, e.key) for e in BUGSExamples.ENTRIES]
+
+    @testset "the @bugs block shown for every program parses back to it" begin
+        for (e, ex) in all_examples
+            shown = sprint(show, MIME"text/plain"(), ex.model_def)
+            @test eval(Meta.parse(shown)).model_def == ex.model_def.model_def
+        end
+    end
+
     # A misspelled initial value silently leaves its parameter to a prior draw.
     @testset "every initial value and reference result names a model variable" begin
         for (volume, examples) in pairs(BUGSExamples.volumes()),
