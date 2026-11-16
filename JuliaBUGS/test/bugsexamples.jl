@@ -147,9 +147,8 @@ using JuliaBUGS: BUGSExamples
 
     # A misspelled initial value silently leaves its parameter to a prior draw.
     @testset "every initial value and reference result names a model variable" begin
-        for (volume, examples) in pairs(BUGSExamples.volumes()),
-            (key, ex) in pairs(examples)
-
+        for (e, ex) in all_examples
+            volume, key = e.volume, e.key
             names = Set{Symbol}()
             MacroTools.postwalk(ex.model_def.model_def) do e
                 e isa Symbol && push!(names, e)
