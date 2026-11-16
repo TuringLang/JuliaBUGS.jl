@@ -91,6 +91,26 @@ const ORDER = Dict(
         :stagnant,
         :asia,
     ),
+    :volume_3 => (
+        :camel,
+        :eye_tracking,
+        :fire,
+        :circle,
+        :hollow_square,
+        :parallelogram,
+        :ring,
+        :square_minus_circle,
+        :hepatitis,
+        :hepatitis_me,
+        :hips1,
+        :hips2,
+        :hips3,
+        :hips4,
+        :jama,
+        :pig_weights,
+        :bayes_factors,
+        :st_veit_klinglberg,
+    ),
 )
 
 # A precompilation dependency, so an edited example file in a checkout rebuilds the cache.

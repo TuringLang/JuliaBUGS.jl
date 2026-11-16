@@ -101,6 +101,22 @@ using JuliaBUGS: BUGSExamples
             :stagnant,
             :asia,
         )
+        @test keys(BUGSExamples.VOLUME_3) == (
+            :eye_tracking,
+            :circle,
+            :hollow_square,
+            :parallelogram,
+            :ring,
+            :square_minus_circle,
+            :hepatitis,
+            :hepatitis_me,
+            :hips1,
+            :hips2,
+            :hips3,
+            :hips4,
+            :pig_weights,
+            :bayes_factors,
+        )
         @test BUGSExamples.load(:rats) isa BUGSExamples.Example
         @test BUGSExamples.load(:volume_2, :dugongs).name == BUGSExamples.dugongs.name
         for (volume, examples) in pairs(volumes), (key, ex) in pairs(examples)
