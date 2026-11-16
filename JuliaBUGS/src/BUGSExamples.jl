@@ -143,19 +143,21 @@ function load(dir::AbstractString)
     )
 end
 
+# Every folder holding an `example.toml`, as entries in each volume's order.
 function entries(root::AbstractString)
     out = Entry[]
     for volume in filter(startswith("volume_"), readdir(tracked(root)))
         volume_dir = tracked(joinpath(root, volume))
         order = get(ORDER, Symbol(volume), ())
         keys = sort(
-            readdir(volume_dir);
+            filter(
+                key -> isfile(joinpath(volume_dir, key, "example.toml")),
+                readdir(volume_dir),
+            );
             by=key -> (something(findfirst(==(Symbol(key)), order), typemax(Int)), key),
         )
         for key in keys
-            dir = joinpath(volume_dir, key)
-            isdir(dir) || continue
-            meta = read_toml(joinpath(dir, "example.toml"))
+            meta = read_toml(joinpath(volume_dir, key, "example.toml"))
             push!(
                 out,
                 Entry(

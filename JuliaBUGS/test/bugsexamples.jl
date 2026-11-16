@@ -36,6 +36,15 @@ using JuliaBUGS: BUGSExamples
         @test ex.reference_results === nothing
     end
 
+    @testset "a folder without example.toml is skipped" begin
+        root = mktempdir()
+        for dir in ("volume_1/a", "volume_1/.ipynb_checkpoints")
+            mkpath(joinpath(root, dir))
+        end
+        write(joinpath(root, "volume_1/a/example.toml"), "name = \"A\"\n")
+        @test map(e -> e.key, BUGSExamples.entries(root)) == [:a]
+    end
+
     @testset "registry" begin
         volumes = BUGSExamples.volumes()
         @test keys(volumes) == (:volume_1, :volume_2, :volume_3)
