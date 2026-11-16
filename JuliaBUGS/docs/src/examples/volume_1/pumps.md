@@ -78,9 +78,14 @@ summarystats(chain)
 
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.pumps.inits` and can be applied with `initialize!(model, inits)`.
 
-## Results
+## Reference results
 
-Reference posterior summaries are not bundled with the package for this example; the published results table can be found on the [OpenBUGS Pumps page](https://chjackson.github.io/openbugsdoc/Examples/Pumps.html). The quantities of interest are the hyperparameters `alpha` and `beta` and the pump-specific failure rates `theta[1]` through `theta[10]`. A correctly converged chain's `summarystats(chain)` should match the published values up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example pumps
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="pumps"></div>

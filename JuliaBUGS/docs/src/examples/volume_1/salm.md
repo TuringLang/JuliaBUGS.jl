@@ -96,28 +96,14 @@ BUGS-style initial values for this example are available as
 `JuliaBUGS.BUGSExamples.VOLUME_1.salm.inits` and can be applied with
 `initialize!(model, inits)`.
 
-## Results
+## Reference results
 
-Unlike most entries in this gallery, the Salm example does not ship with bundled reference
-posterior summaries — its `reference_results` field is empty, so there is no packaged table
-to reproduce here. The published Bayesian posterior summaries for this model are given on the
-[MultiBUGS](https://www.multibugs.org/examples/latest/VolumeI.html) and
-[OpenBUGS](https://chjackson.github.io/openbugsdoc/Examples/Salm.html) pages linked above
-(obtained there from a 1000-iteration burn-in followed by 10000 further iterations).
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
 
-For a rough sanity check, the OpenBUGS page also quotes Breslow's (1984) quasi-likelihood
-point estimates:
-
-| Parameter | Estimate | Std. error |
-| --- | --- | --- |
-| alpha | 2.203 | 0.363 |
-| beta | 0.311 | 0.099 |
-| gamma | -9.74e-4 | 4.37e-4 |
-| sigma | 0.268 | — |
-
-These are maximum quasi-likelihood point estimates rather than posterior summaries, but the
-posterior means from a correctly converged chain should land close to them, up to Monte Carlo
-error and the mild differences between the two estimation approaches.
+```@example salm
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="salm"></div>

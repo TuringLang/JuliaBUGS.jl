@@ -66,16 +66,14 @@ summarystats(chain)
 
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.stacks.inits` and can be applied with `initialize!(model, inits)`.
 
-## Results
+## Reference results
 
-The published reference posterior summaries for this example are:
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
 
-| Parameter     | Mean   | Std    |
-|:------------- |:------ |:------ |
-| `b0`          | -39.64 | 12.63  |
-| `outlier[21]` | 0.3324 | 0.4711 |
-
-A correctly converged chain's `summarystats` should reproduce these values up to Monte Carlo error.
+```@example stacks
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="stacks"></div>

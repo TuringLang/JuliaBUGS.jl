@@ -72,9 +72,16 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 !!! note
     Prior 6 places a half-normal prior on the between-study variance. The original BUGS program writes this as `dnorm(0, p0)T(0,)`; in JuliaBUGS the same truncated prior is written `truncated(dnorm(0, p0), 0, nothing)`, where `nothing` means the upper bound is left unbounded. This affects only the prior on `var"tau.sqrd"[6]` — no observed data are censored or truncated.
 
-## Results
+## Reference results
 
-The package does not bundle reference posterior summaries for this example (its `reference_results` field is empty): the point of the exercise is to compare results across the six priors rather than to reproduce a single set of numbers. Published summaries of `odds.ratio[1:6]` and `tau[1:6]` under each prior are shown on the [OpenBUGS Magnesium page](https://chjackson.github.io/openbugsdoc/Examples/Magnesium.html), and a correctly converged chain's `summarystats(chain)` should match them up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example magnesium
+example.reference_results
+```
+
+Each index of `odds.ratio` and `tau` is one of the six priors.
 
 ```@raw html
 <div class="mcmc-run" data-example="magnesium"></div>

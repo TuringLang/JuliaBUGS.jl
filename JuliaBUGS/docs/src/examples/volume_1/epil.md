@@ -87,9 +87,14 @@ summarystats(chain)
 
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.epil.inits` and can be applied with `initialize!(model, inits)`.
 
-## Results
+## Reference results
 
-JuliaBUGS does not ship reference results for this example. For published estimates, see the [OpenBUGS documentation page](https://chjackson.github.io/openbugsdoc/Examples/Epil.html), which reports results alongside the approximate-likelihood fit of Breslow and Clayton (1993); a correctly converged chain's `summarystats` should agree with those values up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example epil
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="epil"></div>

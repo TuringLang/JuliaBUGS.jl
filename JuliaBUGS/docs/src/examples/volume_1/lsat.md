@@ -69,9 +69,14 @@ summarystats(chain)
 
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.lsat.inits` and can be applied with `initialize!(model, inits)`.
 
-## Results
+## Reference results
 
-Reference posterior summaries are not bundled with the package for this example (the `reference_results` field of `JuliaBUGS.BUGSExamples.VOLUME_1.lsat` is empty). The published results — posterior summaries for the centred item difficulties `a[1]`–`a[5]` and the scale parameter `beta` — are shown in the [OpenBUGS write-up](https://chjackson.github.io/openbugsdoc/Examples/Lsat.html) of this example. A correctly converged chain's `summarystats` output should match those published values up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example lsat
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="lsat"></div>

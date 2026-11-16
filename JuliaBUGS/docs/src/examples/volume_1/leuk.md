@@ -73,9 +73,14 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 !!! note "Censoring is handled by the counting-process formulation"
     This is a survival model with right-censored data: the `fail` indicator marks which observed times are true failures rather than censored follow-up times. Instead of a censored or truncated likelihood, the Cox model is recast in counting-process form, so censoring enters only through the risk-set indicators `Y` and the failure counts `dN`, and the likelihood reduces to an ordinary Poisson model over continuous parameters. No special censoring machinery or discrete latent variables are involved.
 
-## Results
+## Reference results
 
-No reference posterior summaries ship with this example in `JuliaBUGS.BUGSExamples`. Published results for the quantities of interest, including the treatment effect `beta` and the survivor functions `S.treat` and `S.placebo`, are available on the [OpenBUGS page for this example](https://chjackson.github.io/openbugsdoc/Examples/Leuk.html), and a correctly converged chain's `summarystats` should reproduce them up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example leuk
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="leuk"></div>

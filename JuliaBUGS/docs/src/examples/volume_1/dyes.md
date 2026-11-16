@@ -78,9 +78,16 @@ summarystats(chain)
 
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.dyes.inits` and can be applied with `initialize!(model, inits)`.
 
-## Results
+## Reference results
 
-No reference posterior table is bundled with this example (`JuliaBUGS.BUGSExamples.VOLUME_1.dyes.reference_results` is `nothing`), so compare your output against the published summaries on the [OpenBUGS Dyes page](https://chjackson.github.io/openbugsdoc/Examples/Dyes.html). As points of reference, the classical analysis of these data gives ``\sigma^2_{\text{with}} = 2451`` and ``\sigma^2_{\text{btw}} = 1764``, and the overall mean yield ``\theta`` is close to the sample grand mean of about 1527. Note that the posterior of the between-batch variance has a very long upper tail, so its posterior mean sits well above its median; a correctly converged chain's `summarystats` should agree with the published BUGS results up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example dyes
+example.reference_results
+```
+
+The posterior of the between-batch variance has a very long upper tail, so its mean sits well above its median.
 
 ```@raw html
 <div class="mcmc-run" data-example="dyes"></div>

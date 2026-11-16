@@ -87,9 +87,14 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 !!! note "Censored observations"
     Several recurrence times in this data set are censored: the time is missing and known only to exceed `t.cen[i, j]`, the time the patient was last seen without a recurrence. Inside `@bugs`, `censored(dweib(r, mu[i, j]), var"t.cen"[i, j], nothing)` is the BUGS `dweib(r, mu[i, j])C(t.cen[i, j], )`. A censored observation then contributes the Weibull probability of lasting beyond `t.cen[i, j]`, rather than a density at an observed time.
 
-## Results
+## Reference results
 
-The source file for this example ships with `reference_results = nothing`, so there is no bundled table of published posterior summaries to reproduce here. The MultiBUGS and OpenBUGS pages linked above report posterior means and standard deviations for `alpha`, `beta.age`, `beta.sex`, the disease effects `beta.dis[2]`–`beta.dis[4]`, the Weibull shape `r`, and the random-effect standard deviation `sigma`, obtained from a 1000-iteration burn-in followed by 10000 further iterations. A correctly converged chain's `summarystats` output should match those published values up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example kidney
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="kidney"></div>

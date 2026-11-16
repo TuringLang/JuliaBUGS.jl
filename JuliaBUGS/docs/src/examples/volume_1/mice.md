@@ -86,9 +86,14 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 !!! note "Censored observations"
     Several survival times in this example are right-censored: the animal was still alive when the study ended, so its survival time is missing and known only to exceed the follow-up time `t.cen[i, j]`. Inside `@bugs`, `censored(dweib(r, mu[i]), var"t.cen"[i, j], nothing)` is the BUGS `dweib(r, mu[i])C(t.cen[i, j], )`. A censored animal then contributes the Weibull probability of surviving beyond `t.cen[i, j]`, rather than a density at an observed time.
 
-## Results
+## Reference results
 
-Unlike some of the other Volume 1 examples, this one does not ship with a tabulated reference posterior summary — `JuliaBUGS.BUGSExamples.VOLUME_1.mice.reference_results` is `nothing`, so there are no stored means and standard deviations to reproduce here. The published estimates for the shape parameter `r`, the group medians, and the treatment contrasts are reported on the [OpenBUGS Mice page](https://chjackson.github.io/openbugsdoc/Examples/Mice.html) (obtained there from a burn-in of 1000 updates followed by 10000 further updates). Once your chain has converged, the posterior means and standard deviations from `summarystats(chain)` should agree with those published values up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example mice
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="mice"></div>

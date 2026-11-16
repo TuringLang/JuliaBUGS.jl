@@ -77,9 +77,14 @@ summarystats(chain)
 
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.oxford.inits` and can be applied with `initialize!(model, inits)`.
 
-## Results
+## Reference results
 
-This transcription does not bundle a numeric reference table (`JuliaBUGS.BUGSExamples.VOLUME_1.oxford.reference_results` is `nothing`), so there is nothing to reproduce verbatim here. For published posterior summaries of $\alpha$, $\beta_1$, $\beta_2$, and $\sigma$, consult the [OpenBUGS Oxford example](https://chjackson.github.io/openbugsdoc/Examples/Oxford.html) and the original analysis by Breslow and Clayton (1993). A correctly converged chain's `summarystats` should agree with those published values up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example oxford
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="oxford"></div>

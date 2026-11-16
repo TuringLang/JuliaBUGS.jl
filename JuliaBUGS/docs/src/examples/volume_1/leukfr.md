@@ -76,9 +76,14 @@ BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamp
 !!! note "Censored survival data via the counting-process representation"
     Like the other BUGS survival examples, this model does not handle the censored remission times directly. Instead it uses the counting-process (Poisson) representation: the risk-set indicators `Y[i, j]` and the increments `dN[i, j]` are computed deterministically from the observed times and the `fail` indicator, and the `dN[i, j]` are then treated as Poisson observations. There are no discrete latent variables to sample, so no special handling is required beyond the recipe above.
 
-## Results
+## Reference results
 
-The source file ships `reference_results = nothing` for this example, so there is no tabulated reference posterior summary bundled with the package to reproduce here. For published numerical summaries of the treatment effect `beta` and the frailty standard deviation `sigma` (obtained after a 1,000-iteration burn-in followed by 10,000 further updates), see the [OpenBUGS Leukfr page](https://chjackson.github.io/openbugsdoc/Examples/Leukfr.html). A correctly converged chain's `summarystats` output should match those published values up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example leukfr
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="leukfr"></div>

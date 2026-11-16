@@ -66,9 +66,14 @@ summarystats(chain)
 
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.dogs.inits` and can be applied with `initialize!(model, inits)`.
 
-## Results
+## Reference results
 
-This example does not ship packaged reference posterior summaries — its `reference_results` field is `nothing` — so there is no built-in table to reproduce here. Published posterior summaries for the two learning coefficients $\alpha$ and $\beta$ (and the derived per-event multipliers $A$ and $B$) are given on the [MultiBUGS](https://www.multibugs.org/examples/latest/VolumeI.html) and [OpenBUGS](https://chjackson.github.io/openbugsdoc/Examples/Dogs.html) Dogs pages. A correctly converged chain's `summarystats` should reproduce those published values up to Monte Carlo error.
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example dogs
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="dogs"></div>

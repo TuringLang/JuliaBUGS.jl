@@ -77,17 +77,14 @@ summarystats(chain)
 
 BUGS-style initial values for this example are available as `JuliaBUGS.BUGSExamples.VOLUME_1.rats.inits` and can be applied with `initialize!(model, inits)`.
 
-## Results
+## Reference results
 
-The published reference posterior summaries for this example are:
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
 
-| Parameter | Mean  | Std    |
-|-----------|-------|--------|
-| `alpha0`  | 106.6 | 3.66   |
-| `beta.c`  | 6.186 | 0.1086 |
-| `sigma`   | 6.093 | 0.4643 |
-
-A correctly converged chain's `summarystats` should reproduce these values up to Monte Carlo error.
+```@example rats
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="rats"></div>

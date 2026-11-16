@@ -99,19 +99,14 @@ chain = AbstractMCMC.sample(
 summarystats(chain)
 ```
 
-## Results
+## Reference results
 
-The published reference posterior summaries for this example are:
+The posterior summaries published with the original example.
+A converged chain should reproduce them up to Monte Carlo error.
 
-| Parameter | Mean | Std |
-| --- | --- | --- |
-| alpha0 | -0.5499 | 0.1965 |
-| alpha1 | 0.08902 | 0.3124 |
-| alpha12 | -0.841 | 0.4372 |
-| alpha2 | 1.356 | 0.2772 |
-| sigma | 0.2922 | 0.1467 |
-
-A correctly converged chain's `summarystats` output should match these values up to Monte Carlo error.
+```@example seeds
+example.reference_results
+```
 
 ```@raw html
 <div class="mcmc-run" data-example="seeds"></div>

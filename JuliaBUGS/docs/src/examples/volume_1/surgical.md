@@ -114,9 +114,20 @@ summarystats(chain)
 
 BUGS-style initial values for the hierarchical model are available as `JuliaBUGS.BUGSExamples.VOLUME_1.surgical_realistic.inits` (and `...surgical_simple.inits` for the independent model) and can be applied with `initialize!(model, inits)`.
 
-## Results
+## Reference results
 
-The bundled copies of this example do not include reference posterior summaries, so there is no shipped table to compare against here. Published posterior summaries for both models — the per-hospital mortality rates `p[1]` through `p[12]`, and for the hierarchical model also `mu`, `sigma`, and `pop.mean` — are given on the [OpenBUGS Surgical page](https://chjackson.github.io/openbugsdoc/Examples/Surgical.html). A correctly converged chain's `summarystats` should reproduce those values up to Monte Carlo error, with the hierarchical estimates visibly shrunk towards the population mean relative to the independent ones.
+The posterior summaries published with the original example, for the independent and the hierarchical model.
+A converged chain should reproduce them up to Monte Carlo error.
+
+```@example surgical_simple
+example.reference_results
+```
+
+```@example surgical_realistic
+example.reference_results
+```
+
+The hierarchical estimates are shrunk towards the population mean relative to the independent ones.
 
 *See also:* the [example gallery overview](../index.md) and the [getting-started tutorial](../../getting_started.md).
 
