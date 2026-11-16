@@ -15,7 +15,7 @@ using JuliaBUGS: BUGSExamples
         )
         write(
             joinpath(dir, "data.json"),
-            """{"y": [1.5, null], "m": [[1, 2], [3, 4]], "c": [[[1], [2]], [[3], [4]]], "n": 2, "x": 2.0}""",
+            """{"y": [1.5, null], "m": [[1, 2], [3, 4]], "c": [[[1], [2]], [[3], [4]]], "n": 2, "x": 2.0, "v": [1, null, 2.5], "w": [[1, 2], [3.5, 4]]}""",
         )
         ex = BUGSExamples.load(dir)
 
@@ -32,6 +32,8 @@ using JuliaBUGS: BUGSExamples
         @test ex.data.c[2, 1, 1] == 3
         @test ex.data.n === 2
         @test ex.data.x === 2.0
+        @test ex.data.v isa Vector{Union{Missing,Float64}}
+        @test ex.data.w isa Matrix{Float64}
         @test ex.inits === NamedTuple()
         @test ex.reference_results === nothing
     end

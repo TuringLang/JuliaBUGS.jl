@@ -112,9 +112,15 @@ function from_json(x::AbstractVector)
     if !isempty(x) && all(e -> e isa AbstractVector, x)
         rows = map(from_json, x)
         allequal(map(size, rows)) || error("ragged array: $(map(size, rows))")
-        return stack(rows; dims=1)
+        return promote_elements(stack(rows; dims=1))
     end
-    return map(from_json, x)
+    return promote_elements(map(from_json, x))
+end
+
+# One element type, as in a Julia array literal, so `[1, 2.5]` is a `Vector{Float64}`.
+function promote_elements(x::AbstractArray)
+    isempty(x) && return x
+    return convert(AbstractArray{mapreduce(typeof, promote_type, x)}, x)
 end
 
 function read_optional(path)
