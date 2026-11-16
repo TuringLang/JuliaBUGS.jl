@@ -28,7 +28,7 @@ They are on disk, marked blocked, and left out of the volumes above, so their pa
 | Volume 3, Fire | `dloglik` is not an allowed function in `@bugs` |
 | Volume 3, Jama and St Veit Klinglberg | `interp.lin` is not an allowed function in `@bugs` |
 
-Volume 4 has one example in the repository, Methadone, whose data hold 240,776 observations.
+Volume 4 has one example in the repository, Methadone, whose data hold 425,112 observations.
 It is not loaded with the package.
 `JuliaBUGS.BUGSExamples.load(:methadone)` reads it on demand.
 
