@@ -420,7 +420,9 @@ Enable auto-marginalization on a compiled model:
     model = settrans(model, true)
     model = set_evaluation_mode(model, UseAutoMarginalization())
 
-Requires transformed space. Discrete variables must have finite support (Categorical, Bernoulli, etc.).
+Requires transformed space. Marginalization supports finite univariate discrete latents such as
+Categorical and Bernoulli. A multivariate discrete latent such as `dmulti`
+causes a warning and falls back to `UseGraph()` mode.
 
 See [Evaluation Modes](evaluation_modes.md) for more on `set_evaluation_mode`. A quantity
 derived from a marginalized discrete latent — for example a predicted observation or the

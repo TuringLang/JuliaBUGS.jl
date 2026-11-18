@@ -528,13 +528,15 @@ _enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) =
     _classify_node_type(dist)
 
 Classify a distribution into node types for marginalization.
-Returns one of: :deterministic, :discrete_finite, :discrete_infinite, :continuous
+Returns `:discrete_finite`, `:discrete_infinite`, `:discrete_multivariate`, or `:continuous`.
 """
 function _classify_node_type(dist)
     if _is_discrete_finite_distribution(dist)
         return :discrete_finite
     elseif dist isa Distributions.DiscreteUnivariateDistribution
         return :discrete_infinite
+    elseif dist isa Distributions.DiscreteMultivariateDistribution
+        return :discrete_multivariate
     else
         return :continuous
     end
@@ -544,7 +546,7 @@ end
     _compute_node_types(model::BUGSModel)
 
 Compute node type classification for all nodes in the model.
-Returns a vector of symbols: `:deterministic`, `:discrete_finite`, `:discrete_infinite`, or `:continuous`.
+Returns `:deterministic` for deterministic nodes and uses `_classify_node_type` for stochastic nodes.
 """
 function _compute_node_types(model::BUGSModel)
     gd = model.graph_evaluation_data
