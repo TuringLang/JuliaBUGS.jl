@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## 0.18.2
+
+### Bug Fixes
+
+- Auto-marginalization falls back to `UseGraph()` for multivariate discrete latents such as multinomial counts. Gibbs rejects these variables in blocks that require continuous samplers (#574).
+
 ## 0.18.1
 
 ### Bug Fixes

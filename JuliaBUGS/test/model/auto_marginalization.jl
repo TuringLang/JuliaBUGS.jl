@@ -590,6 +590,29 @@ using JuliaBUGS.Model:
     end
 
     @testset "Edge cases" begin
+        @testset "Multivariate discrete variables" begin
+            multinomial_def = @bugs begin
+                mu ~ Normal(0, 1)
+                counts[1:3] ~ dmulti(p[1:3], 1)
+                y ~ Normal(mu + counts[1], 1)
+            end
+            p = [0.2, 0.3, 0.5]
+
+            latent = settrans(compile(multinomial_def, (; p, y=0.0)), true)
+            fallback = @test_logs(
+                (:warn, r"falling back to UseGraph mode"),
+                set_evaluation_mode(latent, UseAutoMarginalization())
+            )
+            @test fallback.evaluation_mode isa UseGraph
+
+            observed = settrans(
+                compile(multinomial_def, (; p, counts=[0, 1, 0], y=0.0)), true
+            )
+            marginalized = set_evaluation_mode(observed, UseAutoMarginalization())
+            @test marginalized.evaluation_mode isa UseAutoMarginalization
+            @test LogDensityProblems.dimension(marginalized) == 1
+        end
+
         @testset "Model with no discrete finite variables" begin
             # Simple continuous model - marginalization should work but do nothing special
             continuous_def = @bugs begin

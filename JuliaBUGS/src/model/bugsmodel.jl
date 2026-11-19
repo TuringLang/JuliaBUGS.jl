@@ -14,7 +14,7 @@ must be invalidated when the graph structure changes (e.g., during conditioning)
 - `minimal_cache_keys::Dict{Int,Vector{Int}}`: Maps node index to minimal frontier indices for memoization.
 - `marginalization_order::Vector{Int}`: Optimized evaluation order that reduces frontier size.
 - `node_types::Vector{Symbol}`: Node type for each node
-  (`:deterministic`, `:discrete_finite`, `:discrete_infinite`, or `:continuous`).
+  (`:deterministic`, `:discrete_finite`, `:discrete_infinite`, `:discrete_multivariate`, or `:continuous`).
 - `param_lengths::Dict{VarName,Int}`: Transformed lengths for continuous parameters.
 - `param_offsets::Dict{VarName,Int}`: Start index in flattened parameter vector for each continuous param.
 - `n_discrete_finite::Int`: Number of discrete finite variables (for memo sizing).
@@ -843,6 +843,11 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                         if node_type == :discrete_infinite
                             error(
                                 "Model contains discrete infinite variable $(vn) which cannot be marginalized. " *
+                                "Use UseGraph evaluation mode instead.",
+                            )
+                        elseif node_type == :discrete_multivariate
+                            error(
+                                "Model contains multivariate discrete variable $(vn) which cannot be marginalized. " *
                                 "Use UseGraph evaluation mode instead.",
                             )
                         end

@@ -86,7 +86,7 @@ end
 function _require_continuous_gibbs_component(variables, node_types, sampler_name)
     discrete_variables = [
         variable for (variable, node_type) in zip(variables, node_types) if
-        node_type === :discrete_finite || node_type === :discrete_infinite
+        node_type in (:discrete_finite, :discrete_infinite, :discrete_multivariate)
     ]
     isempty(discrete_variables) || throw(
         ArgumentError(
