@@ -555,6 +555,21 @@ using StatsBase: mode
         using AdvancedMH: RWMH, StaticMH
         using Distributions: Product, fill
 
+        @testset "Multivariate discrete blocks reject continuous samplers" begin
+            model_def = @bugs begin
+                counts[1:3] ~ dmulti(p[1:3], 1)
+                y ~ dnorm(counts[1], 1)
+            end
+            model = compile(model_def, (; p=[0.2, 0.3, 0.5], y=0.0))
+
+            @test_throws r"AdvancedHMC cannot update discrete Gibbs variables" Gibbs(
+                model, (NUTS(0.65), ADTypes.AutoForwardDiff())
+            )
+            @test_throws r"SliceSampling cannot update discrete Gibbs variables" Gibbs(
+                model, SliceSampling.SliceSteppingOut(1.0)
+            )
+        end
+
         @testset "Gradient-based samplers with AD backends" begin
             model_def = @bugs begin
                 μ ~ Normal(0, 10)
